@@ -1,0 +1,63 @@
+name: Release
+
+on:
+  push:
+    tags:
+      - "v*.*.*"
+
+permissions:
+  contents: write
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Package VSIX
+        run: npm run package
+
+      - name: Extract release notes from CHANGELOG
+        env:
+          TAG_NAME: ${{ github.ref_name }}
+        run: |
+          node <<'NODE'
+          const fs = require('fs');
+
+          const tagName = process.env.TAG_NAME || '';
+          const version = tagName.startsWith('v') ? tagName.slice(1) : tagName;
+          if (!version) throw new Error('Missing tag name/version');
+
+          const changelog = fs.readFileSync('CHANGELOG.md', 'utf8');
+          const escapedVersion = version.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+          const sectionRegex = new RegExp(
+            `^## \\[${escapedVersion}\\].*\\n([\\s\\S]*?)(?=\\n## \\[|\\n# |$)`,
+            'm'
+          );
+
+          const match = changelog.match(sectionRegex);
+          if (!match) {
+            throw new Error(`Could not find changelog section for version ${version}`);
+          }
+
+          const body = match[1].trim();
+          fs.writeFileSync('release-notes.md', `${body}\n`);
+          NODE
+
+      - name: Create GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          name: Proxy Toggler ${{ github.ref_name }}
+          body_path: release-notes.md
+          files: |
+            proxy-toggler-*.vsix
