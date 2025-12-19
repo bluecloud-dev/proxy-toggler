@@ -2,11 +2,24 @@ name: CI
 
 on:
   push:
+    branches: [main]
   pull_request:
+    branches: [main]
+
+# Cancel in-progress runs for the same branch/PR
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+# Principle of least privilege
+permissions:
+  contents: read
 
 jobs:
   test:
     runs-on: ubuntu-latest
+    timeout-minutes: 15
+
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -17,7 +30,7 @@ jobs:
           node-version: 20
           cache: npm
 
-      - name: Install
+      - name: Install dependencies
         run: npm ci
 
       - name: Lint
@@ -40,8 +53,8 @@ jobs:
       - name: No-telemetry guard
         run: npm run check:no-telemetry
 
-      - name: Audit
-        run: npm audit
+      - name: Security audit
+        run: npm audit --audit-level=high
 
       - name: Build VSIX
         run: npm run package
@@ -49,5 +62,6 @@ jobs:
       - name: Upload VSIX
         uses: actions/upload-artifact@v4
         with:
-          name: vsix
-          path: '*.vsix'
+          name: vsix-${{ github.sha }}
+          path: "*.vsix"
+          retention-days: 30
