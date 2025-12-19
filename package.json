@@ -1,0 +1,141 @@
+{
+  "name": "proxy-toggler",
+  "displayName": "%extension.displayName%",
+  "description": "%extension.description%",
+  "version": "0.0.1",
+  "publisher": "aymenhammouda",
+  "private": true,
+  "license": "MIT",
+  "homepage": "https://github.com/ayhammouda/proxy-toggler",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/ayhammouda/proxy-toggler.git"
+  },
+  "icon": "assets/icon.png",
+  "engines": {
+    "vscode": "^1.85.0"
+  },
+  "categories": [
+    "Other"
+  ],
+  "main": "./out/src/extension.js",
+  "files": [
+    "out/src/**",
+    "assets/**",
+    "LICENSE",
+    "package.nls.json",
+    "README.md",
+    "CHANGELOG.md"
+  ],
+  "activationEvents": [
+    "onCommand:proxyToggler.configure",
+    "onCommand:proxyToggler.enable",
+    "onCommand:proxyToggler.disable",
+    "onCommand:proxyToggler.toggle"
+  ],
+  "contributes": {
+    "commands": [
+      {
+        "command": "proxyToggler.enable",
+        "title": "%command.enable.title%"
+      },
+      {
+        "command": "proxyToggler.disable",
+        "title": "%command.disable.title%"
+      },
+      {
+        "command": "proxyToggler.toggle",
+        "title": "%command.toggle.title%"
+      },
+      {
+        "command": "proxyToggler.configure",
+        "title": "%command.configure.title%"
+      }
+    ],
+    "menus": {
+      "commandPalette": [
+        {
+          "command": "proxyToggler.enable",
+          "when": "proxyToggler.hasConfiguration && !proxyToggler.isEnabled"
+        },
+        {
+          "command": "proxyToggler.disable",
+          "when": "proxyToggler.hasConfiguration && proxyToggler.isEnabled"
+        }
+      ]
+    },
+    "configuration": {
+      "title": "%configuration.title%",
+      "properties": {
+        "proxyToggler.confirmBeforeToggle": {
+          "type": "boolean",
+          "default": false,
+          "description": "%configuration.confirmBeforeToggle.description%"
+        }
+      }
+    }
+  },
+  "scripts": {
+    "build": "tsc -p .",
+    "bundle": "node ./esbuild.js --production",
+    "bundle:watch": "node ./esbuild.js --watch",
+    "check:no-telemetry": "node ./scripts/check-no-telemetry.cjs",
+    "lint": "eslint src tests --ext .ts",
+    "test": "npm run test:unit",
+    "test:unit": "mocha -r ts-node/register \"tests/unit/**/*.test.ts\" \"tests/security/**/*.test.ts\"",
+    "test:integration": "npm run build && ts-node ./tests/run-test.ts",
+    "coverage": "node -r ./scripts/patch-os-cpus.cjs ./node_modules/nyc/bin/nyc.js npm run test:unit",
+    "prepublish": "npm run lint && npm run test && npm run build && npm run bundle",
+    "vscode:prepublish": "npm run build && npm run bundle",
+    "package": "node -r ./scripts/patch-os-cpus.cjs ./node_modules/@vscode/vsce/vsce package"
+  },
+  "nyc": {
+    "all": true,
+    "check-coverage": true,
+    "concurrency": 1,
+    "branches": 80,
+    "functions": 80,
+    "lines": 80,
+    "statements": 80,
+    "extension": [
+      ".ts"
+    ],
+    "exclude": [
+      "**/*.d.ts",
+      "out/**",
+      "dist/**",
+      "tests/**"
+    ],
+    "include": [
+      "src/**"
+    ],
+    "reporter": [
+      "text",
+      "lcov"
+    ],
+    "require": [
+      "ts-node/register"
+    ],
+    "sourceMap": true,
+    "instrument": true
+  },
+  "devDependencies": {
+    "@types/mocha": "^10.0.10",
+    "@types/node": "^18.19.76",
+    "@types/sinon": "^17.0.4",
+    "@types/vscode": "^1.85.0",
+    "@typescript-eslint/eslint-plugin": "^8.16.0",
+    "@typescript-eslint/parser": "^8.16.0",
+    "@vscode/test-electron": "^2.5.2",
+    "@vscode/vsce": "^3.2.2",
+    "esbuild": "^0.27.2",
+    "eslint": "^8.57.1",
+    "eslint-config-prettier": "^9.1.0",
+    "mocha": "^10.8.2",
+    "nyc": "^17.1.0",
+    "prettier": "^3.4.2",
+    "sinon": "^19.0.2",
+    "ts-node": "^10.9.2",
+    "typescript": "^5.7.2"
+  }
+}
