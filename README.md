@@ -1,52 +1,86 @@
-# 🔌 Proxy Toggler (VS Code Extension)
+# Proxy Toggler
 
-![Proxy Toggler banner](assets/hero.png)
+<p align="center">
+  <img src="assets/hero.png" alt="Proxy Toggler banner" width="600">
+</p>
 
-Lightweight on/off control for VS Code’s HTTP proxy with credentials stored in your OS keychain (VS Code SecretStorage). Built for devs who bounce between corporate proxies, VPNs, and local networks.
+<p align="center">
+  Lightweight on/off control for VS Code's HTTP proxy with credentials stored in your OS keychain.
+</p>
 
-![Proxy Toggler icon](assets/icon.png)
+<!-- Marketplace badges will go here once published -->
 
-## ✨ Highlights
+---
 
-- One-click toggle from the Command Palette or status bar.
-- Keeps proxy credentials out of settings, logs, and source control.
-- Visual status: enabled/disabled indicator plus optional confirm-before-toggle.
-- Strict SSL and no-proxy entries supported; leaves system proxy untouched.
-- Tested path to publish: `npm run package` produces the VSIX.
+## Table of Contents
 
-## ⚡ Quickstart
+- [Features](#star-features)
+- [Requirements](#clipboard-requirements)
+- [Quick Start](#zap-quick-start)
+- [Commands](#keyboard-commands)
+- [Settings](#gear-settings)
+- [How It Works](#bulb-how-it-works)
+- [Security](#lock-security)
+- [Troubleshooting](#wrench-troubleshooting)
+- [Contributing](#handshake-contributing)
+- [License](#page_facing_up-license)
 
-1) Install: `code --install-extension ./proxy-toggler-*.vsix` (or grab the Marketplace link once published).  
-2) Press `Cmd/Ctrl+Shift+P` → **Proxy Toggler: Configure Proxy Settings** → enter URL/port, strict SSL, no-proxy list, and optional credentials (stored in SecretStorage).  
-3) Toggle as needed:
-- **Proxy Toggler: Enable Proxy**
-- **Proxy Toggler: Disable Proxy**
-- **Proxy Toggler: Toggle Proxy**
+## :star: Features
 
-Status bar shows the current state; click it to toggle.
+- **One-click toggle** from the Command Palette or status bar
+- **Secure credential storage** using VS Code SecretStorage (OS keychain) — never in settings, logs, or source control
+- **Visual status indicator** showing enabled/disabled state
+- **Optional confirmation prompt** before toggling
+- **Strict SSL and no-proxy list** support
+- **Non-invasive** — leaves system proxy configuration untouched
 
-## ⌨️ Commands
+## :clipboard: Requirements
 
-| Command | Palette label |
+- VS Code **1.85** or later
+
+## :zap: Quick Start
+
+1. Install from the [VS Code Marketplace](#) or via VSIX:
+   ```sh
+   code --install-extension proxy-toggler-*.vsix
+   ```
+
+2. Open Command Palette (`Cmd/Ctrl+Shift+P`) and run:
+   ```
+   Proxy Toggler: Configure Proxy Settings
+   ```
+
+3. Enter your proxy URL, port, strict SSL preference, no-proxy list, and optional credentials.
+
+4. Toggle the proxy using any of these methods:
+   - Click the status bar indicator
+   - Run `Proxy Toggler: Toggle Proxy` from Command Palette
+   - Use the enable/disable commands directly
+
+## :keyboard: Commands
+
+| Command | Description |
 | --- | --- |
-| `proxyToggler.configure` | Proxy Toggler: Configure Proxy Settings |
-| `proxyToggler.enable` | Proxy Toggler: Enable Proxy |
-| `proxyToggler.disable` | Proxy Toggler: Disable Proxy |
-| `proxyToggler.toggle` | Proxy Toggler: Toggle Proxy |
+| `Proxy Toggler: Configure Proxy Settings` | Set up proxy URL, credentials, and options |
+| `Proxy Toggler: Enable Proxy` | Enable the configured proxy |
+| `Proxy Toggler: Disable Proxy` | Disable the proxy |
+| `Proxy Toggler: Toggle Proxy` | Toggle between enabled and disabled |
 
-## ⚙️ Settings
+## :gear: Settings
 
-| Setting | Type | Default | Purpose |
+| Setting | Type | Default | Description |
 | --- | --- | --- | --- |
-| `proxyToggler.confirmBeforeToggle` | boolean | `false` | Prompt before switching proxy state. |
+| `proxyToggler.confirmBeforeToggle` | boolean | `false` | Show confirmation prompt before switching proxy state |
 
-## 🧭 What It Manages (VS Code user settings)
+### Managed VS Code Settings
 
-- `http.proxy`
-- `http.proxyStrictSSL`
-- `http.noProxy`
+This extension manages the following VS Code settings:
 
-## 🧩 How It Works
+- `http.proxy` — The proxy URL
+- `http.proxyStrictSSL` — Whether to verify SSL certificates
+- `http.noProxy` — Hosts to exclude from proxy
+
+## :bulb: How It Works
 
 ```mermaid
 flowchart LR
@@ -58,40 +92,48 @@ flowchart LR
     E --> SB["Status bar indicator"]
 ```
 
-## ⬇️ Install (from source)
+## :lock: Security
 
-Prereqs: VS Code `1.85+`, Node.js `20+`.
+- **Credentials are stored securely** in VS Code's SecretStorage, which uses your OS keychain
+- **No credentials in plain text** — never written to `settings.json`, `globalState`, logs, or URLs
+- **No `http.proxyAuthorization`** header is set by this extension
+- VS Code/Electron may still prompt for authentication depending on your proxy configuration
 
-```sh
-npm ci
-npm run package
-code --install-extension ./proxy-toggler-*.vsix
-```
+## :wrench: Troubleshooting
 
-## 🔐 Security Notes
+**Toggle not changing settings?**
+Ensure user-level proxy settings aren't being overridden by workspace settings.
 
-- Credentials live only in SecretStorage (OS keychain), never in `settings.json`, `globalState`, logs, or URLs.
-- The extension does not set `http.proxyAuthorization`.
-- VS Code/Electron may still prompt for auth depending on your proxy/network.
+**Connection still blocked after enabling?**
+Some environments require system-level proxy configuration. This extension only manages VS Code's internal HTTP proxy settings.
 
-## 🛠️ Troubleshooting
+**Stuck in credential prompt loop?**
+Clear saved credentials via `Proxy Toggler: Configure Proxy Settings` and re-enter them.
 
-- Toggle not changing? Ensure user-level proxy settings aren’t overridden by workspace settings.
-- Connection still blocked? Some environments require system-level proxy configuration; this extension only updates VS Code’s HTTP proxy settings.
-- Credential prompt loop? Clear saved creds via the Command Palette (`Proxy Toggler: Configure Proxy Settings`) and re-enter.
-
-## 🤝 Contributing
+## :handshake: Contributing
 
 ```sh
+git clone https://github.com/ayhammouda/proxy-toggler.git
+cd proxy-toggler
 npm ci
 npm test
 npm run lint
 ```
 
-Run locally: open in VS Code, press `F5` (Extension Development Host).  
-Integration tests (downloads VS Code runtime on first run): `npm run test:integration`
+**Run locally:** Open the project in VS Code and press `F5` to launch the Extension Development Host.
 
-## 🎨 Branding assets
+**Integration tests:** Run `npm run test:integration` (downloads VS Code runtime on first run).
 
-- Extension icon: `assets/icon.png` (source `assets/icon.svg`)
-- README/banner: `assets/hero.png` (source `assets/hero.svg`)
+See [CHANGELOG.md](CHANGELOG.md) for version history.
+
+## :page_facing_up: License
+
+[MIT](LICENSE)
+
+---
+
+<p align="center">
+  <a href="https://github.com/ayhammouda/proxy-toggler/issues">Report a Bug</a>
+  ·
+  <a href="https://github.com/ayhammouda/proxy-toggler/issues">Request a Feature</a>
+</p>
