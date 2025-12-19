@@ -1,0 +1,11 @@
+{
+  "extension.displayName": "Proxy Toggler",
+  "extension.description": "Toggle VS Code proxy settings on/off with secure credential storage.",
+  "command.enable.title": "Proxy Toggler: Enable Proxy",
+  "command.disable.title": "Proxy Toggler: Disable Proxy",
+  "command.toggle.title": "Proxy Toggler: Toggle Proxy",
+  "command.configure.title": "Proxy Toggler: Configure Proxy Settings",
+  "configuration.title": "Proxy Toggler",
+  "configuration.confirmBeforeToggle.description": "Show a confirmation prompt before toggling the proxy on/off."
+}
+
