@@ -1,6 +1,18 @@
 # Proxy Toggler
 
 <p align="center">
+  <a href="https://github.com/ayhammouda/proxy-toggler/actions/workflows/ci.yml">
+    <img src="https://github.com/ayhammouda/proxy-toggler/actions/workflows/ci.yml/badge.svg" alt="CI status">
+  </a>
+  <a href="https://github.com/ayhammouda/proxy-toggler/releases">
+    <img src="https://img.shields.io/github/v/release/ayhammouda/proxy-toggler?include_prereleases&label=release" alt="Latest release">
+  </a>
+  <a href="LICENSE">
+    <img src="https://img.shields.io/github/license/ayhammouda/proxy-toggler" alt="License">
+  </a>
+</p>
+
+<p align="center">
   <img src="assets/hero.png" alt="Proxy Toggler banner" width="600">
 </p>
 
