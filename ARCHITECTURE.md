@@ -82,13 +82,13 @@ without a cast, the compiler checks that the declared slice matches VS Code.
 These keys and shapes are a compatibility contract with installed copies of the extension. Unit
 tests pin them.
 
-| Store           | Key                                                                      | Shape                                                                       |
-| --------------- | ------------------------------------------------------------------------ | --------------------------------------------------------------------------- |
-| `globalState`   | `proxyToggler.savedProxy`                                                | `{ proxyUrl, strictSSL, noProxy }`; `noProxy` is a comma-separated string   |
-| `globalState`   | `proxyToggler.state`                                                     | `{ isEnabled, hasConfiguration }`; `hasConfiguration` is recomputed on read |
-| `SecretStorage` | `proxyToggler.credentials.username`, `proxyToggler.credentials.password` | trimmed strings                                                             |
-| User settings   | `http.proxy`, `http.proxyStrictSSL`, `http.noProxy` (array)              | written on enable, removed on disable                                       |
-| Context keys    | `proxyToggler.hasConfiguration`, `proxyToggler.isEnabled`                | booleans used by `contributes.menus.commandPalette`                         |
+| Store           | Key                                                                      | Shape                                                                                              |
+| --------------- | ------------------------------------------------------------------------ | -------------------------------------------------------------------------------------------------- |
+| `globalState`   | `proxyToggler.savedProxy`                                                | `{ proxyUrl, strictSSL, noProxy }`; `noProxy` is a comma-separated string                          |
+| `globalState`   | `proxyToggler.state`                                                     | `{ isEnabled, hasConfiguration }`; `hasConfiguration` is recomputed on read, other fields are kept |
+| `SecretStorage` | `proxyToggler.credentials.username`, `proxyToggler.credentials.password` | trimmed strings                                                                                    |
+| User settings   | `http.proxy`, `http.proxyStrictSSL`, `http.noProxy` (array)              | written on enable, removed on disable                                                              |
+| Context keys    | `proxyToggler.hasConfiguration`, `proxyToggler.isEnabled`                | booleans used by `contributes.menus.commandPalette`                                                |
 
 Credentials never go to `globalState`, settings, logs, or messages.
 

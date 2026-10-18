@@ -11,10 +11,10 @@ that enforces both. User-facing behavior is preserved, except for the changes li
 
 | Measure                                              | Before (`main`)                              | After                                                                |
 | ---------------------------------------------------- | -------------------------------------------- | -------------------------------------------------------------------- |
-| Production source (`src`)                            | 2,101 lines, 12 files                        | 1,297 lines, 19 files                                                |
-| Comment lines in `src`                               | 508                                          | 24, each explaining a constraint                                     |
-| Tests                                                | 2,802 lines; 66 unit/security, 7 integration | 1,910 lines; 82 unit/security, 7 integration on two VS Code versions |
-| Coverage (statements / branches / functions / lines) | 90.4 / 81.6 / 92.1 / 90.2                    | 94.2 / 84.1 / 97.9 / 94.1                                            |
+| Production source (`src`)                            | 2,101 lines, 12 files                        | 1,305 lines, 19 files                                                |
+| Comment lines in `src`                               | 508                                          | 26, each explaining a constraint                                     |
+| Tests                                                | 2,802 lines; 66 unit/security, 7 integration | 1,960 lines; 85 unit/security, 7 integration on two VS Code versions |
+| Coverage (statements / branches / functions / lines) | 90.4 / 81.6 / 92.1 / 90.2                    | 94.3 / 83.9 / 97.9 / 94.2                                            |
 | VSIX contents                                        | 45 files, 105.9 KB                           | 12 files, 60.4 KB                                                    |
 | High-severity `npm audit` advisories (all dev-only)  | 24                                           | 0                                                                    |
 | Files that fail the repo's own Prettier config       | 37                                           | 0                                                                    |
@@ -46,8 +46,10 @@ How the work landed, in order:
    UI code, shared test fakes.
 5. Improvements and deletions (`48068a1` to `5d0fa33`): logging, error causes, legacy removal,
    the lint-enforced layer boundary, and one dependency override.
-6. Documentation (`0b17b84` onward): this report, `QUALITY_BASELINE.md`, `ARCHITECTURE.md`,
+6. Documentation (`0b17b84`, `e586a6c`): this report, `QUALITY_BASELINE.md`, `ARCHITECTURE.md`,
    `TESTING.md`, and the README.
+7. Fixes from the independent review (`5efec4f`); see
+   [Risk assessment](#risk-assessment-and-compatibility).
 
 ## Best-practice comparison
 
@@ -116,23 +118,31 @@ flowchart LR
 
 ## Behavior changes
 
-| Change                                                                                         | Why                                                                                                        | Commit    | Rollback                                                                                            |
-| ---------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------- | --------- | --------------------------------------------------------------------------------------------------- |
-| `engines.vscode` raised from `^1.85.0` to `^1.91.0`                                            | `http.noProxy` first shipped in 1.91; on 1.85–1.90 enabling failed partway (see the commit for the source) | `c8fcd6f` | `git revert c8fcd6f`. Users on 1.85–1.90 would again install a version that cannot enable the proxy |
-| New **Proxy Toggler** entry in the Output panel                                                | Unexpected errors were swallowed or shown with no detail                                                   | `48068a1` | `git revert 48068a1` (this also reverts the next two rows)                                          |
-| Configure with a locked or unavailable keychain shows the keychain message                     | The credential check ran before any error handler, so VS Code showed its generic "command failed" error    | `48068a1` | As above                                                                                            |
-| An unexpected failure inside the configure prompts shows "Failed to save proxy configuration." | Every command now has one failure message for errors it cannot explain                                     | `48068a1` | As above                                                                                            |
-| The VSIX contains only `dist/extension.js` and assets                                          | Duplicate and stale build output was shipped                                                               | `47aed29` | `git revert 47aed29`; no user-visible effect                                                        |
-| `"activationEvents": []`                                                                       | Contributed commands activate the extension implicitly since VS Code 1.74                                  | `51a1271` | `git revert 51a1271`; activation is identical (an integration test proves it)                       |
+| Change                                                                     | Why                                                                                                                                                                                                                     | Commit               | Rollback                                                                                            |
+| -------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | -------------------- | --------------------------------------------------------------------------------------------------- |
+| `engines.vscode` raised from `^1.85.0` to `^1.91.0`                        | `http.noProxy` first shipped in 1.91; on 1.85–1.90 enabling failed partway (see the commit for the source)                                                                                                              | `c8fcd6f`            | `git revert c8fcd6f`. Users on 1.85–1.90 would again install a version that cannot enable the proxy |
+| New **Proxy Toggler** entry in the Output panel                            | Unexpected errors were swallowed or shown with no detail                                                                                                                                                                | `48068a1`            | `git revert 48068a1` (this also reverts the next two rows)                                          |
+| Configure with a locked or unavailable keychain shows the keychain message | The credential check ran before any error handler, so VS Code showed its generic "command failed" error                                                                                                                 | `48068a1`            | As above                                                                                            |
+| An unexpected configure failure shows "Failed to configure proxy."         | Every command now has one failure message for errors it cannot explain. On `main`, prompt and post-save failures reached VS Code's generic error, and unexpected save errors said "Failed to save proxy configuration." | `48068a1`, `5efec4f` | Edit the configure message in `src/proxy-toggler.ts`; `git revert 48068a1` removes the whole change |
+| The VSIX contains only `dist/extension.js` and assets                      | Duplicate and stale build output was shipped                                                                                                                                                                            | `47aed29`            | `git revert 47aed29`; no user-visible effect                                                        |
+| `"activationEvents": []`                                                   | Contributed commands activate the extension implicitly since VS Code 1.74                                                                                                                                               | `51a1271`            | `git revert 51a1271`; activation is identical (an integration test proves it)                       |
 
-Internal changes with no user-visible effect: the test-facing `getStatusBarText()` returns the
-last text after disposal instead of `undefined`, and `ProxyManager.getState()` ignores unknown keys
-in the stored state object, which this extension never writes.
+Internal change with no user-visible effect: the test-facing `getStatusBarText()` returns the
+last text after disposal instead of `undefined`.
 
 ## Risk assessment and compatibility
 
 - **Persisted data is unchanged.** Storage keys, secret keys, stored shapes, and the order of
-  `http.*` writes are the same. Unit tests now pin the storage keys and shapes.
+  `http.*` writes are the same, and fields of the stored toggle state that this version does not
+  manage survive a write, as before. Unit tests now pin all of this.
+- **Independent review.** A separate review agent compared the branch with `main` by reading the
+  code. It reported no high or medium issues, and verified that validation, messages, actions,
+  settings order, storage and secret keys, and status bar text are unchanged. It found no lost
+  security control, no new async hazard, and no type hole. Its two low findings and one latent
+  hazard are fixed in `5efec4f`:
+  - `getState()` had stopped preserving unknown stored fields; main's behavior is restored.
+  - Configure's catch-all message was misleading after a successful save; it is now stage-neutral.
+  - `runInBackground` could let a synchronous throw escape; it now catches it.
 - **CI has not run on these workflows.** The branch is not pushed, so the new CI steps were run
   locally on macOS only. Three CI-specific risks:
   - CI now uses Node 24. npm 11.19 and later block dependency install scripts; `allowScripts`
@@ -197,7 +207,7 @@ saying so.
 
 ## Comment policy outcome
 
-`src` has 24 comment lines, down from 508. Each states a constraint or a reason the code cannot
+`src` has 26 comment lines, down from 508. Each states a constraint or a reason the code cannot
 show: credentials never reach `globalState`; activation must stay keychain-free; settings are
 written in a fixed order; `http.noProxy` is an array; literal `l10n.t` calls keep strings
 extractable; keychain reasons are guessed from messages. Longer explanations now live in:
@@ -294,10 +304,10 @@ Net change per area (lines at `main` and at the branch tip):
 
 | Area                                                              | Before | After | Change      |
 | ----------------------------------------------------------------- | ------ | ----- | ----------- |
-| Core (`src/core`; formerly `services/` and `types/`)              | 890    | 513   | −377 (−42%) |
+| Core (`src/core`; formerly `services/` and `types/`)              | 890    | 516   | −374 (−42%) |
 | UI (`src/commands`, notifications, status bar)                    | 957    | 583   | −374 (−39%) |
-| Integrations (`extension.ts`, composition root, VS Code adapters) | 258    | 201   | −57 (−22%)  |
-| Tests                                                             | 2,802  | 1,910 | −892 (−32%) |
+| Integrations (`extension.ts`, composition root, VS Code adapters) | 258    | 206   | −52 (−20%)  |
+| Tests                                                             | 2,802  | 1,960 | −842 (−30%) |
 | Tooling (config, scripts, CI)                                     | 539    | 617   | +78         |
 | Documentation (`*.md`; 314 lines are the plan appendix)           | 165    | 1,230 | +1,065      |
 
