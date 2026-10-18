@@ -40,13 +40,13 @@ export class ConfigurationError extends Error {
   constructor(
     public readonly operation: 'enable' | 'disable',
     public readonly key: HttpSettingKey,
-    public override readonly cause?: Error
+    options?: ErrorOptions
   ) {
     super(
-      `Failed to ${operation} proxy: unable to update VS Code setting "${formatHttpSettingKey(key)}".`
+      `Failed to ${operation} proxy: unable to update VS Code setting "${formatHttpSettingKey(key)}".`,
+      options
     );
     this.name = 'ConfigurationError';
-    Object.setPrototypeOf(this, new.target.prototype);
   }
 
   toUserMessage(): string {
@@ -196,7 +196,7 @@ export class ProxyManager {
       try {
         await this.httpSettings.update(key, values[key]);
       } catch (error: unknown) {
-        throw new ConfigurationError(operation, key, asError(error));
+        throw new ConfigurationError(operation, key, { cause: error });
       }
     }
   }
@@ -204,8 +204,4 @@ export class ProxyManager {
 
 function formatHttpSettingKey(key: HttpSettingKey): string {
   return `http.${key}`;
-}
-
-function asError(error: unknown): Error | undefined {
-  return error instanceof Error ? error : undefined;
 }

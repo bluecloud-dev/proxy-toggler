@@ -46,6 +46,7 @@ describe('KeychainService', () => {
         assert.ok(error instanceof KeychainError);
         assert.equal(error.operation, 'store');
         assert.equal(error.reason, KeychainErrorReason.LOCKED);
+        assert.match(String(error.cause), /Keychain is locked/);
         assert.match(error.toUserMessage(), /locked/i);
         return true;
       }

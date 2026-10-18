@@ -15,7 +15,6 @@ export class ValidationError extends Error {
   ) {
     super(`Invalid ${field}: ${reason}`);
     this.name = 'ValidationError';
-    Object.setPrototypeOf(this, new.target.prototype);
   }
 }
 

@@ -135,6 +135,7 @@ describe('ProxyManager', () => {
         assert.equal(error.key, 'noProxy');
         assert.equal(error.getSettingId(), 'http.noProxy');
         assert.match(error.toUserMessage(), /http\.noProxy/);
+        assert.match(String(error.cause), /Failed to update noProxy/);
         return true;
       }
     );
