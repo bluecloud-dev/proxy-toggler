@@ -1,17 +1,21 @@
 import type * as vscode from 'vscode';
 
 import type { KeychainService } from './keychain-service';
-import { parseNoProxyList } from './no-proxy';
-import type { ProxyConfiguration, ProxyCredentials } from './proxy-configuration';
-import type { ToggleState } from './toggle-state';
-import { ValidationService } from './validation-service';
-
-const DEFAULT_NO_PROXY = 'localhost,127.0.0.1';
+import { parseNoProxyList, withDefaultNoProxy } from './no-proxy';
+import type { ProxyConfiguration, ProxyCredentials, ToggleState } from './proxy-configuration';
+import { validateCredentials, validateNoProxyList, validateProxyUrl } from './validation';
 
 const STORAGE_KEYS = {
   proxyConfig: 'proxyToggler.savedProxy',
   toggleState: 'proxyToggler.state'
 } as const;
+
+// Written in this order on enable and disable.
+const HTTP_SETTING_KEYS = ['proxy', 'proxyStrictSSL', 'noProxy'] as const;
+
+export type HttpSettingKey = (typeof HTTP_SETTING_KEYS)[number];
+
+type HttpSettingValues = Record<HttpSettingKey, string | boolean | undefined>;
 
 export type Memento = Pick<vscode.Memento, 'get' | 'update'>;
 
@@ -19,8 +23,6 @@ export type CredentialStore = Pick<
   KeychainService,
   'storeCredentials' | 'clearCredentials' | 'hasCredentials'
 >;
-
-export type HttpSettingKey = 'proxy' | 'proxyStrictSSL' | 'noProxy';
 
 export type HttpSettings = {
   read(): Record<HttpSettingKey, unknown>;
@@ -31,22 +33,8 @@ export type LoadedProxyConfiguration = ProxyConfiguration & {
   hasStoredCredentials: boolean;
 };
 
-export type SaveConfigurationOptions =
-  | {
-      configuration: ProxyConfiguration;
-      credentials: ProxyCredentials;
-      clearCredentials?: never;
-    }
-  | {
-      configuration: ProxyConfiguration;
-      clearCredentials: true;
-      credentials?: never;
-    }
-  | {
-      configuration: ProxyConfiguration;
-      credentials?: undefined;
-      clearCredentials?: undefined;
-    };
+export type CredentialsUpdate =
+  { mode: 'keep' } | { mode: 'clear' } | { mode: 'set'; credentials: ProxyCredentials };
 
 export class ConfigurationError extends Error {
   constructor(
@@ -62,8 +50,7 @@ export class ConfigurationError extends Error {
   }
 
   toUserMessage(): string {
-    const action = this.operation === 'enable' ? 'enable' : 'disable';
-    return `Unable to ${action} the proxy because VS Code setting "${formatHttpSettingKey(this.key)}" could not be updated. Your settings may be managed by policy.`;
+    return `Unable to ${this.operation} the proxy because VS Code setting "${this.getSettingId()}" could not be updated. Your settings may be managed by policy.`;
   }
 
   getSettingId(): string {
@@ -83,36 +70,33 @@ export class ProxyManager {
     // No-op: ProxyManager holds no unmanaged resources.
   }
 
-  async saveConfiguration(options: SaveConfigurationOptions): Promise<void> {
-    const normalizedConfiguration = normalizeConfiguration(options.configuration);
+  async saveConfiguration(
+    configuration: ProxyConfiguration,
+    credentialsUpdate: CredentialsUpdate
+  ): Promise<void> {
+    const normalized: ProxyConfiguration = {
+      proxyUrl: configuration.proxyUrl.trim(),
+      strictSSL: configuration.strictSSL,
+      noProxy: withDefaultNoProxy(configuration.noProxy)
+    };
 
-    ValidationService.validateProxyUrl(normalizedConfiguration.proxyUrl);
-    ValidationService.validateNoProxyPattern(normalizedConfiguration.noProxy);
-
-    if (hasCredentialUpdate(options)) {
-      ValidationService.validateCredentials(
-        options.credentials.username,
-        options.credentials.password
-      );
+    validateProxyUrl(normalized.proxyUrl);
+    validateNoProxyList(normalized.noProxy);
+    if (credentialsUpdate.mode === 'set') {
+      const { username, password } = credentialsUpdate.credentials;
+      validateCredentials(username, password);
     }
 
-    await this.globalState.update(STORAGE_KEYS.proxyConfig, normalizedConfiguration);
+    await this.globalState.update(STORAGE_KEYS.proxyConfig, normalized);
 
-    if (hasCredentialUpdate(options)) {
-      await this.keychainService.storeCredentials(
-        options.credentials.username,
-        options.credentials.password
-      );
-    } else if (options.clearCredentials === true) {
+    if (credentialsUpdate.mode === 'set') {
+      const { username, password } = credentialsUpdate.credentials;
+      await this.keychainService.storeCredentials(username, password);
+    } else if (credentialsUpdate.mode === 'clear') {
       await this.keychainService.clearCredentials();
     }
 
-    const nextState: ToggleState = {
-      ...this.getState(),
-      hasConfiguration: true
-    };
-
-    await this.globalState.update(STORAGE_KEYS.toggleState, nextState);
+    await this.writeState({ hasConfiguration: true });
   }
 
   async loadConfiguration(): Promise<LoadedProxyConfiguration | undefined> {
@@ -144,30 +128,25 @@ export class ProxyManager {
 
   async enableProxy(): Promise<void> {
     const configuration = this.savedConfiguration();
-
     if (!configuration) {
       throw new Error('No proxy configuration found');
     }
 
-    await this.updateHttpSetting('enable', 'proxy', configuration.proxyUrl);
-    await this.updateHttpSetting('enable', 'proxyStrictSSL', configuration.strictSSL);
-    await this.updateHttpSetting('enable', 'noProxy', configuration.noProxy);
-
-    await this.globalState.update(STORAGE_KEYS.toggleState, {
-      ...this.getState(),
-      isEnabled: true
+    await this.writeHttpSettings('enable', {
+      proxy: configuration.proxyUrl,
+      proxyStrictSSL: configuration.strictSSL,
+      noProxy: configuration.noProxy
     });
+    await this.writeState({ isEnabled: true });
   }
 
   async disableProxy(): Promise<void> {
-    await this.updateHttpSetting('disable', 'proxy', undefined);
-    await this.updateHttpSetting('disable', 'proxyStrictSSL', undefined);
-    await this.updateHttpSetting('disable', 'noProxy', undefined);
-
-    await this.globalState.update(STORAGE_KEYS.toggleState, {
-      ...this.getState(),
-      isEnabled: false
+    await this.writeHttpSettings('disable', {
+      proxy: undefined,
+      proxyStrictSSL: undefined,
+      noProxy: undefined
     });
+    await this.writeState({ isEnabled: false });
   }
 
   async toggleProxy(): Promise<boolean> {
@@ -186,26 +165,14 @@ export class ProxyManager {
 
   // Records the state found in VS Code settings without writing those settings.
   async syncToggleState(isEnabled: boolean): Promise<void> {
-    await this.globalState.update(STORAGE_KEYS.toggleState, {
-      ...this.getState(),
-      isEnabled
-    });
+    await this.writeState({ isEnabled });
   }
 
   getState(): ToggleState {
     const stored = this.globalState.get<ToggleState>(STORAGE_KEYS.toggleState);
-    const hasConfiguration = Boolean(this.savedConfiguration());
-
-    if (stored) {
-      return {
-        ...stored,
-        hasConfiguration
-      };
-    }
-
     return {
-      isEnabled: false,
-      hasConfiguration
+      isEnabled: stored?.isEnabled ?? false,
+      hasConfiguration: Boolean(this.savedConfiguration())
     };
   }
 
@@ -217,15 +184,20 @@ export class ProxyManager {
     return this.globalState.get<ProxyConfiguration>(STORAGE_KEYS.proxyConfig);
   }
 
-  private async updateHttpSetting(
+  private async writeState(change: Partial<ToggleState>): Promise<void> {
+    await this.globalState.update(STORAGE_KEYS.toggleState, { ...this.getState(), ...change });
+  }
+
+  private async writeHttpSettings(
     operation: ConfigurationError['operation'],
-    key: HttpSettingKey,
-    value: string | boolean | undefined
+    values: HttpSettingValues
   ): Promise<void> {
-    try {
-      await this.httpSettings.update(key, value);
-    } catch (error: unknown) {
-      throw new ConfigurationError(operation, key, asError(error));
+    for (const key of HTTP_SETTING_KEYS) {
+      try {
+        await this.httpSettings.update(key, values[key]);
+      } catch (error: unknown) {
+        throw new ConfigurationError(operation, key, asError(error));
+      }
     }
   }
 }
@@ -236,23 +208,4 @@ function formatHttpSettingKey(key: HttpSettingKey): string {
 
 function asError(error: unknown): Error | undefined {
   return error instanceof Error ? error : undefined;
-}
-
-function hasCredentialUpdate(
-  options: SaveConfigurationOptions
-): options is { configuration: ProxyConfiguration; credentials: ProxyCredentials } {
-  return options.credentials !== undefined;
-}
-
-function normalizeConfiguration(configuration: ProxyConfiguration): ProxyConfiguration {
-  return {
-    proxyUrl: configuration.proxyUrl.trim(),
-    strictSSL: configuration.strictSSL,
-    noProxy: normalizeNoProxyValue(configuration.noProxy)
-  };
-}
-
-function normalizeNoProxyValue(value: string): string {
-  const trimmed = value.trim();
-  return trimmed.length > 0 ? trimmed : DEFAULT_NO_PROXY;
 }

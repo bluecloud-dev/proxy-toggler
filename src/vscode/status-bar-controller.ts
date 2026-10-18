@@ -1,6 +1,6 @@
 import type * as vscode from 'vscode';
 
-import type { ToggleState } from '../core/toggle-state';
+import type { ToggleState } from '../core/proxy-configuration';
 import type { StatusBarItem, VscodeApi } from './api';
 
 type StatusBarApi = Pick<VscodeApi, 'StatusBarAlignment' | 'l10n' | 'window'>;

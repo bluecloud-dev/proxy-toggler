@@ -4,11 +4,9 @@ import type { QuickPickItem } from 'vscode';
 
 import { configureProxyCommand } from '../../src/commands/configure-proxy';
 import { KeychainError, KeychainErrorReason } from '../../src/core/keychain-service';
-import type {
-  LoadedProxyConfiguration,
-  SaveConfigurationOptions
-} from '../../src/core/proxy-manager';
-import { ValidationError } from '../../src/core/validation-service';
+import type { ProxyConfiguration } from '../../src/core/proxy-configuration';
+import type { CredentialsUpdate, LoadedProxyConfiguration } from '../../src/core/proxy-manager';
+import { ValidationError } from '../../src/core/validation';
 import { createFakeVscode } from '../support/fake-vscode';
 import { createNotificationRecorder } from '../support/fakes';
 
@@ -43,7 +41,8 @@ const storedCredentials: LoadedProxyConfiguration = {
 };
 
 async function runConfigure(scenario: Scenario) {
-  const saveCalls: SaveConfigurationOptions[] = [];
+  const saveCalls: Array<{ configuration: ProxyConfiguration; credentials: CredentialsUpdate }> =
+    [];
   let refreshes = 0;
   const vscode = createFakeVscode({
     inputs: scenario.inputs,
@@ -52,11 +51,14 @@ async function runConfigure(scenario: Scenario) {
   const notifications = createNotificationRecorder(() => scenario.notificationAnswer);
   const proxyManager = {
     loadConfiguration: async () => scenario.existing,
-    saveConfiguration: async (options: SaveConfigurationOptions) => {
+    saveConfiguration: async (
+      configuration: ProxyConfiguration,
+      credentials: CredentialsUpdate
+    ) => {
       if (scenario.saveError) {
         throw scenario.saveError;
       }
-      saveCalls.push(options);
+      saveCalls.push({ configuration, credentials });
     }
   };
 
@@ -77,7 +79,10 @@ describe('configureProxyCommand', () => {
     const result = await runConfigure({ inputs: [PROXY_URL, '', ''], picks: [strictSSL(true)] });
 
     assert.deepEqual(result.saveCalls, [
-      { configuration: { proxyUrl: PROXY_URL, strictSSL: true, noProxy: 'localhost,127.0.0.1' } }
+      {
+        configuration: { proxyUrl: PROXY_URL, strictSSL: true, noProxy: '' },
+        credentials: { mode: 'keep' }
+      }
     ]);
     assert.deepEqual(
       result.notifications.map((notification) => notification.message),
@@ -95,8 +100,8 @@ describe('configureProxyCommand', () => {
 
     assert.deepEqual(result.saveCalls, [
       {
-        configuration: { proxyUrl: PROXY_URL, strictSSL: true, noProxy: 'localhost,127.0.0.1' },
-        credentials: { username: 'alice', password: 'secret' }
+        configuration: { proxyUrl: PROXY_URL, strictSSL: true, noProxy: '' },
+        credentials: { mode: 'set', credentials: { username: 'alice', password: 'secret' } }
       }
     ]);
     assert.equal(result.refreshes, 1);
@@ -110,7 +115,10 @@ describe('configureProxyCommand', () => {
     });
 
     assert.deepEqual(result.saveCalls, [
-      { configuration: { proxyUrl: PROXY_URL, strictSSL: false, noProxy: 'localhost' } }
+      {
+        configuration: { proxyUrl: PROXY_URL, strictSSL: false, noProxy: 'localhost' },
+        credentials: { mode: 'keep' }
+      }
     ]);
   });
 
@@ -124,7 +132,7 @@ describe('configureProxyCommand', () => {
     assert.deepEqual(result.saveCalls, [
       {
         configuration: { proxyUrl: PROXY_URL, strictSSL: true, noProxy: 'localhost' },
-        clearCredentials: true
+        credentials: { mode: 'clear' }
       }
     ]);
   });
@@ -139,7 +147,7 @@ describe('configureProxyCommand', () => {
     assert.deepEqual(result.saveCalls, [
       {
         configuration: { proxyUrl: PROXY_URL, strictSSL: true, noProxy: 'localhost' },
-        credentials: { username: 'bob', password: 'secret' }
+        credentials: { mode: 'set', credentials: { username: 'bob', password: 'secret' } }
       }
     ]);
   });

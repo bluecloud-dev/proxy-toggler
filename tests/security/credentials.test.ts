@@ -14,14 +14,16 @@ import {
 const USERNAME = 'alice';
 const PASSWORD = 'super-secret';
 
-const SAVE_WITH_CREDENTIALS = {
-  configuration: {
-    proxyUrl: 'http://proxy.example.com:8080',
-    strictSSL: true,
-    noProxy: 'localhost'
-  },
-  credentials: { username: USERNAME, password: PASSWORD }
+const CONFIGURATION = {
+  proxyUrl: 'http://proxy.example.com:8080',
+  strictSSL: true,
+  noProxy: 'localhost'
 };
+
+const SET_CREDENTIALS = {
+  mode: 'set',
+  credentials: { username: USERNAME, password: PASSWORD }
+} as const;
 
 function createProxyManager(
   state = new Map<string, unknown>(),
@@ -40,7 +42,7 @@ describe('credential handling (security)', () => {
   it('never writes credentials to globalState', async () => {
     const { globalState, proxyManager } = createProxyManager();
 
-    await proxyManager.saveConfiguration(SAVE_WITH_CREDENTIALS);
+    await proxyManager.saveConfiguration(CONFIGURATION, SET_CREDENTIALS);
 
     const serializedState = JSON.stringify([...globalState.store.entries()]);
     assert.doesNotMatch(serializedState, new RegExp(USERNAME));
@@ -49,7 +51,7 @@ describe('credential handling (security)', () => {
 
   it('reports that credentials exist without returning them', async () => {
     const { proxyManager } = createProxyManager();
-    await proxyManager.saveConfiguration(SAVE_WITH_CREDENTIALS);
+    await proxyManager.saveConfiguration(CONFIGURATION, SET_CREDENTIALS);
 
     const loaded = await proxyManager.loadConfiguration();
 
@@ -60,7 +62,10 @@ describe('credential handling (security)', () => {
   it('keeps credentials across a restart', async () => {
     const state = new Map<string, unknown>();
     const secrets = new Map<string, string>();
-    await createProxyManager(state, secrets).proxyManager.saveConfiguration(SAVE_WITH_CREDENTIALS);
+    await createProxyManager(state, secrets).proxyManager.saveConfiguration(
+      CONFIGURATION,
+      SET_CREDENTIALS
+    );
 
     const afterRestart = await createProxyManager(state, secrets).proxyManager.loadConfiguration();
 

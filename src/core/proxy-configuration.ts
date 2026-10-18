@@ -9,3 +9,8 @@ export type ProxyCredentials = {
   username: string;
   password: string;
 };
+
+export type ToggleState = {
+  isEnabled: boolean;
+  hasConfiguration: boolean;
+};

@@ -1,7 +1,7 @@
 import type * as vscode from 'vscode';
 
 import type { ProxyCredentials } from './proxy-configuration';
-import { ValidationService } from './validation-service';
+import { validateCredentials } from './validation';
 
 const USERNAME_SECRET_KEY = 'proxyToggler.credentials.username';
 const PASSWORD_SECRET_KEY = 'proxyToggler.credentials.password';
@@ -54,7 +54,7 @@ export class KeychainService {
     const normalizedUsername = normalizeSecretValue(username);
     const normalizedPassword = normalizeSecretValue(password);
 
-    ValidationService.validateCredentials(normalizedUsername, normalizedPassword);
+    validateCredentials(normalizedUsername, normalizedPassword);
 
     // Blank credentials mean "no authentication", so clear rather than store empty secrets.
     if (!normalizedUsername || !normalizedPassword) {

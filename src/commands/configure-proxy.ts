@@ -1,9 +1,15 @@
 import type { InputBoxOptions, QuickPickItem } from 'vscode';
 
 import { KeychainError } from '../core/keychain-service';
-import type { ProxyConfiguration, ProxyCredentials } from '../core/proxy-configuration';
-import type { ProxyManager as ProxyManagerService } from '../core/proxy-manager';
-import { ValidationError, ValidationService } from '../core/validation-service';
+import { DEFAULT_NO_PROXY } from '../core/no-proxy';
+import type { ProxyConfiguration } from '../core/proxy-configuration';
+import type { CredentialsUpdate, ProxyManager as ProxyManagerService } from '../core/proxy-manager';
+import {
+  validateCredentials,
+  validateNoProxyList,
+  validateProxyUrl,
+  ValidationError
+} from '../core/validation';
 import type { VscodeApi } from '../vscode/api';
 import type {
   NotificationAction,
@@ -11,16 +17,12 @@ import type {
 } from '../vscode/notification-service';
 import { COMMANDS } from './command-ids';
 
-const DEFAULT_NO_PROXY = 'localhost,127.0.0.1';
 // Stored credentials are never read back for display; the UI shows only this mask.
 const MASKED_CREDENTIALS_PLACEHOLDER = '••••••';
 
 type ConfigureApi = Pick<VscodeApi, 'commands' | 'l10n' | 'window'>;
 
 type ProxyManager = Pick<ProxyManagerService, 'loadConfiguration' | 'saveConfiguration'>;
-
-type CredentialsUpdate =
-  { mode: 'keep' } | { mode: 'clear' } | { mode: 'set'; credentials: ProxyCredentials };
 
 type NotificationService = Pick<
   NotificationServiceService,
@@ -67,11 +69,11 @@ export async function configureProxyCommand(
   const configuration: ProxyConfiguration = {
     proxyUrl,
     strictSSL,
-    noProxy: normalizeNoProxy(noProxyInput)
+    noProxy: noProxyInput
   };
 
   try {
-    await saveConfiguration(proxyManager, configuration, credentialsUpdate);
+    await proxyManager.saveConfiguration(configuration, credentialsUpdate);
   } catch (error: unknown) {
     await showConfigurationSaveError(notificationService, error);
     return;
@@ -104,7 +106,7 @@ async function promptForProxyUrl(
 
 function validateProxyUrlInput(vscodeApi: ConfigureApi, value: string): string | undefined {
   try {
-    ValidationService.validateProxyUrl(value);
+    validateProxyUrl(value);
     return undefined;
   } catch (error: unknown) {
     if (error instanceof ValidationError) {
@@ -138,7 +140,7 @@ async function promptForCredentialsUpdate(
   }
 
   try {
-    ValidationService.validateCredentials(username, password);
+    validateCredentials(username, password);
   } catch (error: unknown) {
     await showValidationError(notificationService, error);
     return undefined;
@@ -205,7 +207,7 @@ async function promptForCredentialAction(
   }
 
   try {
-    ValidationService.validateCredentials(username, password);
+    validateCredentials(username, password);
   } catch (error: unknown) {
     await showValidationError(notificationService, error);
     return undefined;
@@ -294,7 +296,7 @@ async function promptForNoProxy(
 
 function validateNoProxyInput(vscodeApi: ConfigureApi, value: string): string | undefined {
   try {
-    ValidationService.validateNoProxyPattern(value);
+    validateNoProxyList(value);
     return undefined;
   } catch (error: unknown) {
     if (error instanceof ValidationError) {
@@ -302,32 +304,6 @@ function validateNoProxyInput(vscodeApi: ConfigureApi, value: string): string | 
     }
     return vscodeApi.l10n.t('Invalid bypass pattern');
   }
-}
-
-function normalizeNoProxy(value: string): string {
-  const trimmed = value.trim();
-  return trimmed.length > 0 ? trimmed : DEFAULT_NO_PROXY;
-}
-
-async function saveConfiguration(
-  proxyManager: ProxyManager,
-  configuration: ProxyConfiguration,
-  credentialsUpdate: CredentialsUpdate
-): Promise<void> {
-  if (credentialsUpdate.mode === 'keep') {
-    await proxyManager.saveConfiguration({ configuration });
-    return;
-  }
-
-  if (credentialsUpdate.mode === 'clear') {
-    await proxyManager.saveConfiguration({ configuration, clearCredentials: true });
-    return;
-  }
-
-  await proxyManager.saveConfiguration({
-    configuration,
-    credentials: credentialsUpdate.credentials
-  });
 }
 
 async function showConfigurationSaveError(

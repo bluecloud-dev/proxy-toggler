@@ -2,7 +2,7 @@ import { strict as assert } from 'node:assert';
 
 import type { ProxyCredentials } from '../../src/core/proxy-configuration';
 import { ConfigurationError, ProxyManager } from '../../src/core/proxy-manager';
-import { ValidationError } from '../../src/core/validation-service';
+import { ValidationError } from '../../src/core/validation';
 import { createHttpSettings, createMemento } from '../support/fakes';
 
 const CONFIGURATION = {
@@ -39,10 +39,10 @@ describe('ProxyManager', () => {
   it('persists a trimmed configuration with the default bypass list and stores credentials', async () => {
     const { globalState, keychain, proxyManager } = setup();
 
-    await proxyManager.saveConfiguration({
-      configuration: { proxyUrl: ' http://proxy.example.com:8080 ', strictSSL: true, noProxy: '' },
-      credentials: { username: 'alice', password: 'secret' }
-    });
+    await proxyManager.saveConfiguration(
+      { proxyUrl: ' http://proxy.example.com:8080 ', strictSSL: true, noProxy: '' },
+      { mode: 'set', credentials: { username: 'alice', password: 'secret' } }
+    );
 
     assert.deepEqual(globalState.store.get('proxyToggler.savedProxy'), {
       proxyUrl: 'http://proxy.example.com:8080',
@@ -62,7 +62,7 @@ describe('ProxyManager', () => {
   it('leaves stored credentials alone when a save omits them', async () => {
     const { keychain, proxyManager } = setup();
 
-    await proxyManager.saveConfiguration({ configuration: CONFIGURATION });
+    await proxyManager.saveConfiguration(CONFIGURATION, { mode: 'keep' });
 
     assert.deepEqual(keychain.calls, { store: [], clear: 0 });
   });
@@ -70,14 +70,14 @@ describe('ProxyManager', () => {
   it('clears stored credentials on request', async () => {
     const { keychain, proxyManager } = setup();
 
-    await proxyManager.saveConfiguration({ configuration: CONFIGURATION, clearCredentials: true });
+    await proxyManager.saveConfiguration(CONFIGURATION, { mode: 'clear' });
 
     assert.deepEqual(keychain.calls, { store: [], clear: 1 });
   });
 
   it('loads the configuration with credential presence but never the credentials', async () => {
     const { proxyManager } = setup({ hasCredentials: true });
-    await proxyManager.saveConfiguration({ configuration: CONFIGURATION });
+    await proxyManager.saveConfiguration(CONFIGURATION, { mode: 'keep' });
 
     assert.deepEqual(await proxyManager.loadConfiguration(), {
       ...CONFIGURATION,
@@ -89,7 +89,7 @@ describe('ProxyManager', () => {
     const { proxyManager } = setup();
     assert.deepEqual(proxyManager.getState(), { isEnabled: false, hasConfiguration: false });
 
-    await proxyManager.saveConfiguration({ configuration: CONFIGURATION });
+    await proxyManager.saveConfiguration(CONFIGURATION, { mode: 'keep' });
 
     assert.deepEqual(proxyManager.getState(), { isEnabled: false, hasConfiguration: true });
     assert.equal(proxyManager.hasConfiguration(), true);
@@ -100,9 +100,10 @@ describe('ProxyManager', () => {
 
     await assert.rejects(
       () =>
-        proxyManager.saveConfiguration({
-          configuration: { ...CONFIGURATION, proxyUrl: 'proxy.example.com:8080' }
-        }),
+        proxyManager.saveConfiguration(
+          { ...CONFIGURATION, proxyUrl: 'proxy.example.com:8080' },
+          { mode: 'keep' }
+        ),
       ValidationError
     );
     assert.deepEqual(globalState.updates, []);
@@ -110,7 +111,7 @@ describe('ProxyManager', () => {
 
   it('enables by writing the http settings in order, then the state', async () => {
     const { httpSettings, proxyManager } = setup();
-    await proxyManager.saveConfiguration({ configuration: CONFIGURATION });
+    await proxyManager.saveConfiguration(CONFIGURATION, { mode: 'keep' });
 
     await proxyManager.enableProxy();
 
@@ -124,7 +125,7 @@ describe('ProxyManager', () => {
 
   it('reports which setting failed as a ConfigurationError', async () => {
     const { proxyManager } = setup({ http: { failKey: 'noProxy' } });
-    await proxyManager.saveConfiguration({ configuration: CONFIGURATION });
+    await proxyManager.saveConfiguration(CONFIGURATION, { mode: 'keep' });
 
     await assert.rejects(
       () => proxyManager.enableProxy(),
@@ -154,7 +155,7 @@ describe('ProxyManager', () => {
 
   it('toggles between enabled and disabled', async () => {
     const { proxyManager } = setup();
-    await proxyManager.saveConfiguration({ configuration: CONFIGURATION });
+    await proxyManager.saveConfiguration(CONFIGURATION, { mode: 'keep' });
 
     assert.equal(await proxyManager.toggleProxy(), true);
     assert.equal(proxyManager.getState().isEnabled, true);
@@ -170,7 +171,7 @@ describe('ProxyManager', () => {
 
   it('records a synced state without touching the settings or the configuration', async () => {
     const { globalState, httpSettings, proxyManager } = setup();
-    await proxyManager.saveConfiguration({ configuration: CONFIGURATION });
+    await proxyManager.saveConfiguration(CONFIGURATION, { mode: 'keep' });
 
     await proxyManager.syncToggleState(true);
 
@@ -194,7 +195,7 @@ describe('ProxyManager', () => {
           }
         }
       });
-      await proxyManager.saveConfiguration({ configuration: CONFIGURATION });
+      await proxyManager.saveConfiguration(CONFIGURATION, { mode: 'keep' });
 
       assert.equal(proxyManager.isConfigurationApplied(), true);
     });
@@ -203,7 +204,7 @@ describe('ProxyManager', () => {
       const { proxyManager } = setup({
         http: { current: { proxy: CONFIGURATION.proxyUrl, proxyStrictSSL: false, noProxy: [] } }
       });
-      await proxyManager.saveConfiguration({ configuration: CONFIGURATION });
+      await proxyManager.saveConfiguration(CONFIGURATION, { mode: 'keep' });
 
       assert.equal(proxyManager.isConfigurationApplied(), false);
     });
