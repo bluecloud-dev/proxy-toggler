@@ -85,7 +85,6 @@
     "test:unit": "mocha -r ts-node/register \"tests/unit/**/*.test.ts\" \"tests/security/**/*.test.ts\"",
     "test:integration": "npm run build && ts-node ./tests/run-test.ts",
     "coverage": "node -r ./scripts/patch-os-cpus.cjs ./node_modules/nyc/bin/nyc.js npm run test:unit",
-    "prepublish": "npm run lint && npm run test && npm run build && npm run bundle",
     "vscode:prepublish": "npm run build && npm run bundle",
     "package": "node -r ./scripts/patch-os-cpus.cjs ./node_modules/@vscode/vsce/vsce package"
   },
@@ -123,19 +122,24 @@
     "@types/mocha": "^10.0.10",
     "@types/node": "^18.19.76",
     "@types/sinon": "^17.0.4",
-    "@types/vscode": "^1.85.0",
+    "@types/vscode": "1.85.0",
     "@typescript-eslint/eslint-plugin": "^8.16.0",
     "@typescript-eslint/parser": "^8.16.0",
-    "@vscode/test-electron": "^2.5.2",
+    "@vscode/test-electron": "^3.1.0",
     "@vscode/vsce": "^3.2.2",
     "esbuild": "^0.27.2",
     "eslint": "^8.57.1",
     "eslint-config-prettier": "^9.1.0",
-    "mocha": "^10.8.2",
+    "mocha": "^12.0.3",
     "nyc": "^17.1.0",
     "prettier": "^3.4.2",
     "sinon": "^19.0.2",
     "ts-node": "^10.9.2",
-    "typescript": "^5.7.2"
+    "typescript": "^5.9.3"
+  },
+  "allowScripts": {
+    "@vscode/vsce-sign": false,
+    "esbuild": false,
+    "keytar": false
   }
 }
