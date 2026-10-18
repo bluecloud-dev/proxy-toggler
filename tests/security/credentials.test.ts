@@ -1,10 +1,13 @@
 import { strict as assert } from 'node:assert';
 
+import { COMMANDS } from '../../src/commands/command-ids';
 import { configureProxyCommand } from '../../src/commands/configure-proxy';
 import { KeychainService } from '../../src/core/keychain-service';
 import { ProxyManager } from '../../src/core/proxy-manager';
+import { createProxyToggler } from '../../src/proxy-toggler';
 import { createFakeVscode } from '../support/fake-vscode';
 import {
+  createExtensionContext,
   createHttpSettings,
   createMemento,
   createNotificationRecorder,
@@ -88,5 +91,21 @@ describe('credential handling (security)', () => {
     const shown = [...notifications.notifications, ...vscode.messages];
     assert.ok(shown.length > 0);
     assert.doesNotMatch(JSON.stringify(shown), new RegExp(`${USERNAME}|${PASSWORD}`, 'i'));
+  });
+
+  it('keeps entered credentials out of the log when a command fails', async () => {
+    const vscode = createFakeVscode({
+      inputs: ['http://proxy.example.com:8080', USERNAME, PASSWORD]
+    });
+    vscode.window.showQuickPick = async () => {
+      throw new Error('quick pick failed');
+    };
+    createProxyToggler(vscode, createExtensionContext());
+
+    await vscode.commandHandlers.get(COMMANDS.configure)?.();
+
+    const log = vscode.logs.join('\n');
+    assert.match(log, /quick pick failed/);
+    assert.doesNotMatch(log, new RegExp(`${USERNAME}|${PASSWORD}`, 'i'));
   });
 });

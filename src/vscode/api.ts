@@ -16,6 +16,7 @@ export type VscodeApi = {
     t(message: string, ...args: Array<string | number | boolean>): string;
   };
   window: {
+    createOutputChannel(name: string, options: { log: true }): Logger;
     createStatusBarItem(alignment: vscode.StatusBarAlignment, priority: number): StatusBarItem;
     showErrorMessage(message: string, ...items: string[]): PromiseLike<string | undefined>;
     showInformationMessage(message: string, ...items: string[]): PromiseLike<string | undefined>;
@@ -30,6 +31,8 @@ export type VscodeApi = {
     getConfiguration(section: string): WorkspaceConfiguration;
   };
 };
+
+export type Logger = Pick<vscode.LogOutputChannel, 'dispose' | 'error'>;
 
 export type StatusBarItem = Pick<
   vscode.StatusBarItem,

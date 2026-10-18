@@ -1,7 +1,7 @@
 import type { ProxyManager } from '../core/proxy-manager';
 import type { VscodeApi } from '../vscode/api';
 import type { NotificationAction, Notifier } from '../vscode/notification-service';
-import { announceEnabled, offerToConfigure, showProxyError } from './proxy-feedback';
+import { announceEnabled, offerToConfigure, showKnownProxyError } from './proxy-feedback';
 
 const ACTION_CANCEL: NotificationAction = { id: 'cancel', title: 'Cancel' };
 
@@ -32,10 +32,7 @@ export async function toggleProxyCommand(
       await notificationService.showSuccess('Proxy disabled');
     }
   } catch (error: unknown) {
-    await showProxyError(vscodeApi, notificationService, error, {
-      fallbackMessage: 'Failed to toggle proxy.',
-      offerDisable: true
-    });
+    await showKnownProxyError(vscodeApi, notificationService, error, { offerDisable: true });
   }
 }
 

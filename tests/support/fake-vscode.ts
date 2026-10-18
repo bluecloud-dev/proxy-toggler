@@ -26,6 +26,8 @@ export type FakeVscodeOptions = {
 
 export type FakeVscode = VscodeApi & {
   commandHandlers: Map<string, () => unknown>;
+  // Everything written to the extension's log channel, one string per call.
+  logs: string[];
   executedCommands: Array<{ command: string; args: unknown[] }>;
   messages: RecordedMessage[];
   settings: Map<string, unknown>;
@@ -40,6 +42,7 @@ export function createFakeVscode(options: FakeVscodeOptions = {}): FakeVscode {
   const settings = new Map(Object.entries(options.settings ?? {}));
   const settingUpdates: FakeVscode['settingUpdates'] = [];
   const statusBarItems: FakeStatusBarItem[] = [];
+  const logs: string[] = [];
   const inputs = [...(options.inputs ?? [])];
   let quickPickCalls = 0;
 
@@ -76,6 +79,7 @@ export function createFakeVscode(options: FakeVscodeOptions = {}): FakeVscode {
 
   return {
     commandHandlers,
+    logs,
     executedCommands,
     messages,
     settings,
@@ -95,6 +99,12 @@ export function createFakeVscode(options: FakeVscodeOptions = {}): FakeVscode {
     },
     l10n: { t: options.translate ?? ((message) => message) },
     window: {
+      createOutputChannel: () => ({
+        error: (message: string | Error, ...args: unknown[]) => {
+          logs.push([message, ...args].map(String).join(' '));
+        },
+        dispose: () => undefined
+      }),
       createStatusBarItem: (alignment, priority) => {
         const item: FakeStatusBarItem = {
           alignment,

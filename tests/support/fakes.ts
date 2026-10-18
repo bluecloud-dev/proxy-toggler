@@ -112,12 +112,16 @@ export function createNotificationRecorder(
 }
 
 export function createExtensionContext(
-  stores: { state?: Map<string, unknown>; secrets?: Map<string, string> } = {}
+  stores: {
+    state?: Map<string, unknown>;
+    secrets?: Map<string, string>;
+    secretFailures?: SecretStorageFailures;
+  } = {}
 ): ExtensionContext & { globalState: FakeMemento } {
   return {
     subscriptions: [],
     globalState: createMemento(stores.state),
-    secrets: createSecretStorage(stores.secrets)
+    secrets: createSecretStorage(stores.secrets, stores.secretFailures)
   };
 }
 

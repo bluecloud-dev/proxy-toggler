@@ -1,7 +1,7 @@
 import type { ProxyManager } from '../core/proxy-manager';
 import type { VscodeApi } from '../vscode/api';
 import type { Notifier } from '../vscode/notification-service';
-import { announceEnabled, offerToConfigure, showProxyError } from './proxy-feedback';
+import { announceEnabled, offerToConfigure, showKnownProxyError } from './proxy-feedback';
 
 export async function enableProxyCommand(
   vscodeApi: Pick<VscodeApi, 'commands'>,
@@ -19,9 +19,6 @@ export async function enableProxyCommand(
     await refreshUi();
     await announceEnabled(vscodeApi, notificationService);
   } catch (error: unknown) {
-    await showProxyError(vscodeApi, notificationService, error, {
-      fallbackMessage: 'Failed to enable proxy.',
-      offerDisable: true
-    });
+    await showKnownProxyError(vscodeApi, notificationService, error, { offerDisable: true });
   }
 }

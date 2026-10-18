@@ -8,6 +8,7 @@ import { KeychainService } from './core/keychain-service';
 import type { ToggleState } from './core/proxy-configuration';
 import { ProxyManager } from './core/proxy-manager';
 import type { ExtensionContext, VscodeApi } from './vscode/api';
+import { createCommandRegistrar, runInBackground } from './vscode/error-reporting';
 import { createHttpSettings } from './vscode/http-settings';
 import { NotificationService } from './vscode/notification-service';
 import { StatusBarController } from './vscode/status-bar-controller';
@@ -24,6 +25,7 @@ export function createProxyToggler(
   vscodeApi: VscodeApi,
   context: ExtensionContext
 ): ProxyTogglerApi {
+  const logger = vscodeApi.window.createOutputChannel('Proxy Toggler', { log: true });
   const keychainService = new KeychainService(context.secrets);
   const proxyManager = new ProxyManager(
     context.globalState,
@@ -33,7 +35,7 @@ export function createProxyToggler(
   const notificationService = new NotificationService(vscodeApi);
   const statusBarController = new StatusBarController(vscodeApi, COMMANDS.toggle);
 
-  context.subscriptions.push(keychainService, proxyManager, statusBarController);
+  context.subscriptions.push(logger, keychainService, proxyManager, statusBarController);
 
   const refreshUi = async (): Promise<void> => {
     const state = proxyManager.getState();
@@ -46,24 +48,25 @@ export function createProxyToggler(
     await vscodeApi.commands.executeCommand('setContext', CONTEXT_KEYS.isEnabled, state.isEnabled);
   };
 
-  void refreshUi().catch(() => {});
-  void checkSettingsDrift(proxyManager, notificationService, refreshUi).catch(() => {});
+  runInBackground(logger, 'Status bar refresh', refreshUi);
+  runInBackground(logger, 'Settings drift check', () =>
+    checkSettingsDrift(proxyManager, notificationService, refreshUi)
+  );
 
-  const register = (command: string, handler: () => Promise<void>): void => {
-    context.subscriptions.push(vscodeApi.commands.registerCommand(command, handler));
-  };
-
-  register(COMMANDS.configure, () =>
-    configureProxyCommand(vscodeApi, proxyManager, notificationService, refreshUi)
-  );
-  register(COMMANDS.enable, () =>
-    enableProxyCommand(vscodeApi, proxyManager, notificationService, refreshUi)
-  );
-  register(COMMANDS.disable, () =>
-    disableProxyCommand(vscodeApi, proxyManager, notificationService, refreshUi)
-  );
-  register(COMMANDS.toggle, () =>
-    toggleProxyCommand(vscodeApi, proxyManager, notificationService, refreshUi)
+  const register = createCommandRegistrar(vscodeApi, logger, notificationService);
+  context.subscriptions.push(
+    register(COMMANDS.configure, 'Failed to save proxy configuration.', () =>
+      configureProxyCommand(vscodeApi, proxyManager, notificationService, refreshUi)
+    ),
+    register(COMMANDS.enable, 'Failed to enable proxy.', () =>
+      enableProxyCommand(vscodeApi, proxyManager, notificationService, refreshUi)
+    ),
+    register(COMMANDS.disable, 'Failed to disable proxy.', () =>
+      disableProxyCommand(vscodeApi, proxyManager, notificationService, refreshUi)
+    ),
+    register(COMMANDS.toggle, 'Failed to toggle proxy.', () =>
+      toggleProxyCommand(vscodeApi, proxyManager, notificationService, refreshUi)
+    )
   );
 
   return {

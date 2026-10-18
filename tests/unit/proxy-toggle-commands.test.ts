@@ -214,4 +214,16 @@ describe('proxy state commands', () => {
       );
     });
   }
+
+  it('rethrows errors it cannot explain, for the command registrar to report', async () => {
+    const proxyManager = failWith(
+      createProxyManagerStub({ hasConfiguration: true }),
+      new Error('unexpected')
+    );
+
+    await assert.rejects(
+      enableProxyCommand(createFakeVscode(), proxyManager, createNotificationRecorder(), noRefresh),
+      /unexpected/
+    );
+  });
 });

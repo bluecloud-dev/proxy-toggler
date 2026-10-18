@@ -32,7 +32,7 @@ describe('createProxyToggler', () => {
       [...vscode.commandHandlers.keys()],
       [COMMANDS.configure, COMMANDS.enable, COMMANDS.disable, COMMANDS.toggle]
     );
-    assert.equal(context.subscriptions.length, 7);
+    assert.equal(context.subscriptions.length, 8);
   });
 
   it('runs every command without a saved configuration', async () => {
@@ -114,5 +114,49 @@ describe('createProxyToggler', () => {
     await vscode.commandHandlers.get(COMMANDS.enable)?.();
 
     assert.deepEqual(vscode.settings.get('http.noProxy'), ['localhost', '127.0.0.1']);
+  });
+
+  it('shows the keychain message and logs when the keychain cannot be read', async () => {
+    const vscode = createFakeVscode();
+    const context = createExtensionContext({
+      state: new Map<string, unknown>([['proxyToggler.savedProxy', SAVED_PROXY]]),
+      secretFailures: { get: new Error('Keychain is locked') }
+    });
+    createProxyToggler(vscode, context);
+
+    await vscode.commandHandlers.get(COMMANDS.configure)?.();
+
+    assert.deepEqual(
+      vscode.messages.map((message) => [message.kind, message.message]),
+      [['error', 'Your system keychain appears to be locked. Unlock it and try again.']]
+    );
+    assert.match(vscode.logs.join('\n'), /proxyToggler\.configure failed/);
+  });
+
+  it('logs an unexpected failure and shows the command failure message', async () => {
+    const { vscode } = activateWith({});
+    vscode.window.showInputBox = async () => {
+      throw new Error('input box failed');
+    };
+
+    await vscode.commandHandlers.get(COMMANDS.configure)?.();
+
+    assert.deepEqual(
+      vscode.messages.map((message) => [message.kind, message.message]),
+      [['error', 'Failed to save proxy configuration.']]
+    );
+    assert.match(vscode.logs.join('\n'), /input box failed/);
+  });
+
+  it('logs failed background work instead of dropping it', async () => {
+    const vscode = createFakeVscode();
+    vscode.commands.executeCommand = async () => {
+      throw new Error('setContext failed');
+    };
+
+    createProxyToggler(vscode, createExtensionContext());
+    await flushBackgroundTasks();
+
+    assert.match(vscode.logs.join('\n'), /Status bar refresh failed.*setContext failed/);
   });
 });

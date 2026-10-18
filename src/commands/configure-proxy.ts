@@ -174,6 +174,9 @@ async function promptForNewCredentials(
   try {
     validateCredentials(username, password);
   } catch (error: unknown) {
+    if (!(error instanceof ValidationError)) {
+      throw error;
+    }
     await showValidationError(notificationService, error);
     return undefined;
   }
@@ -252,15 +255,13 @@ async function showConfigurationSaveError(
     return;
   }
 
-  await notificationService.showError('Failed to save proxy configuration.');
+  throw error;
 }
 
-async function showValidationError(notificationService: Notifier, error: unknown): Promise<void> {
-  if (!(error instanceof ValidationError)) {
-    await notificationService.showError('Invalid configuration input.');
-    return;
-  }
-
+async function showValidationError(
+  notificationService: Notifier,
+  error: ValidationError
+): Promise<void> {
   const examples = error.examples?.length ? ` Examples: ${error.examples.join(', ')}` : '';
   await notificationService.showError(`${error.message}${examples}`);
 }

@@ -35,11 +35,12 @@ export async function announceEnabled(
   }
 }
 
-export async function showProxyError(
+// Shows the errors these commands can explain and rethrows the rest for the command registrar.
+export async function showKnownProxyError(
   vscodeApi: CommandsApi,
   notificationService: Notifier,
   error: unknown,
-  options: { fallbackMessage: string; offerDisable: boolean }
+  options: { offerDisable: boolean }
 ): Promise<void> {
   if (error instanceof KeychainError) {
     await notificationService.showError(error.toUserMessage());
@@ -47,8 +48,7 @@ export async function showProxyError(
   }
 
   if (!(error instanceof ConfigurationError)) {
-    await notificationService.showError(options.fallbackMessage);
-    return;
+    throw error;
   }
 
   const actions = options.offerDisable

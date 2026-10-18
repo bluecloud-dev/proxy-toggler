@@ -191,4 +191,15 @@ describe('configureProxyCommand', () => {
     assert.match(error?.message ?? '', /examples/i);
     assert.equal(result.refreshes, 0);
   });
+
+  it('rethrows save errors it cannot explain', async () => {
+    await assert.rejects(
+      runConfigure({
+        inputs: [PROXY_URL, '', 'localhost'],
+        picks: [strictSSL(true)],
+        saveError: new Error('disk full')
+      }),
+      /disk full/
+    );
+  });
 });
