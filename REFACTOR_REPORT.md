@@ -1,7 +1,7 @@
 # Refactor report
 
-Branch `refactor/quality-baseline`, 24 commits on top of `main` (`88f1dc0`), not pushed. Appendix A
-is the plan as it was written and committed before any code changed.
+Branch `refactor/quality-baseline` on top of `main` (`88f1dc0`), not pushed; `git log main..` lists
+every commit. Appendix A is the plan as it was written and committed before any code changed.
 
 ## Executive summary
 
@@ -15,7 +15,7 @@ that enforces both. User-facing behavior is preserved, except for the changes li
 | Comment lines in `src`                               | 508                                          | 24, each explaining a constraint                                     |
 | Tests                                                | 2,802 lines; 66 unit/security, 7 integration | 1,910 lines; 82 unit/security, 7 integration on two VS Code versions |
 | Coverage (statements / branches / functions / lines) | 90.4 / 81.6 / 92.1 / 90.2                    | 94.2 / 84.1 / 97.9 / 94.1                                            |
-| VSIX contents                                        | 45 files, 105.9 KB                           | 12 files, 59.5 KB                                                    |
+| VSIX contents                                        | 45 files, 105.9 KB                           | 12 files, 60.4 KB                                                    |
 | High-severity `npm audit` advisories (all dev-only)  | 24                                           | 0                                                                    |
 | Files that fail the repo's own Prettier config       | 37                                           | 0                                                                    |
 
@@ -44,10 +44,10 @@ How the work landed, in order:
    was checked for an unchanged bundle.
 4. Structural (`e208b98` to `cd550ce`): composition root and VS Code boundary, core APIs, shared
    UI code, shared test fakes.
-5. Improvements and deletions (`48068a1` to `79a3689`): logging, error causes, legacy removal,
-   and the lint-enforced layer boundary.
-6. Documentation: this report, `QUALITY_BASELINE.md`, `ARCHITECTURE.md`, `TESTING.md`, and the
-   README.
+5. Improvements and deletions (`48068a1` to `5d0fa33`): logging, error causes, legacy removal,
+   the lint-enforced layer boundary, and one dependency override.
+6. Documentation (`0b17b84` onward): this report, `QUALITY_BASELINE.md`, `ARCHITECTURE.md`,
+   `TESTING.md`, and the README.
 
 ## Best-practice comparison
 
@@ -227,6 +227,18 @@ extractable; keychain reasons are guessed from messages. Longer explanations now
   Host without one.
 - Local VSIX builds in the working tree (`proxy-toggler-0.1.0.vsix`) were regenerated during
   validation. They are untracked build artifacts.
+
+Where the work departed from the plan in Appendix A:
+
+- **Mocha 11, not 12.** The plan named Mocha 12. The minimum-engine integration run showed that
+  Mocha 12 cannot load in an older extension host. Mocha 11.8 also fixes the Node 26 crash, and
+  needs one `overrides` entry for `serialize-javascript`.
+- **The engine floor rose.** The plan assumed `^1.85.0` would stay. Evidence that 1.85–1.90 cannot
+  run the extension made raising it to 1.91 a bug fix.
+- **No Dependabot file.** The plan listed Dependabot under CI. The benchmark found it in only 1 of
+  7 projects, and it changes how the maintainer works, so it is a follow-up with a ready config.
+- **One extra guard.** The `core` layer boundary is enforced by an ESLint rule (`79a3689`), not
+  only by review.
 
 ## Follow-ups deliberately left out
 
