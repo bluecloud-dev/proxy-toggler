@@ -1,8 +1,326 @@
 # Refactor report
 
-> **Status:** plan only. This file was written before any code changed. The report sections
-> (summary, behavior changes, LOC impact, and the rest) are added when the work is finished; the
-> plan below stays as written so reviewers can compare intent with outcome.
+Branch `refactor/quality-baseline`, 24 commits on top of `main` (`88f1dc0`), not pushed. Appendix A
+is the plan as it was written and committed before any code changed.
+
+## Executive summary
+
+The extension now has one architecture, one pattern for each cross-cutting concern, and tooling
+that enforces both. User-facing behavior is preserved, except for the changes listed under
+[Behavior changes](#behavior-changes).
+
+| Measure                                              | Before (`main`)                              | After                                                                |
+| ---------------------------------------------------- | -------------------------------------------- | -------------------------------------------------------------------- |
+| Production source (`src`)                            | 2,101 lines, 12 files                        | 1,297 lines, 19 files                                                |
+| Comment lines in `src`                               | 508                                          | 24, each explaining a constraint                                     |
+| Tests                                                | 2,802 lines; 66 unit/security, 7 integration | 1,910 lines; 82 unit/security, 7 integration on two VS Code versions |
+| Coverage (statements / branches / functions / lines) | 90.4 / 81.6 / 92.1 / 90.2                    | 94.2 / 84.1 / 97.9 / 94.1                                            |
+| VSIX contents                                        | 45 files, 105.9 KB                           | 12 files, 59.5 KB                                                    |
+| High-severity `npm audit` advisories (all dev-only)  | 24                                           | 0                                                                    |
+| Files that fail the repo's own Prettier config       | 37                                           | 0                                                                    |
+
+Problems found on the way, and how they were handled:
+
+- **The extension could not enable the proxy on its declared minimum VS Code.** `http.noProxy`
+  first shipped in VS Code 1.91, but `engines.vscode` said `^1.85.0`. On 1.85–1.90, enabling
+  wrote `http.proxy` and then failed. The new minimum-engine integration run exposed this; the
+  engine floor is now 1.91.
+- **The toolchain was broken on current platforms.** Mocha 10 crashed on Node 26, and
+  `@vscode/test-electron` 2.5 could not launch VS Code 1.110+ on macOS. Fixed by upgrading.
+- **Every `npm install` and `npm ci` ran lint, the tests, and two builds** through npm's
+  deprecated `prepublish` script. Removed; CI and the release workflow now run the checks
+  explicitly.
+- **The VSIX shipped duplicate and stale build output.** esbuild now bundles into a cleaned
+  `dist/`, which is all that ships.
+- **Errors were swallowed.** One command registrar and one background-task helper now log every
+  unexpected failure to a **Proxy Toggler** output channel.
+
+How the work landed, in order:
+
+1. Plan (`2723db0`).
+2. Tooling (`741d0a7` to `61afc3f`): toolchain repair, ESLint 10, audit fixes, Prettier and
+   EditorConfig, tsconfig, knip, the `dist/` build, the engine fix, and CI.
+3. Mechanical (`32c1351` to `7da0fdb`): formatting, autofixes, comment cleanup, file moves. Each
+   was checked for an unchanged bundle.
+4. Structural (`e208b98` to `cd550ce`): composition root and VS Code boundary, core APIs, shared
+   UI code, shared test fakes.
+5. Improvements and deletions (`48068a1` to `79a3689`): logging, error causes, legacy removal,
+   and the lint-enforced layer boundary.
+6. Documentation: this report, `QUALITY_BASELINE.md`, `ARCHITECTURE.md`, `TESTING.md`, and the
+   README.
+
+## Best-practice comparison
+
+The full benchmark is in [A.6](#a6-benchmark). Highlights, and what this repository adopted:
+
+- **Bundling into `dist/` (5 of 7 projects).** Adopted. The VSIX now contains only
+  `dist/extension.js`.
+- **Flat ESLint config (6 of 7) and Prettier with `eslint-config-prettier` (4 of 7).** Adopted.
+  Typed linting (`recommendedTypeChecked`) follows prettier-vscode.
+- **`.nvmrc` as the Node source for CI (prettier-vscode).** Adopted.
+- **Integration tests on the `engines.vscode` minimum and on stable (rust-analyzer).** Adopted.
+  This is what exposed the `http.noProxy` bug.
+- **`createOutputChannel(name, { log: true })` (4 of 7).** Adopted.
+- **`"activationEvents": []` for commands-only activation (official esbuild sample).** Adopted.
+- **Format and type checks in CI (prettier-vscode, rust-analyzer, GitLens).** Adopted.
+- **Not adopted:** SHA-pinned actions (rust-analyzer) and a dependency bot (1 of 7). Both are
+  recorded as follow-ups.
+- **Beyond the benchmark:** a coverage gate and knip; none of the seven projects use either.
+
+## Standards introduced
+
+[QUALITY_BASELINE.md](QUALITY_BASELINE.md) is the standard. The mechanisms that enforce it:
+
+| Standard                                                                                   | Enforced by                                                |
+| ------------------------------------------------------------------------------------------ | ---------------------------------------------------------- |
+| Formatting (Prettier 3.9.10, exact) and EditorConfig                                       | `npm run format:check` in CI                               |
+| Typed lint rules, import order, `import type`, `type` aliases                              | `npm run lint` (ESLint 10, typescript-eslint)              |
+| Runtime `vscode` import only in `src/extension.ts`; `core` independent of the other layers | `no-restricted-imports` in `eslint.config.mjs`             |
+| No unused files, exports, or dependencies                                                  | `npm run lint:unused` (knip)                               |
+| Strict TypeScript plus four extra flags                                                    | `npm run typecheck`                                        |
+| 80% coverage minimum                                                                       | `npm run coverage` (nyc)                                   |
+| Works on the minimum and the latest VS Code                                                | `npm run test:integration`                                 |
+| No telemetry; no high advisories                                                           | `check:no-telemetry`, `npm audit --audit-level=high` in CI |
+| Releases pass the same checks                                                              | `.github/workflows/release.yml`                            |
+
+## Architecture: before and after
+
+Before, `src/extension.ts` built everything, adapted `http.*` settings, ran the drift check, and
+accepted the VS Code API as an optional parameter for tests. Seven modules each declared their own
+partial copy of the VS Code API.
+
+```mermaid
+flowchart LR
+  vscode["VS Code"] -->|"activate(context, vscodeApi?, importVscodeApi?)"| ext["extension.ts<br/>wiring, http.* adapter,<br/>drift check, setContext"]
+  ext --> cmds["commands/*<br/>4 files, each with its own<br/>VscodeApi type and error UX"]
+  ext --> services["services/*<br/>ProxyManager, KeychainService,<br/>static ValidationService"]
+  ext --> ui["ui/*<br/>NotificationService, StatusBarController"]
+  cmds --> services
+  cmds --> ui
+  services --> stores[("globalState, SecretStorage,<br/>http.* settings")]
+```
+
+After, each layer has one job, and the import rules are enforced by lint:
+
+```mermaid
+flowchart LR
+  vscode["VS Code"] -->|"activate(context)"| ext["extension.ts<br/>passes the real vscode module"]
+  ext --> root["proxy-toggler.ts<br/>composition root"]
+  root --> adapters["vscode/*<br/>api type, http-settings, notifications,<br/>status bar, error-reporting"]
+  root --> cmds["commands/*<br/>workflows + shared feedback"]
+  cmds --> core["core/*<br/>ProxyManager, KeychainService,<br/>validation, no-proxy, types"]
+  adapters --> core
+  core --> ports{{"Memento, SecretStorage,<br/>HttpSettings ports"}}
+  adapters -.implements.-> ports
+```
+
+## Behavior changes
+
+| Change                                                                                         | Why                                                                                                        | Commit    | Rollback                                                                                            |
+| ---------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------- | --------- | --------------------------------------------------------------------------------------------------- |
+| `engines.vscode` raised from `^1.85.0` to `^1.91.0`                                            | `http.noProxy` first shipped in 1.91; on 1.85–1.90 enabling failed partway (see the commit for the source) | `c8fcd6f` | `git revert c8fcd6f`. Users on 1.85–1.90 would again install a version that cannot enable the proxy |
+| New **Proxy Toggler** entry in the Output panel                                                | Unexpected errors were swallowed or shown with no detail                                                   | `48068a1` | `git revert 48068a1` (this also reverts the next two rows)                                          |
+| Configure with a locked or unavailable keychain shows the keychain message                     | The credential check ran before any error handler, so VS Code showed its generic "command failed" error    | `48068a1` | As above                                                                                            |
+| An unexpected failure inside the configure prompts shows "Failed to save proxy configuration." | Every command now has one failure message for errors it cannot explain                                     | `48068a1` | As above                                                                                            |
+| The VSIX contains only `dist/extension.js` and assets                                          | Duplicate and stale build output was shipped                                                               | `47aed29` | `git revert 47aed29`; no user-visible effect                                                        |
+| `"activationEvents": []`                                                                       | Contributed commands activate the extension implicitly since VS Code 1.74                                  | `51a1271` | `git revert 51a1271`; activation is identical (an integration test proves it)                       |
+
+Internal changes with no user-visible effect: the test-facing `getStatusBarText()` returns the
+last text after disposal instead of `undefined`, and `ProxyManager.getState()` ignores unknown keys
+in the stored state object, which this extension never writes.
+
+## Risk assessment and compatibility
+
+- **Persisted data is unchanged.** Storage keys, secret keys, stored shapes, and the order of
+  `http.*` writes are the same. Unit tests now pin the storage keys and shapes.
+- **CI has not run on these workflows.** The branch is not pushed, so the new CI steps were run
+  locally on macOS only. Three CI-specific risks:
+  - CI now uses Node 24. npm 11.19 and later block dependency install scripts; `allowScripts`
+    denies the three affected packages, which a clean local `npm ci` showed are not needed.
+  - VS Code 1.91 will run under `xvfb` on ubuntu-latest for the first time.
+    `@vscode/test-electron` 3.1 passes `--no-sandbox` by default, which covers the usual Electron
+    sandbox failure on Ubuntu 24.04.
+  - The release workflow now runs the integration tests, so tagging takes longer.
+- **The test runner is pinned to Mocha 11.** Mocha 12 is ESM-only and cannot load in VS Code
+  1.91's extension host. Mocha 11 pins a vulnerable `serialize-javascript` (`^6`), so an npm
+  `overrides` entry forces the patched `^7.0.5`. Mocha loads that package only in `--parallel`
+  mode, which this project does not use (`5d0fa33`).
+- **Developer machines need Node 22 or later**, because `@vscode/test-electron` 3 requires it.
+  `.nvmrc` selects 24.
+- **Pre-existing behavioral risks are unchanged**; see [A.4](#a4-risk-areas) and the follow-ups.
+
+## How to run
+
+| Task                                          | Command                                             |
+| --------------------------------------------- | --------------------------------------------------- |
+| Install                                       | `npm ci` (Node from `.nvmrc`)                       |
+| Develop                                       | `npm run watch`, then press F5 in VS Code           |
+| Build                                         | `npm run build` (type check and development bundle) |
+| Production bundle                             | `npm run vscode:prepublish`                         |
+| Lint                                          | `npm run lint`                                      |
+| Unused code                                   | `npm run lint:unused`                               |
+| Format / check formatting                     | `npm run format` / `npm run format:check`           |
+| Type check                                    | `npm run typecheck`                                 |
+| Unit and security tests                       | `npm test` (`npm run coverage` adds the gate)       |
+| Integration tests                             | `npm run test:integration` (`xvfb-run -a` on Linux) |
+| Everything CI checks before integration tests | `npm run check`                                     |
+| Package                                       | `npm run package`                                   |
+
+## Removed legacy code
+
+| Removed                                                                                                                               | Evidence                                                                                                  | Commit    |
+| ------------------------------------------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------- | --------- |
+| npm `prepublish` script                                                                                                               | npm documents that it runs on `npm install` and `npm ci`; a scratch package confirmed this with npm 11.19 | `741d0a7` |
+| `.eslintrc.json`, `.eslintignore`, ESLint 8                                                                                           | ESLint 8 is end-of-life; ESLint 10 uses flat config only                                                  | `bfc344b` |
+| `forceConsistentCasingInFileNames` and implicit `node10` resolution                                                                   | Default since TypeScript 5.0; deprecated in TypeScript 6.0                                                | `156dc24` |
+| `tsc` output in `out/src` used as the shipped extension                                                                               | The VSIX listing showed duplicate and stale modules                                                       | `47aed29` |
+| 507 boilerplate JSDoc lines                                                                                                           | They restated names and signatures; the bundle was byte-identical without them                            | `dac4bc4` |
+| Four `.gitkeep` files                                                                                                                 | Their folders are not empty                                                                               | `7da0fdb` |
+| Test-only `activate()` parameters, the `require('vscode')` cast, and the `Module._load` test patch                                    | Replaced by the composition root; the compiler now checks the real module                                 | `e208b98` |
+| Seven hand-written VS Code API type copies                                                                                            | Replaced by `src/vscode/api.ts`                                                                           | `e208b98` |
+| Static-only `ValidationService`; public `validatePort` and `validateScheme`                                                           | No callers outside `validateProxyUrl`; knip now guards exports                                            | `c1e6c57` |
+| `SaveConfigurationOptions`, its type guard, and the translation helper                                                                | Replaced by the `CredentialsUpdate` union used end to end                                                 | `c1e6c57` |
+| Duplicate `DEFAULT_NO_PROXY` and bypass-list normalizers                                                                              | Consolidated in `core/no-proxy.ts`                                                                        | `c1e6c57` |
+| Three copies of the state-command error UX; three identical notification methods; three status bar branches; two-phase `initialize()` | Consolidated without changing messages or actions                                                         | `b770711` |
+| The integration test's own `noProxy` parser                                                                                           | `http.noProxy` is always an array on VS Code 1.91 and later                                               | `cd550ce` |
+| The unreachable "Invalid configuration input." fallback                                                                               | `validateCredentials` throws only `ValidationError`                                                       | `48068a1` |
+| `Object.setPrototypeOf` in three error classes, `cause` parameter properties, `asError` helpers, the one enum                         | The TypeScript handbook limits the workaround to ES5 output; the project targets ES2022                   | `8ab2b88` |
+| `onCommand:` activation events                                                                                                        | VS Code docs (implicit since 1.74) plus a new integration test                                            | `51a1271` |
+| No-op `dispose()` on `ProxyManager` and `KeychainService`                                                                             | They held no resources                                                                                    | `51a1271` |
+| `KeychainService.retrieveCredentials()`                                                                                               | No production caller                                                                                      | `51a1271` |
+| The string-shaped `http.noProxy` write path and `inspect`                                                                             | `type: 'array'` since the setting appeared in 1.91                                                        | `51a1271` |
+| Three `assert.equal(true, true)` smoke tests                                                                                          | The other tests in each folder already prove that the runners start                                       | `51a1271` |
+
+Kept on purpose: `scripts/patch-os-cpus.cjs`. Some sandboxed environments report zero CPUs, and
+nyc and vsce size their worker pools from `os.cpus()`. The script now carries a one-line comment
+saying so.
+
+## Comment policy outcome
+
+`src` has 24 comment lines, down from 508. Each states a constraint or a reason the code cannot
+show: credentials never reach `globalState`; activation must stay keychain-free; settings are
+written in a fixed order; `http.noProxy` is an array; literal `l10n.t` calls keep strings
+extractable; keychain reasons are guessed from messages. Longer explanations now live in:
+
+- [ARCHITECTURE.md](ARCHITECTURE.md): layers, ports, persisted data, the error model, and design
+  decisions.
+- [QUALITY_BASELINE.md](QUALITY_BASELINE.md): conventions and why they exist.
+- [TESTING.md](TESTING.md): test strategy and the manual QA checklist.
+- Commit messages: the evidence for each removal and behavior change.
+
+## Assumptions
+
+- Working autonomously, I committed each step to a local branch so that the three-step ordering
+  is reviewable. Nothing was pushed, and no pull request was opened.
+- The Microsoft Learn MCP server has no VS Code extension documentation, which lives on
+  code.visualstudio.com. I used Context7's index of those official pages instead and recorded the
+  Learn query results.
+- The local, untracked `proxy-toggler-constitution.md` asks for JSDoc on every public function.
+  This brief's comment-light rule supersedes it, so JSDoc was removed and the "why" kept.
+- I chose Node 24 LTS for development and CI because Node 20 is end-of-life and Node 24 is
+  supported until April 2028.
+- `trailingComma: "none"` matches the existing code and keeps the one-time formatting diff small.
+- GitHub Actions stay on their current major versions, because this branch cannot run CI to
+  verify an upgrade.
+- `.vscode/` is ignored by the local `.gitignore`, which local hooks protect from commits, so no
+  launch configuration was committed. The README explains how to start the Extension Development
+  Host without one.
+- Local VSIX builds in the working tree (`proxy-toggler-0.1.0.vsix`) were regenerated during
+  validation. They are untracked build artifacts.
+
+## Follow-ups deliberately left out
+
+These are pre-existing issues that the refactor does not depend on. They are ordered by
+importance.
+
+1. **Decide what credentials are for.** The extension collects and stores a proxy username and
+   password but never uses them (no `http.proxyAuthorization`, nothing passed to VS Code).
+   Collecting secrets that are never used adds risk without benefit. Either use them or stop
+   asking for them.
+2. **Stale drift sync.** The drift check computes the applied state before awaiting the user's
+   answer and writes it afterwards. If the user toggles in between, the write is stale. Recompute
+   after the answer.
+3. **Concurrent commands.** Two quick toggles interleave read-modify-write cycles. Serialize state
+   transitions.
+4. **Partial enable.** If the second or third `http.*` write fails, the earlier writes stay. Roll
+   them back, or report the partial state.
+5. **Passwords are trimmed** before storage, so leading or trailing spaces are lost.
+6. **Localization is only partly extractable.** There is no `l10n` bundle yet, and messages passed
+   through `NotificationService`, as well as `ValidationError` text, reach `l10n.t` as variables.
+7. **UX polish.** Use `category` in `contributes.commands` instead of a hard-coded "Proxy
+   Toggler:" title prefix. Give the status bar item an `id` and `name`. React to `http.*` changes
+   made outside the extension with `onDidChangeConfiguration`.
+8. **Supply chain.** Actions are three major versions behind (`checkout`, `setup-node`, and
+   `upload-artifact` v4 to v7; `action-gh-release` v2 to v3) and are not pinned to commit SHAs.
+   Add Dependabot for npm and GitHub Actions; a ready configuration is below.
+9. **Dev dependency majors.** nyc 18 (which clears the remaining moderate `uuid` advisory),
+   `@vscode/vsce` 4, sinon 22, and a replacement for the unmaintained ts-node (tsx, or Node's own
+   type stripping).
+10. **TypeScript 6 and 7.** The tsconfig is already compatible with TypeScript 6's deprecations.
+11. **Publishing.** Marketplace and Open VSX publishing from the release workflow.
+12. **Drift detection reads effective values.** Workspace settings can override the global
+    settings the extension writes.
+
+A ready Dependabot configuration (`.github/dependabot.yml`):
+
+```yaml
+version: 2
+updates:
+  - package-ecosystem: github-actions
+    directory: /
+    schedule: { interval: weekly }
+  - package-ecosystem: npm
+    directory: /
+    schedule: { interval: weekly }
+    groups:
+      dev-dependencies: { dependency-type: development, update-types: [minor, patch] }
+```
+
+## LOC impact summary
+
+Net change per area (lines at `main` and at the branch tip):
+
+| Area                                                              | Before | After | Change      |
+| ----------------------------------------------------------------- | ------ | ----- | ----------- |
+| Core (`src/core`; formerly `services/` and `types/`)              | 890    | 513   | −377 (−42%) |
+| UI (`src/commands`, notifications, status bar)                    | 957    | 583   | −374 (−39%) |
+| Integrations (`extension.ts`, composition root, VS Code adapters) | 258    | 201   | −57 (−22%)  |
+| Tests                                                             | 2,802  | 1,910 | −892 (−32%) |
+| Tooling (config, scripts, CI)                                     | 539    | 617   | +78         |
+| Documentation (`*.md`; 314 lines are the plan appendix)           | 165    | 1,230 | +1,065      |
+
+Added and removed lines by category, summed over the commits in each category:
+
+| Category                                          | `src` added | `src` removed | tests added | tests removed |
+| ------------------------------------------------- | ----------- | ------------- | ----------- | ------------- |
+| Formatting (Prettier, autofixes)                  | 113         | 39            | 124         | 56            |
+| Deleted comments                                  | 8           | 506           | 0           | 0             |
+| Moved (769 lines in seven files changed location) | 26          | 30            | 23          | 23            |
+| Consolidated (structural commits)                 | 808         | 1,178         | 1,315       | 2,401         |
+| Improvements (logging, error causes)              | 122         | 98            | 105         | 3             |
+| Deleted legacy and dead code                      | 6           | 40            | 41          | 45            |
+| Edits required by new tooling                     | 2           | 2             | 58          | 30            |
+
+Places where I chose not to shorten the code:
+
+1. **The configure wizard (`configure-proxy.ts`, 267 lines)** keeps one function per prompt with
+   literal `l10n.t` strings. A table-driven step engine would be shorter but would hide the flow
+   and make the strings impossible to extract.
+2. **`StatusBarController.presentationFor`** keeps three explicit branches instead of a lookup
+   table, for the same reason.
+3. **Bypass-list validation** keeps one `if` and one message per rule. A combined regular
+   expression would be shorter, but the messages are user-facing and differ per rule.
+4. **Command dependencies are narrow `Pick<…>` types** rather than whole classes. The signatures
+   are a little longer, but each command documents what it uses and tests need no casts.
+5. **The integration runner (+30 lines)** reads `engines.vscode` and runs the suite twice. It
+   costs time, and it caught the `http.noProxy` bug.
+
+## References
+
+Every documentation source used is listed in
+[QUALITY_BASELINE.md → References](QUALITY_BASELINE.md#references). The benchmark sources are
+in [A.6](#a6-benchmark). The evidence for individual removals and behavior changes is in the
+commit messages on this branch.
 
 ## Appendix A — Refactor plan (written before execution)
 

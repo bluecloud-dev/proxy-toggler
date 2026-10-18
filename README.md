@@ -124,21 +124,51 @@ Some environments require system-level proxy configuration. This extension only 
 **Stuck in credential prompt loop?**
 Clear saved credentials via `Proxy Toggler: Configure Proxy Settings` and re-enter them.
 
+**Something failed and the notification did not say why?**
+Open **View → Output** and pick **Proxy Toggler** in the dropdown. Errors are logged there with details; credentials never are.
+
 ## :handshake: Contributing
+
+### Getting started
+
+You need Node.js 24 (the version in `.nvmrc`; run `nvm use` if you use nvm) and VS Code 1.91 or later.
 
 ```sh
 git clone https://github.com/ayhammouda/proxy-toggler.git
 cd proxy-toggler
 npm ci
-npm test
-npm run lint
+npm run check
 ```
 
-**Run locally:** Open the project in VS Code and press `F5` to launch the Extension Development Host.
+`npm run check` runs the format check, lint, the unused-code check, the type check, and the unit and security tests with coverage. It is what CI runs before the integration tests.
 
-**Integration tests:** Run `npm run test:integration` (downloads VS Code runtime on first run).
+### Run the extension
 
-See [CHANGELOG.md](CHANGELOG.md) for version history.
+1. Run `npm run watch` to rebuild `dist/extension.js` on every change, or `npm run build` once.
+2. Open the folder in VS Code and press `F5`. If VS Code asks for a debugger, choose **VS Code Extension Development**.
+3. Use the commands in the new Extension Development Host window. Errors appear in **Output → Proxy Toggler**.
+
+### Common workflows
+
+| Task                                              | Command                    |
+| ------------------------------------------------- | -------------------------- |
+| Format all project files                          | `npm run format`           |
+| Lint (ESLint with type information)               | `npm run lint`             |
+| Find unused files, exports, and dependencies      | `npm run lint:unused`      |
+| Type-check                                        | `npm run typecheck`        |
+| Unit and security tests                           | `npm test`                 |
+| The same, with the coverage gate                  | `npm run coverage`         |
+| Integration tests in VS Code (minimum and stable) | `npm run test:integration` |
+| Build the VSIX                                    | `npm run package`          |
+
+On Linux without a display, run the integration tests as `xvfb-run -a npm run test:integration`. The first run downloads VS Code into `.vscode-test/`.
+
+### Where to look next
+
+- [ARCHITECTURE.md](ARCHITECTURE.md): layers, persisted data, the error model, and design decisions.
+- [TESTING.md](TESTING.md): how the tests are organized, the shared fakes, and the manual QA checklist.
+- [QUALITY_BASELINE.md](QUALITY_BASELINE.md): the coding, TypeScript, extension, and dependency standards.
+- [CHANGELOG.md](CHANGELOG.md): version history.
 
 ## :page_facing_up: License
 
