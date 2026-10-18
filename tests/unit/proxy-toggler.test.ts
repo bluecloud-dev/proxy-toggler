@@ -32,7 +32,7 @@ describe('createProxyToggler', () => {
       [...vscode.commandHandlers.keys()],
       [COMMANDS.configure, COMMANDS.enable, COMMANDS.disable, COMMANDS.toggle]
     );
-    assert.equal(context.subscriptions.length, 8);
+    assert.equal(context.subscriptions.length, 6);
   });
 
   it('runs every command without a saved configuration', async () => {
@@ -102,9 +102,9 @@ describe('createProxyToggler', () => {
     assert.deepEqual(vscode.messages, []);
   });
 
-  it('writes http.noProxy as an array when the VS Code schema default is an array', async () => {
+  it('writes http.noProxy as an array', async () => {
     const { vscode } = activateWith(
-      { settingDefaults: { 'http.noProxy': [] } },
+      {},
       {
         'proxyToggler.savedProxy': { ...SAVED_PROXY, noProxy: 'localhost,127.0.0.1' },
         'proxyToggler.state': { isEnabled: false, hasConfiguration: true }

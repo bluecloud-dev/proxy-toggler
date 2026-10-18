@@ -39,10 +39,7 @@ export type StatusBarItem = Pick<
   'accessibilityInformation' | 'command' | 'dispose' | 'show' | 'text' | 'tooltip'
 >;
 
-export type WorkspaceConfiguration = Pick<
-  vscode.WorkspaceConfiguration,
-  'get' | 'inspect' | 'update'
->;
+export type WorkspaceConfiguration = Pick<vscode.WorkspaceConfiguration, 'get' | 'update'>;
 
 export type ExtensionContext = Pick<vscode.ExtensionContext, 'subscriptions'> & {
   globalState: Memento;

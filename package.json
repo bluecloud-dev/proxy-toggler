@@ -27,12 +27,7 @@
     "README.md",
     "CHANGELOG.md"
   ],
-  "activationEvents": [
-    "onCommand:proxyToggler.configure",
-    "onCommand:proxyToggler.enable",
-    "onCommand:proxyToggler.disable",
-    "onCommand:proxyToggler.toggle"
-  ],
+  "activationEvents": [],
   "contributes": {
     "commands": [
       {

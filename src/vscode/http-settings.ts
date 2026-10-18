@@ -18,17 +18,11 @@ export function createHttpSettings(
       };
     },
     update: async (key, value) => {
-      const http = httpConfiguration();
+      // http.noProxy has been an array setting since VS Code 1.91 introduced it.
       const resolvedValue =
-        key === 'noProxy' && typeof value === 'string' && isArraySetting(http, key)
-          ? parseNoProxyList(value)
-          : value;
+        key === 'noProxy' && typeof value === 'string' ? parseNoProxyList(value) : value;
 
-      await http.update(key, resolvedValue, vscodeApi.ConfigurationTarget.Global);
+      await httpConfiguration().update(key, resolvedValue, vscodeApi.ConfigurationTarget.Global);
     }
   };
-}
-
-function isArraySetting(configuration: WorkspaceConfiguration, key: string): boolean {
-  return Array.isArray(configuration.inspect(key)?.defaultValue);
 }

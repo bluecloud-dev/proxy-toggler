@@ -26,14 +26,19 @@ describe('createHttpSettings', () => {
     ]);
   });
 
-  it('writes noProxy in the shape of the VS Code schema', async () => {
-    const arrayShaped = createFakeVscode({ settingDefaults: { 'http.noProxy': [] } });
-    const stringShaped = createFakeVscode();
+  it('writes the comma-separated bypass list as the array VS Code expects', async () => {
+    const vscode = createFakeVscode();
 
-    await createHttpSettings(arrayShaped).update('noProxy', 'localhost, 127.0.0.1');
-    await createHttpSettings(stringShaped).update('noProxy', 'localhost, 127.0.0.1');
+    await createHttpSettings(vscode).update('noProxy', 'localhost, 127.0.0.1');
 
-    assert.deepEqual(arrayShaped.settings.get('http.noProxy'), ['localhost', '127.0.0.1']);
-    assert.equal(stringShaped.settings.get('http.noProxy'), 'localhost, 127.0.0.1');
+    assert.deepEqual(vscode.settings.get('http.noProxy'), ['localhost', '127.0.0.1']);
+  });
+
+  it('clears a setting by writing undefined', async () => {
+    const vscode = createFakeVscode({ settings: { 'http.noProxy': ['localhost'] } });
+
+    await createHttpSettings(vscode).update('noProxy', undefined);
+
+    assert.equal(vscode.settings.has('http.noProxy'), false);
   });
 });

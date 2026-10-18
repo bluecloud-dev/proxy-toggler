@@ -21,7 +21,6 @@ export type FakeVscodeOptions = {
   translate?: (message: string) => string;
   // Keyed by full setting id, for example 'http.proxy'.
   settings?: Record<string, unknown>;
-  settingDefaults?: Record<string, unknown>;
 };
 
 export type FakeVscode = VscodeApi & {
@@ -59,11 +58,6 @@ export function createFakeVscode(options: FakeVscodeOptions = {}): FakeVscode {
     const configuration = {
       get: (key: string, defaultValue?: unknown) =>
         settings.has(id(key)) ? settings.get(id(key)) : defaultValue,
-      inspect: (key: string) => ({
-        key: id(key),
-        defaultValue: options.settingDefaults?.[id(key)],
-        globalValue: settings.get(id(key))
-      }),
       update: async (key: string, value: unknown, target?: unknown) => {
         settingUpdates.push({ id: id(key), value, target });
         if (value === undefined) {

@@ -26,16 +26,15 @@ export function createProxyToggler(
   context: ExtensionContext
 ): ProxyTogglerApi {
   const logger = vscodeApi.window.createOutputChannel('Proxy Toggler', { log: true });
-  const keychainService = new KeychainService(context.secrets);
   const proxyManager = new ProxyManager(
     context.globalState,
-    keychainService,
+    new KeychainService(context.secrets),
     createHttpSettings(vscodeApi)
   );
   const notificationService = new NotificationService(vscodeApi);
   const statusBarController = new StatusBarController(vscodeApi, COMMANDS.toggle);
 
-  context.subscriptions.push(logger, keychainService, proxyManager, statusBarController);
+  context.subscriptions.push(logger, statusBarController);
 
   const refreshUi = async (): Promise<void> => {
     const state = proxyManager.getState();

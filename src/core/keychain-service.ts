@@ -1,6 +1,5 @@
 import type * as vscode from 'vscode';
 
-import type { ProxyCredentials } from './proxy-configuration';
 import { validateCredentials } from './validation';
 
 const USERNAME_SECRET_KEY = 'proxyToggler.credentials.username';
@@ -50,10 +49,6 @@ export class KeychainError extends Error {
 export class KeychainService {
   constructor(private readonly secrets: SecretStorage) {}
 
-  dispose(): void {
-    // No-op: SecretStorage is owned by VS Code.
-  }
-
   async storeCredentials(username?: string, password?: string): Promise<void> {
     const normalizedUsername = normalizeSecretValue(username);
     const normalizedPassword = normalizeSecretValue(password);
@@ -71,21 +66,6 @@ export class KeychainService {
       await this.secrets.store(PASSWORD_SECRET_KEY, normalizedPassword);
     } catch (error: unknown) {
       throw new KeychainError('store', inferKeychainReason(error), { cause: error });
-    }
-  }
-
-  async retrieveCredentials(): Promise<ProxyCredentials | undefined> {
-    try {
-      const username = normalizeSecretValue(await this.secrets.get(USERNAME_SECRET_KEY));
-      const password = normalizeSecretValue(await this.secrets.get(PASSWORD_SECRET_KEY));
-
-      if (!username || !password) {
-        return undefined;
-      }
-
-      return { username, password };
-    } catch (error: unknown) {
-      throw new KeychainError('retrieve', inferKeychainReason(error), { cause: error });
     }
   }
 

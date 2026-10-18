@@ -15,6 +15,24 @@ type ExtensionManifest = {
 };
 
 describe('command palette contributions', () => {
+  // Runs first: proves that contributed commands activate the extension without explicit
+  // onCommand activation events.
+  it('activates when one of its commands runs', async () => {
+    const extension = vscode.extensions.getExtension(EXTENSION_ID);
+    assert.ok(extension, 'Expected extension to be available in VS Code test host');
+    assert.equal(extension.isActive, false);
+
+    const sandbox = sinon.createSandbox();
+    sandbox.stub(vscode.window, 'showWarningMessage').resolves(undefined);
+    try {
+      await vscode.commands.executeCommand('proxyToggler.toggle');
+    } finally {
+      sandbox.restore();
+    }
+
+    assert.equal(extension.isActive, true);
+  });
+
   it('registers proxy toggler commands', async () => {
     await activateExtension();
 

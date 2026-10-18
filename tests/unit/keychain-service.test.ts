@@ -9,23 +9,23 @@ import { ValidationError } from '../../src/core/validation';
 import { createSecretStorage } from '../support/fakes';
 
 describe('KeychainService', () => {
-  it('stores, retrieves, and clears credentials', async () => {
+  it('stores trimmed credentials under stable keys and clears them', async () => {
     const secrets = createSecretStorage();
     const service = new KeychainService(secrets);
-
     assert.equal(await service.hasCredentials(), false);
-    assert.equal(await service.retrieveCredentials(), undefined);
 
     await service.storeCredentials(' alice ', ' secret ');
+
     assert.equal(await service.hasCredentials(), true);
-    assert.deepEqual(await service.retrieveCredentials(), {
-      username: 'alice',
-      password: 'secret'
+    assert.deepEqual(Object.fromEntries(secrets.values), {
+      'proxyToggler.credentials.username': 'alice',
+      'proxyToggler.credentials.password': 'secret'
     });
 
     await service.clearCredentials();
+
     assert.equal(await service.hasCredentials(), false);
-    assert.equal(await service.retrieveCredentials(), undefined);
+    assert.equal(secrets.values.size, 0);
   });
 
   it('rejects mismatched username/password', async () => {
@@ -86,7 +86,7 @@ describe('KeychainService', () => {
 
     const unknownService = new KeychainService(unknown);
     await assert.rejects(
-      () => unknownService.retrieveCredentials(),
+      () => unknownService.hasCredentials(),
       (error: unknown) => {
         assert.ok(error instanceof KeychainError);
         assert.equal(error.operation, 'retrieve');

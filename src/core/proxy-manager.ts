@@ -66,10 +66,6 @@ export class ProxyManager {
     private readonly httpSettings: HttpSettings
   ) {}
 
-  dispose(): void {
-    // No-op: ProxyManager holds no unmanaged resources.
-  }
-
   async saveConfiguration(
     configuration: ProxyConfiguration,
     credentialsUpdate: CredentialsUpdate
