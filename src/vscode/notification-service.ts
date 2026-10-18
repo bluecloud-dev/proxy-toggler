@@ -6,54 +6,34 @@ export type NotificationAction = {
   title: string;
 };
 
+type MessageMethod = 'showInformationMessage' | 'showWarningMessage' | 'showErrorMessage';
+
 export class NotificationService {
   constructor(private readonly vscodeApi: Pick<VscodeApi, 'l10n' | 'window'>) {}
 
-  async showSuccess(
-    message: string,
-    ...actions: NotificationAction[]
-  ): Promise<string | undefined> {
-    const localizedActions = actions.map((action) => ({
-      id: action.id,
-      title: this.vscodeApi.l10n.t(action.title)
-    }));
-    const actionTitles = localizedActions.map((action) => action.title);
-    const selection = await this.vscodeApi.window.showInformationMessage(
-      this.vscodeApi.l10n.t(message),
-      ...actionTitles
-    );
-
-    return localizedActions.find((action) => action.title === selection)?.id;
+  showSuccess(message: string, ...actions: NotificationAction[]): Promise<string | undefined> {
+    return this.show('showInformationMessage', message, actions);
   }
 
-  async showWarning(
-    message: string,
-    ...actions: NotificationAction[]
-  ): Promise<string | undefined> {
-    const localizedActions = actions.map((action) => ({
-      id: action.id,
-      title: this.vscodeApi.l10n.t(action.title)
-    }));
-    const actionTitles = localizedActions.map((action) => action.title);
-    const selection = await this.vscodeApi.window.showWarningMessage(
-      this.vscodeApi.l10n.t(message),
-      ...actionTitles
-    );
-
-    return localizedActions.find((action) => action.title === selection)?.id;
+  showWarning(message: string, ...actions: NotificationAction[]): Promise<string | undefined> {
+    return this.show('showWarningMessage', message, actions);
   }
 
-  async showError(message: string, ...actions: NotificationAction[]): Promise<string | undefined> {
-    const localizedActions = actions.map((action) => ({
-      id: action.id,
-      title: this.vscodeApi.l10n.t(action.title)
-    }));
-    const actionTitles = localizedActions.map((action) => action.title);
-    const selection = await this.vscodeApi.window.showErrorMessage(
-      this.vscodeApi.l10n.t(message),
-      ...actionTitles
-    );
+  showError(message: string, ...actions: NotificationAction[]): Promise<string | undefined> {
+    return this.show('showErrorMessage', message, actions);
+  }
 
-    return localizedActions.find((action) => action.title === selection)?.id;
+  private async show(
+    method: MessageMethod,
+    message: string,
+    actions: NotificationAction[]
+  ): Promise<string | undefined> {
+    const { l10n, window } = this.vscodeApi;
+    const titles = actions.map((action) => l10n.t(action.title));
+    const selection = await window[method](l10n.t(message), ...titles);
+
+    return actions.find((_, index) => titles[index] === selection)?.id;
   }
 }
+
+export type Notifier = Pick<NotificationService, 'showSuccess' | 'showWarning' | 'showError'>;

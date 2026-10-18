@@ -1,86 +1,27 @@
-import { KeychainError } from '../core/keychain-service';
-import type { ProxyManager as ProxyManagerService } from '../core/proxy-manager';
-import { ConfigurationError } from '../core/proxy-manager';
+import type { ProxyManager } from '../core/proxy-manager';
 import type { VscodeApi } from '../vscode/api';
-import type {
-  NotificationAction,
-  NotificationService as NotificationServiceService
-} from '../vscode/notification-service';
-import { COMMANDS } from './command-ids';
-
-type CommandsApi = Pick<VscodeApi, 'commands'>;
-
-type ProxyManager = Pick<ProxyManagerService, 'hasConfiguration' | 'enableProxy'>;
-
-type NotificationService = Pick<
-  NotificationServiceService,
-  'showSuccess' | 'showWarning' | 'showError'
->;
-
-type RefreshUi = () => Promise<void>;
-
-const ACTION_CONFIGURE_NOW: NotificationAction = { id: 'configure', title: 'Configure Now' };
-const ACTION_DISABLE_PROXY: NotificationAction = { id: 'disableProxy', title: 'Disable Proxy' };
-const ACTION_OPEN_SETTINGS: NotificationAction = { id: 'openSettings', title: 'Open Settings' };
+import type { Notifier } from '../vscode/notification-service';
+import { announceEnabled, offerToConfigure, showProxyError } from './proxy-feedback';
 
 export async function enableProxyCommand(
-  vscodeApi: CommandsApi,
-  proxyManager: ProxyManager,
-  notificationService: NotificationService,
-  refreshUi: RefreshUi
+  vscodeApi: Pick<VscodeApi, 'commands'>,
+  proxyManager: Pick<ProxyManager, 'hasConfiguration' | 'enableProxy'>,
+  notificationService: Notifier,
+  refreshUi: () => Promise<void>
 ): Promise<void> {
   if (!proxyManager.hasConfiguration()) {
-    const choice = await notificationService.showWarning(
-      'No proxy configuration found. Please configure proxy settings first.',
-      ACTION_CONFIGURE_NOW
-    );
-
-    if (choice === ACTION_CONFIGURE_NOW.id) {
-      await vscodeApi.commands.executeCommand(COMMANDS.configure);
-    }
-
+    await offerToConfigure(vscodeApi, notificationService);
     return;
   }
 
   try {
     await proxyManager.enableProxy();
     await refreshUi();
-    const choice = await notificationService.showSuccess('Proxy enabled', ACTION_DISABLE_PROXY);
-    if (choice === ACTION_DISABLE_PROXY.id) {
-      await vscodeApi.commands.executeCommand(COMMANDS.disable);
-    }
+    await announceEnabled(vscodeApi, notificationService);
   } catch (error: unknown) {
-    await showEnableError(vscodeApi, notificationService, error);
+    await showProxyError(vscodeApi, notificationService, error, {
+      fallbackMessage: 'Failed to enable proxy.',
+      offerDisable: true
+    });
   }
-}
-
-async function showEnableError(
-  vscodeApi: CommandsApi,
-  notificationService: NotificationService,
-  error: unknown
-): Promise<void> {
-  if (error instanceof KeychainError) {
-    await notificationService.showError(error.toUserMessage());
-    return;
-  }
-
-  if (error instanceof ConfigurationError) {
-    const choice = await notificationService.showError(
-      error.toUserMessage(),
-      ACTION_OPEN_SETTINGS,
-      ACTION_DISABLE_PROXY
-    );
-
-    if (choice === ACTION_OPEN_SETTINGS.id) {
-      await vscodeApi.commands.executeCommand(
-        'workbench.action.openSettings',
-        error.getSettingId()
-      );
-    } else if (choice === ACTION_DISABLE_PROXY.id) {
-      await vscodeApi.commands.executeCommand(COMMANDS.disable);
-    }
-    return;
-  }
-
-  await notificationService.showError('Failed to enable proxy.');
 }

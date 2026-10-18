@@ -5,77 +5,66 @@ import type { StatusBarItem, VscodeApi } from './api';
 
 type StatusBarApi = Pick<VscodeApi, 'StatusBarAlignment' | 'l10n' | 'window'>;
 
+type Presentation = { icon: string; text: string; tooltip: string; label: string };
+
 export class StatusBarController implements vscode.Disposable {
-  private statusBarItem: StatusBarItem | undefined;
+  private readonly item: StatusBarItem;
 
   constructor(
     private readonly vscodeApi: StatusBarApi,
-    private readonly toggleCommandId: string
-  ) {}
-
-  initialize(): void {
-    if (this.statusBarItem) {
-      return;
-    }
-
-    const item = this.vscodeApi.window.createStatusBarItem(
-      this.vscodeApi.StatusBarAlignment.Right,
-      100
-    );
-    item.command = this.toggleCommandId;
-    item.show();
-
-    this.statusBarItem = item;
+    toggleCommandId: string
+  ) {
+    this.item = vscodeApi.window.createStatusBarItem(vscodeApi.StatusBarAlignment.Right, 100);
+    this.item.command = toggleCommandId;
+    this.item.show();
   }
 
   updateState(state: ToggleState): void {
-    if (!this.statusBarItem) {
-      return;
-    }
-
-    if (!state.hasConfiguration) {
-      this.statusBarItem.text = `$(warning) ${this.vscodeApi.l10n.t('Proxy: Not Configured')}`;
-      this.statusBarItem.tooltip = this.vscodeApi.l10n.t(
-        'Configure proxy settings to enable toggling.'
-      );
-      this.statusBarItem.accessibilityInformation = {
-        label: this.vscodeApi.l10n.t('Proxy status: not configured'),
-        role: 'button'
-      };
-      this.statusBarItem.show();
-      return;
-    }
-
-    if (state.isEnabled) {
-      this.statusBarItem.text = `$(plug) ${this.vscodeApi.l10n.t('Proxy: ON')}`;
-      this.statusBarItem.tooltip = this.vscodeApi.l10n.t('Proxy is enabled. Click to toggle.');
-      this.statusBarItem.accessibilityInformation = {
-        label: this.vscodeApi.l10n.t('Proxy status: enabled'),
-        role: 'button'
-      };
-      this.statusBarItem.show();
-      return;
-    }
-
-    this.statusBarItem.text = `$(debug-disconnect) ${this.vscodeApi.l10n.t('Proxy: OFF')}`;
-    this.statusBarItem.tooltip = this.vscodeApi.l10n.t('Proxy is disabled. Click to toggle.');
-    this.statusBarItem.accessibilityInformation = {
-      label: this.vscodeApi.l10n.t('Proxy status: disabled'),
-      role: 'button'
-    };
-    this.statusBarItem.show();
+    const { icon, text, tooltip, label } = this.presentationFor(state);
+    this.item.text = `$(${icon}) ${text}`;
+    this.item.tooltip = tooltip;
+    this.item.accessibilityInformation = { label, role: 'button' };
   }
 
-  getText(): string | undefined {
-    return this.statusBarItem?.text;
+  getText(): string {
+    return this.item.text;
   }
 
   getAccessibilityLabel(): string | undefined {
-    return this.statusBarItem?.accessibilityInformation?.label;
+    return this.item.accessibilityInformation?.label;
   }
 
   dispose(): void {
-    this.statusBarItem?.dispose();
-    this.statusBarItem = undefined;
+    this.item.dispose();
+  }
+
+  // Literal l10n.t calls, rather than a lookup table, keep these strings extractable.
+  private presentationFor(state: ToggleState): Presentation {
+    const { l10n } = this.vscodeApi;
+
+    if (!state.hasConfiguration) {
+      return {
+        icon: 'warning',
+        text: l10n.t('Proxy: Not Configured'),
+        tooltip: l10n.t('Configure proxy settings to enable toggling.'),
+        label: l10n.t('Proxy status: not configured')
+      };
+    }
+
+    if (state.isEnabled) {
+      return {
+        icon: 'plug',
+        text: l10n.t('Proxy: ON'),
+        tooltip: l10n.t('Proxy is enabled. Click to toggle.'),
+        label: l10n.t('Proxy status: enabled')
+      };
+    }
+
+    return {
+      icon: 'debug-disconnect',
+      text: l10n.t('Proxy: OFF'),
+      tooltip: l10n.t('Proxy is disabled. Click to toggle.'),
+      label: l10n.t('Proxy status: disabled')
+    };
   }
 }

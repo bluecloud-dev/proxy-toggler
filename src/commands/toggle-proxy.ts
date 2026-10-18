@@ -1,48 +1,18 @@
-import { KeychainError } from '../core/keychain-service';
-import type { ProxyManager as ProxyManagerService } from '../core/proxy-manager';
-import { ConfigurationError } from '../core/proxy-manager';
+import type { ProxyManager } from '../core/proxy-manager';
 import type { VscodeApi } from '../vscode/api';
-import type {
-  NotificationAction,
-  NotificationService as NotificationServiceService
-} from '../vscode/notification-service';
-import { COMMANDS } from './command-ids';
+import type { NotificationAction, Notifier } from '../vscode/notification-service';
+import { announceEnabled, offerToConfigure, showProxyError } from './proxy-feedback';
 
-const CONFIRM_BEFORE_TOGGLE_SETTING = 'confirmBeforeToggle';
-const SETTINGS_SECTION = 'proxyToggler';
-
-type ToggleApi = Pick<VscodeApi, 'commands' | 'workspace'>;
-
-type ProxyManager = Pick<ProxyManagerService, 'hasConfiguration' | 'getState' | 'toggleProxy'>;
-
-type NotificationService = Pick<
-  NotificationServiceService,
-  'showSuccess' | 'showWarning' | 'showError'
->;
-
-type RefreshUi = () => Promise<void>;
-
-const ACTION_CONFIGURE_NOW: NotificationAction = { id: 'configure', title: 'Configure Now' };
 const ACTION_CANCEL: NotificationAction = { id: 'cancel', title: 'Cancel' };
-const ACTION_DISABLE_PROXY: NotificationAction = { id: 'disableProxy', title: 'Disable Proxy' };
-const ACTION_OPEN_SETTINGS: NotificationAction = { id: 'openSettings', title: 'Open Settings' };
 
 export async function toggleProxyCommand(
-  vscodeApi: ToggleApi,
-  proxyManager: ProxyManager,
-  notificationService: NotificationService,
-  refreshUi: RefreshUi
+  vscodeApi: Pick<VscodeApi, 'commands' | 'workspace'>,
+  proxyManager: Pick<ProxyManager, 'hasConfiguration' | 'getState' | 'toggleProxy'>,
+  notificationService: Notifier,
+  refreshUi: () => Promise<void>
 ): Promise<void> {
   if (!proxyManager.hasConfiguration()) {
-    const choice = await notificationService.showWarning(
-      'No proxy configuration found. Please configure proxy settings first.',
-      ACTION_CONFIGURE_NOW
-    );
-
-    if (choice === ACTION_CONFIGURE_NOW.id) {
-      await vscodeApi.commands.executeCommand(COMMANDS.configure);
-    }
-
+    await offerToConfigure(vscodeApi, notificationService);
     return;
   }
 
@@ -57,62 +27,31 @@ export async function toggleProxyCommand(
     const isEnabled = await proxyManager.toggleProxy();
     await refreshUi();
     if (isEnabled) {
-      const choice = await notificationService.showSuccess('Proxy enabled', ACTION_DISABLE_PROXY);
-      if (choice === ACTION_DISABLE_PROXY.id) {
-        await vscodeApi.commands.executeCommand(COMMANDS.disable);
-      }
+      await announceEnabled(vscodeApi, notificationService);
     } else {
       await notificationService.showSuccess('Proxy disabled');
     }
   } catch (error: unknown) {
-    await showToggleError(vscodeApi, notificationService, error);
+    await showProxyError(vscodeApi, notificationService, error, {
+      fallbackMessage: 'Failed to toggle proxy.',
+      offerDisable: true
+    });
   }
 }
 
-function shouldConfirmToggle(vscodeApi: ToggleApi): boolean {
-  const configuration = vscodeApi.workspace.getConfiguration(SETTINGS_SECTION);
-  return configuration.get<boolean>(CONFIRM_BEFORE_TOGGLE_SETTING, false);
+function shouldConfirmToggle(vscodeApi: Pick<VscodeApi, 'workspace'>): boolean {
+  return vscodeApi.workspace
+    .getConfiguration('proxyToggler')
+    .get<boolean>('confirmBeforeToggle', false);
 }
 
-async function confirmToggle(
-  notificationService: NotificationService,
-  isEnabled: boolean
-): Promise<boolean> {
-  const actionLabel = isEnabled ? 'Disable' : 'Enable';
+async function confirmToggle(notificationService: Notifier, isEnabled: boolean): Promise<boolean> {
+  const confirmAction: NotificationAction = {
+    id: 'confirm',
+    title: isEnabled ? 'Disable' : 'Enable'
+  };
   const message = isEnabled ? 'Disable proxy?' : 'Enable proxy?';
 
-  const confirmAction: NotificationAction = { id: 'confirm', title: actionLabel };
   const choice = await notificationService.showWarning(message, confirmAction, ACTION_CANCEL);
   return choice === confirmAction.id;
-}
-
-async function showToggleError(
-  vscodeApi: ToggleApi,
-  notificationService: NotificationService,
-  error: unknown
-): Promise<void> {
-  if (error instanceof KeychainError) {
-    await notificationService.showError(error.toUserMessage());
-    return;
-  }
-
-  if (error instanceof ConfigurationError) {
-    const choice = await notificationService.showError(
-      error.toUserMessage(),
-      ACTION_OPEN_SETTINGS,
-      ACTION_DISABLE_PROXY
-    );
-
-    if (choice === ACTION_OPEN_SETTINGS.id) {
-      await vscodeApi.commands.executeCommand(
-        'workbench.action.openSettings',
-        error.getSettingId()
-      );
-    } else if (choice === ACTION_DISABLE_PROXY.id) {
-      await vscodeApi.commands.executeCommand(COMMANDS.disable);
-    }
-    return;
-  }
-
-  await notificationService.showError('Failed to toggle proxy.');
 }

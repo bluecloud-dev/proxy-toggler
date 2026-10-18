@@ -7,7 +7,7 @@ describe('StatusBarController', () => {
   it('creates one right-aligned item that runs the toggle command', () => {
     const vscode = createFakeVscode();
 
-    new StatusBarController(vscode, 'proxyToggler.toggle').initialize();
+    new StatusBarController(vscode, 'proxyToggler.toggle');
 
     const [item] = vscode.statusBarItems;
     assert.equal(vscode.statusBarItems.length, 1);
@@ -19,7 +19,6 @@ describe('StatusBarController', () => {
   it('renders each state with an accessible label', () => {
     const vscode = createFakeVscode();
     const controller = new StatusBarController(vscode, 'proxyToggler.toggle');
-    controller.initialize();
 
     const rendered = [
       { isEnabled: false, hasConfiguration: false },
@@ -40,7 +39,6 @@ describe('StatusBarController', () => {
   it('disposes its item', () => {
     const vscode = createFakeVscode();
     const controller = new StatusBarController(vscode, 'proxyToggler.toggle');
-    controller.initialize();
 
     controller.dispose();
 

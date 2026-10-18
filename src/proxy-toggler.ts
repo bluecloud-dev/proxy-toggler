@@ -32,7 +32,6 @@ export function createProxyToggler(
   );
   const notificationService = new NotificationService(vscodeApi);
   const statusBarController = new StatusBarController(vscodeApi, COMMANDS.toggle);
-  statusBarController.initialize();
 
   context.subscriptions.push(keychainService, proxyManager, statusBarController);
 
