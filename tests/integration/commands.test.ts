@@ -8,6 +8,10 @@ type CommandPaletteItem = {
   when?: string;
 };
 
+type ExtensionManifest = {
+  contributes?: { menus?: { commandPalette?: CommandPaletteItem[] } };
+};
+
 describe('command palette contributions', () => {
   it('registers proxy toggler commands', async () => {
     const extension = vscode.extensions.getExtension('aymenhammouda.proxy-toggler');
@@ -45,9 +49,8 @@ describe('command palette contributions', () => {
     const extension = vscode.extensions.getExtension('aymenhammouda.proxy-toggler');
     assert.ok(extension, 'Expected extension to be available in VS Code test host');
 
-    const commandPalette = extension.packageJSON?.contributes?.menus?.commandPalette as
-      | CommandPaletteItem[]
-      | undefined;
+    const manifest = extension.packageJSON as ExtensionManifest;
+    const commandPalette = manifest.contributes?.menus?.commandPalette;
     assert.ok(Array.isArray(commandPalette), 'Expected contributes.menus.commandPalette to be an array');
 
     const enable = commandPalette.find((item) => item.command === 'proxyToggler.enable');

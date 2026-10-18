@@ -1,5 +1,3 @@
-/* eslint-disable no-console */
-
 const path = require('node:path');
 
 const esbuild = require('esbuild');
