@@ -28,30 +28,11 @@ type VscodeApi = {
 export class StatusBarController implements vscode.Disposable {
   private statusBarItem: StatusBarItem | undefined;
 
-  /**
-   * @param vscodeApi VS Code API surface for status bar and localization.
-   * @param toggleCommandId Command invoked when the status bar item is clicked.
-   * @example
-   * ```ts
-   * const controller = new StatusBarController(vscode, 'proxyToggler.toggle');
-   * controller.initialize();
-   * ```
-   */
   constructor(
     private readonly vscodeApi: VscodeApi,
     private readonly toggleCommandId: string
   ) {}
 
-  /**
-   * Creates and shows the status bar item (idempotent).
-   *
-   * @returns void
-   * @throws {Error} If VS Code fails to create the status bar item.
-   * @example
-   * ```ts
-   * controller.initialize();
-   * ```
-   */
   initialize(): void {
     if (this.statusBarItem) {
       return;
@@ -67,16 +48,6 @@ export class StatusBarController implements vscode.Disposable {
     this.statusBarItem = item;
   }
 
-  /**
-   * Updates the status bar text, tooltip, and accessibility label.
-   *
-   * @param state Current toggle state.
-   * @returns void
-   * @example
-   * ```ts
-   * controller.updateState({ hasConfiguration: true, isEnabled: false });
-   * ```
-   */
   updateState(state: ToggleState): void {
     if (!this.statusBarItem) {
       return;
@@ -115,37 +86,14 @@ export class StatusBarController implements vscode.Disposable {
     this.statusBarItem.show();
   }
 
-  /**
-   * @returns Current status bar text, if initialized.
-   * @example
-   * ```ts
-   * const text = controller.getText();
-   * ```
-   */
   getText(): string | undefined {
     return this.statusBarItem?.text;
   }
 
-  /**
-   * @returns Current accessibility label, if initialized.
-   * @example
-   * ```ts
-   * const label = controller.getAccessibilityLabel();
-   * ```
-   */
   getAccessibilityLabel(): string | undefined {
     return this.statusBarItem?.accessibilityInformation?.label;
   }
 
-  /**
-   * Disposes the status bar item.
-   *
-   * @returns void
-   * @example
-   * ```ts
-   * controller.dispose();
-   * ```
-   */
   dispose(): void {
     this.statusBarItem?.dispose();
     this.statusBarItem = undefined;

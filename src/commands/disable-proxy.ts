@@ -17,20 +17,6 @@ type RefreshUi = () => Promise<void>;
 
 const ACTION_OPEN_SETTINGS = { id: 'openSettings', title: 'Open Settings' } as const;
 
-/**
- * Disables the proxy by clearing VS Code `http.*` settings.
- *
- * @param vscodeApi VS Code API surface used for commands execution.
- * @param proxyManager ProxyManager facade.
- * @param notificationService Notification helper (localized UI).
- * @param refreshUi Callback to refresh status bar and context keys.
- * @returns void
- * @throws {Error} If VS Code command execution fails unexpectedly.
- * @example
- * ```ts
- * await disableProxyCommand(vscode, proxyManager, notifications, refreshUi);
- * ```
- */
 export async function disableProxyCommand(
   vscodeApi: VscodeApi,
   proxyManager: ProxyManager,

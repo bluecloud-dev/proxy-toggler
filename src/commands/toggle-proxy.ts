@@ -36,22 +36,6 @@ const ACTION_CANCEL: NotificationAction = { id: 'cancel', title: 'Cancel' };
 const ACTION_DISABLE_PROXY: NotificationAction = { id: 'disableProxy', title: 'Disable Proxy' };
 const ACTION_OPEN_SETTINGS: NotificationAction = { id: 'openSettings', title: 'Open Settings' };
 
-/**
- * Toggles the proxy on/off.
- *
- * If `proxyToggler.confirmBeforeToggle` is enabled, the user is prompted before toggling.
- *
- * @param vscodeApi VS Code API surface used for commands execution and settings reads.
- * @param proxyManager ProxyManager facade.
- * @param notificationService Notification helper (localized UI).
- * @param refreshUi Callback to refresh status bar and context keys.
- * @returns void
- * @throws {Error} If VS Code command execution fails unexpectedly.
- * @example
- * ```ts
- * await toggleProxyCommand(vscode, proxyManager, notifications, refreshUi);
- * ```
- */
 export async function toggleProxyCommand(
   vscodeApi: VscodeApi,
   proxyManager: ProxyManager,

@@ -8,6 +8,7 @@ import type {
 } from '../ui/notification-service';
 
 const DEFAULT_NO_PROXY = 'localhost,127.0.0.1';
+// Stored credentials are never read back for display; the UI shows only this mask.
 const MASKED_CREDENTIALS_PLACEHOLDER = '••••••';
 
 type InputBoxOptions = {
@@ -59,22 +60,6 @@ type RefreshUi = () => Promise<void>;
 const ACTION_ENABLE: NotificationAction = { id: 'enable', title: 'Enable' };
 const ACTION_NOT_NOW: NotificationAction = { id: 'notNow', title: 'Not Now' };
 
-/**
- * Prompts the user to configure proxy settings and saves them securely.
- *
- * Credentials are stored in SecretStorage (OS keychain) and are never displayed back to the user.
- *
- * @param vscodeApi VS Code API surface used for prompts and command execution.
- * @param proxyManager ProxyManager instance.
- * @param notificationService Notification helper (localized UI).
- * @param refreshUi Callback to refresh status bar and context keys.
- * @returns void
- * @throws {Error} If VS Code APIs reject unexpectedly.
- * @example
- * ```ts
- * await configureProxyCommand(vscode, proxyManager, notifications, refreshUi);
- * ```
- */
 export async function configureProxyCommand(
   vscodeApi: VscodeApi,
   proxyManager: ProxyManager,

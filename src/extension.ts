@@ -95,18 +95,6 @@ export type ProxyTogglerApi = {
   getStatusBarAccessibilityLabel: () => string | undefined;
 };
 
-/**
- * Registers all extension commands and returns a small API used by integration tests.
- *
- * @param vscodeApi VS Code API surface to use (injectable for tests).
- * @param context VS Code extension context.
- * @returns API surface for state/UX inspection.
- * @throws {Error} If command registration fails unexpectedly.
- * @example
- * ```ts
- * const api = registerCommands(vscode, context);
- * ```
- */
 export function registerCommands(
   vscodeApi: VscodeApi,
   context: vscode.ExtensionContext
@@ -164,19 +152,6 @@ export function registerCommands(
   };
 }
 
-/**
- * VS Code activation entrypoint.
- *
- * @param context VS Code extension context.
- * @param vscodeApi Optional injected VS Code API (tests).
- * @param importVscodeApi Lazy loader for VS Code API (production).
- * @returns API surface for state/UX inspection.
- * @throws {Error} If activation fails unexpectedly.
- * @example
- * ```ts
- * const api = activate(context);
- * ```
- */
 export function activate(
   context: vscode.ExtensionContext,
   vscodeApi?: VscodeApi,

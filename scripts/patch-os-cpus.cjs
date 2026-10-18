@@ -1,3 +1,5 @@
+// Preloaded by the coverage and package scripts: some sandboxed runners report zero CPUs,
+// and nyc and vsce size their worker pools from os.cpus().
 const os = require('node:os');
 
 const originalCpus = os.cpus;

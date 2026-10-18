@@ -25,20 +25,6 @@ const ACTION_CONFIGURE_NOW: NotificationAction = { id: 'configure', title: 'Conf
 const ACTION_DISABLE_PROXY: NotificationAction = { id: 'disableProxy', title: 'Disable Proxy' };
 const ACTION_OPEN_SETTINGS: NotificationAction = { id: 'openSettings', title: 'Open Settings' };
 
-/**
- * Enables the proxy by applying the saved configuration to VS Code `http.*` settings.
- *
- * @param vscodeApi VS Code API surface used for commands execution.
- * @param proxyManager ProxyManager facade.
- * @param notificationService Notification helper (localized UI).
- * @param refreshUi Callback to refresh status bar and context keys.
- * @returns void
- * @throws {Error} If VS Code command execution fails unexpectedly.
- * @example
- * ```ts
- * await enableProxyCommand(vscode, proxyManager, notifications, refreshUi);
- * ```
- */
 export async function enableProxyCommand(
   vscodeApi: VscodeApi,
   proxyManager: ProxyManager,
