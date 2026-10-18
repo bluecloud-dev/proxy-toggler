@@ -18,9 +18,9 @@
   "categories": [
     "Other"
   ],
-  "main": "./out/src/extension.js",
+  "main": "./dist/extension.js",
   "files": [
-    "out/src/**",
+    "dist/**",
     "assets/**",
     "LICENSE",
     "package.nls.json",
@@ -76,9 +76,8 @@
     }
   },
   "scripts": {
-    "build": "tsc -p .",
-    "bundle": "node ./esbuild.js --production",
-    "bundle:watch": "node ./esbuild.js --watch",
+    "build": "npm run typecheck && node ./esbuild.js",
+    "watch": "node ./esbuild.js --watch",
     "check": "npm run format:check && npm run lint && npm run lint:unused && npm run typecheck && npm run coverage",
     "check:no-telemetry": "node ./scripts/check-no-telemetry.cjs",
     "format": "prettier --write .",
@@ -87,9 +86,9 @@
     "lint:unused": "knip",
     "typecheck": "tsc -p . --noEmit",
     "test": "mocha",
-    "test:integration": "npm run build && ts-node ./tests/run-test.ts",
+    "test:integration": "node ./esbuild.js && tsc -p . && ts-node ./tests/run-test.ts",
     "coverage": "node -r ./scripts/patch-os-cpus.cjs ./node_modules/nyc/bin/nyc.js npm test",
-    "vscode:prepublish": "npm run build && npm run bundle",
+    "vscode:prepublish": "npm run typecheck && node ./esbuild.js --production",
     "package": "node -r ./scripts/patch-os-cpus.cjs ./node_modules/@vscode/vsce/vsce package"
   },
   "nyc": {
@@ -136,7 +135,7 @@
     "eslint-plugin-simple-import-sort": "^14.0.0",
     "globals": "^17.13.0",
     "knip": "^6.42.0",
-    "mocha": "^12.0.3",
+    "mocha": "^11.8.0",
     "nyc": "^17.1.0",
     "prettier": "3.9.10",
     "sinon": "^19.0.2",
