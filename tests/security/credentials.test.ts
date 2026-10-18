@@ -206,7 +206,9 @@ function createProxyManagerStub(): {
 
 function createVscodeApiStub(options: {
   inputs: string[];
-  onQuickPick: (items: Array<{ label: string; value?: boolean }>) => { label: string; value?: boolean };
+  onQuickPick: (
+    items: Array<{ label: string; value?: boolean }>
+  ) => { label: string; value?: boolean } | undefined;
 }): Parameters<typeof configureProxyCommand>[0] {
   let inputIndex = 0;
 
@@ -218,7 +220,7 @@ function createVscodeApiStub(options: {
       showInputBox: async (): Promise<string | undefined> => options.inputs[inputIndex++],
       showQuickPick: async <T extends { label: string }>(
         items: readonly T[]
-      ): Promise<T | undefined> => options.onQuickPick(items as unknown as Array<{ label: string; value?: boolean }>) as T
+      ): Promise<T | undefined> => options.onQuickPick(items as unknown as Array<{ label: string; value?: boolean }>) as T | undefined
     },
     commands: {
       executeCommand: async (): Promise<unknown> => undefined

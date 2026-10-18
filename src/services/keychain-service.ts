@@ -34,7 +34,7 @@ export class KeychainError extends Error {
   constructor(
     public readonly operation: 'store' | 'retrieve' | 'delete',
     public readonly reason: KeychainErrorReason,
-    public readonly cause?: Error
+    public override readonly cause?: Error
   ) {
     super(`Keychain ${operation} failed: ${reason}`);
     this.name = 'KeychainError';

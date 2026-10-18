@@ -57,7 +57,7 @@ describe('US2 command handlers', () => {
     });
 
     assert.equal(informationMessages.length, 1);
-    assert.match(informationMessages[0], /enabled/i);
+    assert.match(informationMessages[0] ?? '', /enabled/i);
     assert.equal(proxyManager.enableCalls, 1);
     assert.equal(refreshed, 1);
   });
@@ -78,7 +78,7 @@ describe('US2 command handlers', () => {
 
     assert.equal(proxyManager.disableCalls, 1);
     assert.equal(informationMessages.length, 1);
-    assert.match(informationMessages[0], /disabled/i);
+    assert.match(informationMessages[0] ?? '', /disabled/i);
     assert.equal(refreshed, 1);
   });
 
@@ -127,7 +127,7 @@ describe('US2 command handlers', () => {
 
     assert.equal(proxyManager.toggleCalls, 1);
     assert.equal(informationMessages.length, 1);
-    assert.match(informationMessages[0], /enabled/i);
+    assert.match(informationMessages[0] ?? '', /enabled/i);
   });
 
   it('toggleProxyCommand prompts to configure when missing configuration', async () => {
@@ -164,7 +164,7 @@ describe('US2 command handlers', () => {
     await enableProxyCommand(vscodeApi, proxyManager, notificationService, async () => {});
 
     assert.equal(errorMessages.length, 1);
-    assert.match(errorMessages[0], /locked/i);
+    assert.match(errorMessages[0] ?? '', /locked/i);
   });
 
   it('enableProxyCommand opens settings when configuration update fails', async () => {
@@ -192,7 +192,7 @@ describe('US2 command handlers', () => {
     await enableProxyCommand(vscodeApi, proxyManager, notificationService, async () => {});
 
     assert.equal(errorMessages.length, 1);
-    assert.ok(errorMessages[0].actions.some((action) => action.id === 'openSettings'));
+    assert.ok(errorMessages[0]?.actions.some((action) => action.id === 'openSettings'));
     assert.deepEqual(executed, [{ command: 'workbench.action.openSettings', args: ['http.proxy'] }]);
   });
 

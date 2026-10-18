@@ -69,7 +69,7 @@ export class ConfigurationError extends Error {
   constructor(
     public readonly operation: 'enable' | 'disable',
     public readonly key: HttpConfigurationKey,
-    public readonly cause?: Error
+    public override readonly cause?: Error
   ) {
     super(`Failed to ${operation} proxy: unable to update VS Code setting "${formatHttpSettingKey(key)}".`);
     this.name = 'ConfigurationError';

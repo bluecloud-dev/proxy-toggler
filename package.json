@@ -83,6 +83,7 @@
     "format": "prettier --write .",
     "format:check": "prettier --check .",
     "lint": "eslint src tests scripts esbuild.js eslint.config.mjs",
+    "typecheck": "tsc -p . --noEmit",
     "test": "npm run test:unit",
     "test:unit": "mocha -r ts-node/register \"tests/unit/**/*.test.ts\" \"tests/security/**/*.test.ts\"",
     "test:integration": "npm run build && ts-node ./tests/run-test.ts",

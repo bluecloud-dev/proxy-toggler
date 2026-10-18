@@ -53,7 +53,7 @@ describe('configureProxyCommand', () => {
     });
 
     assert.equal(infoMessages.length, 1);
-    assert.match(infoMessages[0].message, /saved/i);
+    assert.match(infoMessages[0]?.message ?? '', /saved/i);
     assert.equal(executedCommands.length, 0);
     assert.equal(refreshed, 1);
   });
@@ -296,8 +296,8 @@ describe('configureProxyCommand', () => {
     );
 
     assert.equal(errorMessages.length, 1);
-    assert.match(errorMessages[0], /permission/i);
-    assert.doesNotMatch(errorMessages[0], /secret/i);
+    assert.match(errorMessages[0] ?? '', /permission/i);
+    assert.doesNotMatch(errorMessages[0] ?? '', /secret/i);
     assert.equal(refreshed, 0);
   });
 
@@ -332,8 +332,8 @@ describe('configureProxyCommand', () => {
     );
 
     assert.equal(errorMessages.length, 1);
-    assert.match(errorMessages[0], /invalid proxyurl/i);
-    assert.match(errorMessages[0], /examples/i);
+    assert.match(errorMessages[0] ?? '', /invalid proxyurl/i);
+    assert.match(errorMessages[0] ?? '', /examples/i);
     assert.equal(refreshed, 0);
   });
 });

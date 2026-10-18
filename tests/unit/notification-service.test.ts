@@ -32,8 +32,8 @@ describe('NotificationService', () => {
 
     assert.equal(selected, 'b');
     assert.equal(infoCalls.length, 1);
-    assert.equal(infoCalls[0].message, 't:Hello');
-    assert.deepEqual(infoCalls[0].items, ['t:Action A', 't:Action B']);
+    assert.equal(infoCalls[0]?.message, 't:Hello');
+    assert.deepEqual(infoCalls[0]?.items, ['t:Action A', 't:Action B']);
   });
 
   it('maps warning selections back to action ids', async () => {
@@ -62,8 +62,8 @@ describe('NotificationService', () => {
 
     assert.equal(selected, 'open');
     assert.equal(warningCalls.length, 1);
-    assert.equal(warningCalls[0].message, 't:Warning');
-    assert.deepEqual(warningCalls[0].items, ['t:Open Settings']);
+    assert.equal(warningCalls[0]?.message, 't:Warning');
+    assert.deepEqual(warningCalls[0]?.items, ['t:Open Settings']);
   });
 
   it('maps error selections back to action ids', async () => {
@@ -93,7 +93,7 @@ describe('NotificationService', () => {
 
     assert.equal(selected, 'disable');
     assert.equal(errorCalls.length, 1);
-    assert.equal(errorCalls[0].message, 't:Error');
-    assert.deepEqual(errorCalls[0].items, ['t:Open Settings', 't:Disable Proxy']);
+    assert.equal(errorCalls[0]?.message, 't:Error');
+    assert.deepEqual(errorCalls[0]?.items, ['t:Open Settings', 't:Disable Proxy']);
   });
 });
