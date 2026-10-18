@@ -181,6 +181,24 @@ describe('ProxyManager', () => {
     assert.deepEqual(globalState.store.get('proxyToggler.savedProxy'), CONFIGURATION);
   });
 
+  it('keeps state fields it does not manage, such as ones written by another version', async () => {
+    const { globalState, proxyManager } = setup();
+    await proxyManager.saveConfiguration(CONFIGURATION, { mode: 'keep' });
+    globalState.store.set('proxyToggler.state', {
+      isEnabled: true,
+      hasConfiguration: false,
+      lastProfile: 'work'
+    });
+
+    await proxyManager.syncToggleState(false);
+
+    assert.deepEqual(globalState.store.get('proxyToggler.state'), {
+      isEnabled: false,
+      hasConfiguration: true,
+      lastProfile: 'work'
+    });
+  });
+
   describe('isConfigurationApplied', () => {
     it('is false when nothing is saved', () => {
       assert.equal(setup().proxyManager.isConfigurationApplied(), false);

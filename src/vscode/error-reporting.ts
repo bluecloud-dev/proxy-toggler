@@ -30,9 +30,14 @@ export function createCommandRegistrar(
 }
 
 export function runInBackground(logger: Logger, task: string, run: () => Promise<void>): void {
-  run().catch((error: unknown) => {
-    logger.error(`${task} failed`, error);
-  });
+  // The async wrapper also catches a callback that throws before returning its promise.
+  void (async () => {
+    try {
+      await run();
+    } catch (error: unknown) {
+      logger.error(`${task} failed`, error);
+    }
+  })();
 }
 
 function userMessageFor(error: unknown, failureMessage: string): string {

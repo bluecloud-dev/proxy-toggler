@@ -166,10 +166,13 @@ export class ProxyManager {
 
   getState(): ToggleState {
     const stored = this.globalState.get<ToggleState>(STORAGE_KEYS.toggleState);
-    return {
-      isEnabled: stored?.isEnabled ?? false,
-      hasConfiguration: Boolean(this.savedConfiguration())
-    };
+    const hasConfiguration = Boolean(this.savedConfiguration());
+    if (!stored) {
+      return { isEnabled: false, hasConfiguration };
+    }
+
+    // Spread rather than pick, so fields written by other versions survive the next write.
+    return { ...stored, hasConfiguration };
   }
 
   hasConfiguration(): boolean {

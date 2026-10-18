@@ -54,7 +54,7 @@ export function createProxyToggler(
 
   const register = createCommandRegistrar(vscodeApi, logger, notificationService);
   context.subscriptions.push(
-    register(COMMANDS.configure, 'Failed to save proxy configuration.', () =>
+    register(COMMANDS.configure, 'Failed to configure proxy.', () =>
       configureProxyCommand(vscodeApi, proxyManager, notificationService, refreshUi)
     ),
     register(COMMANDS.enable, 'Failed to enable proxy.', () =>

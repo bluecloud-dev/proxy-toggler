@@ -143,7 +143,7 @@ describe('createProxyToggler', () => {
 
     assert.deepEqual(
       vscode.messages.map((message) => [message.kind, message.message]),
-      [['error', 'Failed to save proxy configuration.']]
+      [['error', 'Failed to configure proxy.']]
     );
     assert.match(vscode.logs.join('\n'), /input box failed/);
   });
