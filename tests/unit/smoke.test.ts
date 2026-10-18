@@ -5,4 +5,3 @@ describe('unit smoke', () => {
     assert.equal(true, true);
   });
 });
-

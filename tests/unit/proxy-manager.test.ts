@@ -317,7 +317,9 @@ function createKeychainStub(options?: { hasCredentials?: boolean }): KeychainSer
   } as unknown as KeychainService & { storeCalls: ProxyCredentials[]; clearCalls: number };
 }
 
-function createHttpConfigurationStub(options?: { failKey?: 'proxy' | 'proxyStrictSSL' | 'noProxy' }): HttpConfiguration & {
+function createHttpConfigurationStub(options?: {
+  failKey?: 'proxy' | 'proxyStrictSSL' | 'noProxy';
+}): HttpConfiguration & {
   updateCalls: Array<{ key: string; value: string | boolean | undefined }>;
 } {
   const updateCalls: Array<{ key: string; value: string | boolean | undefined }> = [];

@@ -1,6 +1,10 @@
 import { strict as assert } from 'node:assert';
 
-import { KeychainError, KeychainErrorReason, KeychainService } from '../../src/services/keychain-service';
+import {
+  KeychainError,
+  KeychainErrorReason,
+  KeychainService
+} from '../../src/services/keychain-service';
 import { ValidationError } from '../../src/services/validation-service';
 
 type SecretsStub = {
@@ -19,7 +23,10 @@ describe('KeychainService', () => {
 
     await service.storeCredentials(' alice ', ' secret ');
     assert.equal(await service.hasCredentials(), true);
-    assert.deepEqual(await service.retrieveCredentials(), { username: 'alice', password: 'secret' });
+    assert.deepEqual(await service.retrieveCredentials(), {
+      username: 'alice',
+      password: 'secret'
+    });
 
     await service.clearCredentials();
     assert.equal(await service.hasCredentials(), false);

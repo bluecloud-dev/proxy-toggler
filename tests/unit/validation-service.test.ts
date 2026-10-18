@@ -16,17 +16,23 @@ function captureValidationError(operation: () => void): ValidationError {
 describe('ValidationService', () => {
   describe('validateProxyUrl', () => {
     it('accepts valid http/https URLs with ports', () => {
-      assert.doesNotThrow(() => ValidationService.validateProxyUrl('http://proxy.example.com:8080'));
+      assert.doesNotThrow(() =>
+        ValidationService.validateProxyUrl('http://proxy.example.com:8080')
+      );
       assert.doesNotThrow(() => ValidationService.validateProxyUrl('https://10.0.0.1:3128'));
       assert.doesNotThrow(() => ValidationService.validateProxyUrl('http://[::1]:8080'));
-      assert.doesNotThrow(() => ValidationService.validateProxyUrl('HTTP://proxy.example.com:8080'));
+      assert.doesNotThrow(() =>
+        ValidationService.validateProxyUrl('HTTP://proxy.example.com:8080')
+      );
     });
 
     it('rejects missing or malformed URLs', () => {
       const emptyError = captureValidationError(() => ValidationService.validateProxyUrl(''));
       assert.equal(emptyError.field, 'proxyUrl');
 
-      const whitespaceError = captureValidationError(() => ValidationService.validateProxyUrl('   '));
+      const whitespaceError = captureValidationError(() =>
+        ValidationService.validateProxyUrl('   ')
+      );
       assert.equal(whitespaceError.field, 'proxyUrl');
 
       const notStringError = captureValidationError(() =>
@@ -138,7 +144,9 @@ describe('ValidationService', () => {
     });
 
     it('rejects CIDR patterns (out of scope for v1)', () => {
-      const error = captureValidationError(() => ValidationService.validateNoProxyPattern('10.0.0.0/8'));
+      const error = captureValidationError(() =>
+        ValidationService.validateNoProxyPattern('10.0.0.0/8')
+      );
       assert.equal(error.field, 'noProxy');
       assert.match(error.reason, /cidr/i);
     });
@@ -149,15 +157,27 @@ describe('ValidationService', () => {
       );
       assert.equal(schemeError.field, 'noProxy');
 
-      assert.throws(() => ValidationService.validateNoProxyPattern('**.example.com'), ValidationError);
-      assert.throws(() => ValidationService.validateNoProxyPattern('example.*.com'), ValidationError);
-      assert.throws(() => ValidationService.validateNoProxyPattern('*..example.com'), ValidationError);
+      assert.throws(
+        () => ValidationService.validateNoProxyPattern('**.example.com'),
+        ValidationError
+      );
+      assert.throws(
+        () => ValidationService.validateNoProxyPattern('example.*.com'),
+        ValidationError
+      );
+      assert.throws(
+        () => ValidationService.validateNoProxyPattern('*..example.com'),
+        ValidationError
+      );
     });
 
     it('rejects invalid bypass entries', () => {
       assert.throws(() => ValidationService.validateNoProxyPattern('.'), ValidationError);
       assert.throws(() => ValidationService.validateNoProxyPattern('user@host'), ValidationError);
-      assert.throws(() => ValidationService.validateNoProxyPattern('example.com:8080'), ValidationError);
+      assert.throws(
+        () => ValidationService.validateNoProxyPattern('example.com:8080'),
+        ValidationError
+      );
       assert.throws(() => ValidationService.validateNoProxyPattern('local host'), ValidationError);
       assert.throws(() => ValidationService.validateNoProxyPattern('*.127.0.0.1'), ValidationError);
     });

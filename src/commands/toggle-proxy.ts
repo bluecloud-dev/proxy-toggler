@@ -99,7 +99,10 @@ function shouldConfirmToggle(vscodeApi: VscodeApi): boolean {
   return configuration.get<boolean>(CONFIRM_BEFORE_TOGGLE_SETTING, false);
 }
 
-async function confirmToggle(notificationService: NotificationService, isEnabled: boolean): Promise<boolean> {
+async function confirmToggle(
+  notificationService: NotificationService,
+  isEnabled: boolean
+): Promise<boolean> {
   const actionLabel = isEnabled ? 'Disable' : 'Enable';
   const message = isEnabled ? 'Disable proxy?' : 'Enable proxy?';
 
@@ -126,7 +129,10 @@ async function showToggleError(
     );
 
     if (choice === ACTION_OPEN_SETTINGS.id) {
-      await vscodeApi.commands.executeCommand('workbench.action.openSettings', error.getSettingId());
+      await vscodeApi.commands.executeCommand(
+        'workbench.action.openSettings',
+        error.getSettingId()
+      );
     } else if (choice === ACTION_DISABLE_PROXY.id) {
       await vscodeApi.commands.executeCommand('proxyToggler.disable');
     }

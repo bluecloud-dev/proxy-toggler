@@ -59,7 +59,10 @@ async function showDisableError(
   if (error instanceof ConfigurationError) {
     const choice = await notificationService.showError(error.toUserMessage(), ACTION_OPEN_SETTINGS);
     if (choice === ACTION_OPEN_SETTINGS.id) {
-      await vscodeApi.commands.executeCommand('workbench.action.openSettings', error.getSettingId());
+      await vscodeApi.commands.executeCommand(
+        'workbench.action.openSettings',
+        error.getSettingId()
+      );
     }
     return;
   }

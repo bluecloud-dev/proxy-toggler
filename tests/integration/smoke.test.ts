@@ -5,4 +5,3 @@ describe('integration smoke', () => {
     assert.equal(true, true);
   });
 });
-

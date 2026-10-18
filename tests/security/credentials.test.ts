@@ -1,7 +1,10 @@
 import { strict as assert } from 'node:assert';
 
 import type { ProxyConfiguration } from '../../src/types/proxy-configuration';
-import type { LoadedProxyConfiguration, SaveConfigurationOptions } from '../../src/services/proxy-manager';
+import type {
+  LoadedProxyConfiguration,
+  SaveConfigurationOptions
+} from '../../src/services/proxy-manager';
 import { ProxyManager } from '../../src/services/proxy-manager';
 import { KeychainService } from '../../src/services/keychain-service';
 import { configureProxyCommand } from '../../src/commands/configure-proxy';
@@ -160,7 +163,9 @@ describe('credential handling (security)', () => {
   });
 });
 
-function createMemento(store?: Map<string, unknown>): MementoStub & { snapshot: Map<string, unknown> } {
+function createMemento(
+  store?: Map<string, unknown>
+): MementoStub & { snapshot: Map<string, unknown> } {
   const snapshot = store ?? new Map<string, unknown>();
 
   return {
@@ -187,7 +192,10 @@ function createSecretsStub(initialStore?: Map<string, string>): SecretsStub {
 }
 
 function createHttpConfigurationStub(): {
-  update: (key: 'proxy' | 'proxyStrictSSL' | 'noProxy', value: string | boolean | undefined) => Promise<void>;
+  update: (
+    key: 'proxy' | 'proxyStrictSSL' | 'noProxy',
+    value: string | boolean | undefined
+  ) => Promise<void>;
 } {
   return {
     update: async (): Promise<void> => undefined
@@ -220,7 +228,9 @@ function createVscodeApiStub(options: {
       showInputBox: async (): Promise<string | undefined> => options.inputs[inputIndex++],
       showQuickPick: async <T extends { label: string }>(
         items: readonly T[]
-      ): Promise<T | undefined> => options.onQuickPick(items as unknown as Array<{ label: string; value?: boolean }>) as T | undefined
+      ): Promise<T | undefined> =>
+        options.onQuickPick(items as unknown as Array<{ label: string; value?: boolean }>) as
+          T | undefined
     },
     commands: {
       executeCommand: async (): Promise<unknown> => undefined

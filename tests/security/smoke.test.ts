@@ -5,4 +5,3 @@ describe('security smoke', () => {
     assert.equal(true, true);
   });
 });
-

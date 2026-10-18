@@ -47,9 +47,7 @@ type VscodeApi = {
 };
 
 type CredentialsUpdate =
-  | { mode: 'keep' }
-  | { mode: 'clear' }
-  | { mode: 'set'; credentials: ProxyCredentials };
+  { mode: 'keep' } | { mode: 'clear' } | { mode: 'set'; credentials: ProxyCredentials };
 
 type NotificationService = Pick<
   NotificationServiceService,
@@ -134,7 +132,10 @@ export async function configureProxyCommand(
   }
 }
 
-async function promptForProxyUrl(vscodeApi: VscodeApi, initialValue?: string): Promise<string | undefined> {
+async function promptForProxyUrl(
+  vscodeApi: VscodeApi,
+  initialValue?: string
+): Promise<string | undefined> {
   return vscodeApi.window.showInputBox({
     prompt: vscodeApi.l10n.t('Enter proxy URL (e.g., http://proxy.example.com:8080)'),
     placeHolder: vscodeApi.l10n.t('http://proxy.example.com:8080'),
@@ -262,7 +263,8 @@ async function promptForUsername(
 ): Promise<string | undefined> {
   return vscodeApi.window.showInputBox({
     prompt:
-      overrides?.prompt ?? vscodeApi.l10n.t('Enter proxy username (leave empty if no authentication)'),
+      overrides?.prompt ??
+      vscodeApi.l10n.t('Enter proxy username (leave empty if no authentication)'),
     placeHolder: vscodeApi.l10n.t('username (optional)'),
     ignoreFocusOut: true
   });
@@ -320,7 +322,10 @@ function buildStrictSSLItems(
   return [yes, no];
 }
 
-async function promptForNoProxy(vscodeApi: VscodeApi, initialValue?: string): Promise<string | undefined> {
+async function promptForNoProxy(
+  vscodeApi: VscodeApi,
+  initialValue?: string
+): Promise<string | undefined> {
   return vscodeApi.window.showInputBox({
     prompt: vscodeApi.l10n.t('Enter domains/IPs to bypass proxy (comma-separated, optional)'),
     placeHolder: DEFAULT_NO_PROXY,
@@ -362,10 +367,16 @@ async function saveConfiguration(
     return;
   }
 
-  await proxyManager.saveConfiguration({ configuration, credentials: credentialsUpdate.credentials });
+  await proxyManager.saveConfiguration({
+    configuration,
+    credentials: credentialsUpdate.credentials
+  });
 }
 
-async function showConfigurationSaveError(notificationService: NotificationService, error: unknown): Promise<void> {
+async function showConfigurationSaveError(
+  notificationService: NotificationService,
+  error: unknown
+): Promise<void> {
   if (error instanceof ValidationError) {
     await showValidationError(notificationService, error);
     return;
@@ -379,9 +390,14 @@ async function showConfigurationSaveError(notificationService: NotificationServi
   await notificationService.showError('Failed to save proxy configuration.');
 }
 
-async function showValidationError(notificationService: NotificationService, error: unknown): Promise<void> {
+async function showValidationError(
+  notificationService: NotificationService,
+  error: unknown
+): Promise<void> {
   if (error instanceof ValidationError) {
-    const message = error.examples?.length ? `${error.message} Examples: ${error.examples.join(', ')}` : error.message;
+    const message = error.examples?.length
+      ? `${error.message} Examples: ${error.examples.join(', ')}`
+      : error.message;
     await notificationService.showError(message);
     return;
   }

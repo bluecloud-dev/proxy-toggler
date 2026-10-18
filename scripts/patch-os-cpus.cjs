@@ -17,4 +17,3 @@ os.cpus = function patchedCpus() {
     }
   ];
 };
-

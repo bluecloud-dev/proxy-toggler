@@ -20,13 +20,13 @@ registers the commands. The return value is a small API that integration tests r
 
 **Subsystems.**
 
-| Area | Files | Responsibility |
-| --- | --- | --- |
-| Entry and wiring | `src/extension.ts` | Composition, `http.*` write adapter (string vs array `noProxy`), drift detection, `setContext` keys |
-| Commands | `src/commands/{configure,enable,disable,toggle}-proxy.ts` | One file per command: prompts, calls `ProxyManager`, renders errors |
-| Services | `src/services/{proxy-manager,keychain-service,validation-service}.ts` | Persistence and toggle state, credential storage, input validation |
-| UI | `src/ui/{notification-service,status-bar-controller}.ts` | Localized notifications with action ids, status bar item |
-| Types | `src/types/{proxy-configuration,toggle-state}.ts` | Shared data shapes |
+| Area             | Files                                                                 | Responsibility                                                                                      |
+| ---------------- | --------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------- |
+| Entry and wiring | `src/extension.ts`                                                    | Composition, `http.*` write adapter (string vs array `noProxy`), drift detection, `setContext` keys |
+| Commands         | `src/commands/{configure,enable,disable,toggle}-proxy.ts`             | One file per command: prompts, calls `ProxyManager`, renders errors                                 |
+| Services         | `src/services/{proxy-manager,keychain-service,validation-service}.ts` | Persistence and toggle state, credential storage, input validation                                  |
+| UI               | `src/ui/{notification-service,status-bar-controller}.ts`              | Localized notifications with action ids, status bar item                                            |
+| Types            | `src/types/{proxy-configuration,toggle-state}.ts`                     | Shared data shapes                                                                                  |
 
 No module imports `vscode` at runtime except `extension.ts` (through `require`). Every other
 module receives a hand-written, partial `VscodeApi` type as a parameter.
@@ -119,15 +119,15 @@ flowchart LR
 
 ### A.2 Baseline (measured before any change)
 
-| Check | Command | Result |
-| --- | --- | --- |
-| Lint | `npm run lint` | Pass (ESLint 8, `src` and `tests` only) |
-| Build | `npm run build` | Pass |
-| Unit + security tests | `npm test` on Node 22.23.1 | 66 passing |
-| Unit + security tests | `npm test` on Node 26.12.0 | Crash before any test: `ReferenceError: require is not defined in ES module scope` (Mocha 10 loading yargs) |
-| Coverage | `npm run coverage` | 90.38% statements, 81.56% branches, 92.10% functions, 90.22% lines |
-| Integration | `npm run test:integration` on macOS | Fails to start: `spawn .../Visual Studio Code.app/Contents/MacOS/Electron ENOENT`. VS Code 1.110+ renamed the macOS executable to `Code`; `@vscode/test-electron` 2.5.2 hard-codes `Electron`, 3.1.0 resolves it |
-| Formatting | `prettier --check` over tracked files | 37 files differ from the repo's own `.prettierrc` |
+| Check                 | Command                               | Result                                                                                                                                                                                                           |
+| --------------------- | ------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Lint                  | `npm run lint`                        | Pass (ESLint 8, `src` and `tests` only)                                                                                                                                                                          |
+| Build                 | `npm run build`                       | Pass                                                                                                                                                                                                             |
+| Unit + security tests | `npm test` on Node 22.23.1            | 66 passing                                                                                                                                                                                                       |
+| Unit + security tests | `npm test` on Node 26.12.0            | Crash before any test: `ReferenceError: require is not defined in ES module scope` (Mocha 10 loading yargs)                                                                                                      |
+| Coverage              | `npm run coverage`                    | 90.38% statements, 81.56% branches, 92.10% functions, 90.22% lines                                                                                                                                               |
+| Integration           | `npm run test:integration` on macOS   | Fails to start: `spawn .../Visual Studio Code.app/Contents/MacOS/Electron ENOENT`. VS Code 1.110+ renamed the macOS executable to `Code`; `@vscode/test-electron` 2.5.2 hard-codes `Electron`, 3.1.0 resolves it |
+| Formatting            | `prettier --check` over tracked files | 37 files differ from the repo's own `.prettierrc`                                                                                                                                                                |
 
 ### A.3 Top ten quality issues, ranked by impact
 
@@ -136,8 +136,7 @@ flowchart LR
    Users download the bundle plus every unbundled module and an 89 KB source map; local builds can
    also ship modules from deleted sources.
 2. **The toolchain is broken on current platforms.** Unit tests crash on Node 26, integration tests
-   cannot launch VS Code 1.110+ on macOS, and CI runs on Node 20, which reached end of life in
-   2026. Because `prepublish` runs the tests, `npm install` itself fails on Node 26.
+   cannot launch VS Code 1.110+ on macOS, and CI runs on Node 20, which reached end of life in 2026. Because `prepublish` runs the tests, `npm install` itself fails on Node 26.
 3. **`prepublish` hides the real pipeline.** Every `npm install` and `npm ci` runs lint, tests,
    and two builds. CI therefore runs everything twice, and the release workflow has no quality gate
    of its own.
@@ -200,19 +199,19 @@ follow-ups and not fixed in this work.
 
 ### A.5 Duplication and boilerplate hotspots
 
-| Area | Hotspot | Consolidation | Rough change |
-| --- | --- | --- | --- |
-| All `src` modules | Seven hand-written `VscodeApi`-style type blocks | One VS Code surface type that the real module satisfies without a cast | -110 |
-| `src/commands` | Configure-first prompt, enabled notice, settings-error UX copied across three commands | One shared feedback module | -80 |
-| `configure-proxy.ts` | Credential prompts written twice; two identical input validators; `CredentialsUpdate` translated into a second union | One prompt flow, one validator factory, one union end to end | -60 |
-| `src/ui` | Three identical notification methods; three identical status bar branches | One private `show`; one presentation function | -45 |
-| `noProxy` rules | Split, trim, and default logic in five places | `core/no-proxy.ts` | -30 |
-| JSDoc | About 450 boilerplate comment lines | Delete; keep the "why" in one line or move it to docs | -430 |
-| Error classes | `setPrototypeOf` x3, `asError` x2, custom `cause` x3 | ES2022 `{ cause }` | -15 |
-| Tests | One 80-line fake copied six times; memento, secret, settings, and notification stubs copied across files | `tests/support` fakes | -700 |
-| Tests | Three tautological smoke tests | Delete | -24 |
-| Tooling | Legacy ESLint files; no EditorConfig, unused-code check, Node pin, or Dependabot | Flat config and new config files | +120 |
-| Docs | No architecture, testing, or standards documents | Five documents and a README developer section | +700 |
+| Area                 | Hotspot                                                                                                              | Consolidation                                                          | Rough change |
+| -------------------- | -------------------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------- | ------------ |
+| All `src` modules    | Seven hand-written `VscodeApi`-style type blocks                                                                     | One VS Code surface type that the real module satisfies without a cast | -110         |
+| `src/commands`       | Configure-first prompt, enabled notice, settings-error UX copied across three commands                               | One shared feedback module                                             | -80          |
+| `configure-proxy.ts` | Credential prompts written twice; two identical input validators; `CredentialsUpdate` translated into a second union | One prompt flow, one validator factory, one union end to end           | -60          |
+| `src/ui`             | Three identical notification methods; three identical status bar branches                                            | One private `show`; one presentation function                          | -45          |
+| `noProxy` rules      | Split, trim, and default logic in five places                                                                        | `core/no-proxy.ts`                                                     | -30          |
+| JSDoc                | About 450 boilerplate comment lines                                                                                  | Delete; keep the "why" in one line or move it to docs                  | -430         |
+| Error classes        | `setPrototypeOf` x3, `asError` x2, custom `cause` x3                                                                 | ES2022 `{ cause }`                                                     | -15          |
+| Tests                | One 80-line fake copied six times; memento, secret, settings, and notification stubs copied across files             | `tests/support` fakes                                                  | -700         |
+| Tests                | Three tautological smoke tests                                                                                       | Delete                                                                 | -24          |
+| Tooling              | Legacy ESLint files; no EditorConfig, unused-code check, Node pin, or Dependabot                                     | Flat config and new config files                                       | +120         |
+| Docs                 | No architecture, testing, or standards documents                                                                     | Five documents and a README developer section                          | +700         |
 
 Expected totals: `src` from about 2,100 to about 1,250 lines; tests from about 2,800 to about
 1,900 lines.
@@ -227,25 +226,25 @@ were re-checked at the source: prettier-vscode's CI uses `node-version-file: .nv
 `prettier --check`; rust-analyzer runs integration tests on the `engines.vscode` minimum and on
 stable; the esbuild sample uses `"activationEvents": []` and `"main": "./dist/extension.js"`.
 
-| Practice | Prevalence | This repo today | Standard adopted here |
-| --- | --- | --- | --- |
-| `strict` TypeScript | 6 of 7 | Yes | Keep; add `noImplicitOverride`, `noImplicitReturns` (3 of 7 each), `noFallthroughCasesInSwitch`, and `noUncheckedIndexedAccess` (rust-analyzer). Leave `exactOptionalPropertyTypes` off, as rust-analyzer does |
-| ESLint flat config | 6 of 7 (GitLens uses oxlint) | Legacy `.eslintrc.json`, ESLint 8 | ESLint 10 flat config |
-| Type-aware lint rules | prettier-vscode (`recommendedTypeChecked`), vscode-eslint (hand-picked) | None | `recommendedTypeChecked`: cheap at this size, and it catches floating promises |
-| Prettier, with `eslint-config-prettier` | 4 of 7 | Configured, not enforced | Enforce in CI with `format:check` |
-| EditorConfig | 3 of 7 | None | Add |
-| Bundler with `main` in `dist/` | Bundler 7 of 7; `dist/` 5 of 7 | esbuild into `out/`, mixed with `tsc` output | esbuild into a cleaned `dist/` |
-| Real VS Code integration tests | 5 of 7 | Yes | Keep |
-| Minimum engine plus stable in tests | rust-analyzer, which reads `engines.vscode` | Stable only | Adopt the rust-analyzer approach |
-| GitHub Actions with `npm ci` | 6 of 7 | Yes | Keep; Node from `.nvmrc`, as prettier-vscode does |
-| Format and type checks in CI | prettier-vscode, rust-analyzer, GitLens | Neither | Add |
-| SHA-pinned actions | rust-analyzer, one workflow in the PR extension | Major tags | Keep major tags; recorded as a follow-up |
-| Pipeline-driven release | 6 of 7 | Tag builds a GitHub release with no gate | Run the same checks as CI before packaging |
-| `createOutputChannel(name, { log: true })` | 4 of 7 | No logging | Add one log channel |
-| `context.subscriptions.push` | 7 of 7 | Yes | Keep |
-| Commands-only activation | The samples use `"activationEvents": []` | Explicit `onCommand:` list | `[]`, since commands activate implicitly from VS Code 1.74 |
-| Dependabot or Renovate | 1 of 7 (actions only) | None | Not added: it is a maintainer process decision; recorded as a follow-up with a ready config |
-| Coverage gate; knip or ts-prune | 0 of 7 each | Coverage gate | Keep the coverage gate and add knip, because unused-code detection is part of this brief even though the benchmark projects lack it |
+| Practice                                   | Prevalence                                                              | This repo today                              | Standard adopted here                                                                                                                                                                                          |
+| ------------------------------------------ | ----------------------------------------------------------------------- | -------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `strict` TypeScript                        | 6 of 7                                                                  | Yes                                          | Keep; add `noImplicitOverride`, `noImplicitReturns` (3 of 7 each), `noFallthroughCasesInSwitch`, and `noUncheckedIndexedAccess` (rust-analyzer). Leave `exactOptionalPropertyTypes` off, as rust-analyzer does |
+| ESLint flat config                         | 6 of 7 (GitLens uses oxlint)                                            | Legacy `.eslintrc.json`, ESLint 8            | ESLint 10 flat config                                                                                                                                                                                          |
+| Type-aware lint rules                      | prettier-vscode (`recommendedTypeChecked`), vscode-eslint (hand-picked) | None                                         | `recommendedTypeChecked`: cheap at this size, and it catches floating promises                                                                                                                                 |
+| Prettier, with `eslint-config-prettier`    | 4 of 7                                                                  | Configured, not enforced                     | Enforce in CI with `format:check`                                                                                                                                                                              |
+| EditorConfig                               | 3 of 7                                                                  | None                                         | Add                                                                                                                                                                                                            |
+| Bundler with `main` in `dist/`             | Bundler 7 of 7; `dist/` 5 of 7                                          | esbuild into `out/`, mixed with `tsc` output | esbuild into a cleaned `dist/`                                                                                                                                                                                 |
+| Real VS Code integration tests             | 5 of 7                                                                  | Yes                                          | Keep                                                                                                                                                                                                           |
+| Minimum engine plus stable in tests        | rust-analyzer, which reads `engines.vscode`                             | Stable only                                  | Adopt the rust-analyzer approach                                                                                                                                                                               |
+| GitHub Actions with `npm ci`               | 6 of 7                                                                  | Yes                                          | Keep; Node from `.nvmrc`, as prettier-vscode does                                                                                                                                                              |
+| Format and type checks in CI               | prettier-vscode, rust-analyzer, GitLens                                 | Neither                                      | Add                                                                                                                                                                                                            |
+| SHA-pinned actions                         | rust-analyzer, one workflow in the PR extension                         | Major tags                                   | Keep major tags; recorded as a follow-up                                                                                                                                                                       |
+| Pipeline-driven release                    | 6 of 7                                                                  | Tag builds a GitHub release with no gate     | Run the same checks as CI before packaging                                                                                                                                                                     |
+| `createOutputChannel(name, { log: true })` | 4 of 7                                                                  | No logging                                   | Add one log channel                                                                                                                                                                                            |
+| `context.subscriptions.push`               | 7 of 7                                                                  | Yes                                          | Keep                                                                                                                                                                                                           |
+| Commands-only activation                   | The samples use `"activationEvents": []`                                | Explicit `onCommand:` list                   | `[]`, since commands activate implicitly from VS Code 1.74                                                                                                                                                     |
+| Dependabot or Renovate                     | 1 of 7 (actions only)                                                   | None                                         | Not added: it is a maintainer process decision; recorded as a follow-up with a ready config                                                                                                                    |
+| Coverage gate; knip or ts-prune            | 0 of 7 each                                                             | Coverage gate                                | Keep the coverage gate and add knip, because unused-code detection is part of this brief even though the benchmark projects lack it                                                                            |
 
 ### A.7 Refactor steps and validation
 

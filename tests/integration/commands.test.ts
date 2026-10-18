@@ -51,7 +51,10 @@ describe('command palette contributions', () => {
 
     const manifest = extension.packageJSON as ExtensionManifest;
     const commandPalette = manifest.contributes?.menus?.commandPalette;
-    assert.ok(Array.isArray(commandPalette), 'Expected contributes.menus.commandPalette to be an array');
+    assert.ok(
+      Array.isArray(commandPalette),
+      'Expected contributes.menus.commandPalette to be an array'
+    );
 
     const enable = commandPalette.find((item) => item.command === 'proxyToggler.enable');
     const disable = commandPalette.find((item) => item.command === 'proxyToggler.disable');

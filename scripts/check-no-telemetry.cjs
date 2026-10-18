@@ -77,4 +77,3 @@ if (found.length === 0) {
 console.error('Telemetry dependencies are not allowed in this project.');
 console.error(`Found: ${found.join(', ')}`);
 process.exit(1);
-

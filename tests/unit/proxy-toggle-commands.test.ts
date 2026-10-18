@@ -72,9 +72,14 @@ describe('US2 command handlers', () => {
       }
     });
 
-    await disableProxyCommand(createVscodeApiStub(), proxyManager, notificationService, async () => {
-      refreshed += 1;
-    });
+    await disableProxyCommand(
+      createVscodeApiStub(),
+      proxyManager,
+      notificationService,
+      async () => {
+        refreshed += 1;
+      }
+    );
 
     assert.equal(proxyManager.disableCalls, 1);
     assert.equal(informationMessages.length, 1);
@@ -110,7 +115,11 @@ describe('US2 command handlers', () => {
 
   it('toggleProxyCommand toggles when confirmation accepted', async () => {
     const informationMessages: string[] = [];
-    const proxyManager = createProxyManagerStub({ hasConfiguration: true, isEnabled: false, toggleResult: true });
+    const proxyManager = createProxyManagerStub({
+      hasConfiguration: true,
+      isEnabled: false,
+      toggleResult: true
+    });
 
     const vscodeApi = createVscodeApiStub({
       confirmBeforeToggle: true,
@@ -193,7 +202,9 @@ describe('US2 command handlers', () => {
 
     assert.equal(errorMessages.length, 1);
     assert.ok(errorMessages[0]?.actions.some((action) => action.id === 'openSettings'));
-    assert.deepEqual(executed, [{ command: 'workbench.action.openSettings', args: ['http.proxy'] }]);
+    assert.deepEqual(executed, [
+      { command: 'workbench.action.openSettings', args: ['http.proxy'] }
+    ]);
   });
 
   it('enableProxyCommand offers a "Disable Proxy" action after enabling', async () => {
@@ -231,7 +242,9 @@ describe('US2 command handlers', () => {
 
     await disableProxyCommand(vscodeApi, proxyManager, notificationService, async () => {});
 
-    assert.deepEqual(executed, [{ command: 'workbench.action.openSettings', args: ['http.noProxy'] }]);
+    assert.deepEqual(executed, [
+      { command: 'workbench.action.openSettings', args: ['http.noProxy'] }
+    ]);
   });
 
   it('toggleProxyCommand opens settings when configuration update fails', async () => {
@@ -266,7 +279,11 @@ describe('US2 command handlers', () => {
       }
     });
 
-    const proxyManager = createProxyManagerStub({ hasConfiguration: true, isEnabled: false, toggleResult: true });
+    const proxyManager = createProxyManagerStub({
+      hasConfiguration: true,
+      isEnabled: false,
+      toggleResult: true
+    });
     const notificationService = createNotificationServiceStub({ successSelection: 'disableProxy' });
 
     await toggleProxyCommand(vscodeApi, proxyManager, notificationService, async () => {});
@@ -325,9 +342,9 @@ function createVscodeApiStub(options?: {
     workspace: {
       getConfiguration: () => ({
         get: <T>(_key: string, defaultValue?: T): T =>
-          (_key === 'confirmBeforeToggle'
+          _key === 'confirmBeforeToggle'
             ? (confirmBeforeToggle as unknown as T)
-            : (defaultValue as T))
+            : (defaultValue as T)
       })
     }
   };

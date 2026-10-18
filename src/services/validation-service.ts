@@ -72,7 +72,12 @@ export class ValidationService {
     const port = Number.parseInt(parsedUrl.port, 10);
     ValidationService.validatePort(port);
 
-    if (trimmedUrl.endsWith('/') || parsedUrl.pathname !== '/' || parsedUrl.search || parsedUrl.hash) {
+    if (
+      trimmedUrl.endsWith('/') ||
+      parsedUrl.pathname !== '/' ||
+      parsedUrl.search ||
+      parsedUrl.hash
+    ) {
       throw new ValidationError('proxyUrl', 'URL must not include a path, query, or fragment');
     }
   }
@@ -170,7 +175,11 @@ export class ValidationService {
 
   private static validateSingleNoProxyEntry(entry: string): void {
     if (entry.includes('://')) {
-      throw new ValidationError('noProxy', `Do not include a scheme in "${entry}"`, NO_PROXY_EXAMPLES);
+      throw new ValidationError(
+        'noProxy',
+        `Do not include a scheme in "${entry}"`,
+        NO_PROXY_EXAMPLES
+      );
     }
 
     if (entry.includes('/')) {
@@ -186,18 +195,30 @@ export class ValidationService {
     }
 
     if (entry.includes('*') && (!entry.startsWith('*.') || entry.slice(2).includes('*'))) {
-      throw new ValidationError('noProxy', `Invalid wildcard pattern: "${entry}"`, NO_PROXY_EXAMPLES);
+      throw new ValidationError(
+        'noProxy',
+        `Invalid wildcard pattern: "${entry}"`,
+        NO_PROXY_EXAMPLES
+      );
     }
 
     if (entry.startsWith('*.') && entry.slice(2).startsWith('.')) {
-      throw new ValidationError('noProxy', `Invalid wildcard pattern: "${entry}"`, NO_PROXY_EXAMPLES);
+      throw new ValidationError(
+        'noProxy',
+        `Invalid wildcard pattern: "${entry}"`,
+        NO_PROXY_EXAMPLES
+      );
     }
 
     const core = ValidationService.extractNoProxyCore(entry);
 
     if (isIP(core) !== 0) {
       if (entry !== core) {
-        throw new ValidationError('noProxy', `Invalid bypass pattern: "${entry}"`, NO_PROXY_EXAMPLES);
+        throw new ValidationError(
+          'noProxy',
+          `Invalid bypass pattern: "${entry}"`,
+          NO_PROXY_EXAMPLES
+        );
       }
       return;
     }

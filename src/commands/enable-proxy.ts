@@ -88,7 +88,10 @@ async function showEnableError(
     );
 
     if (choice === ACTION_OPEN_SETTINGS.id) {
-      await vscodeApi.commands.executeCommand('workbench.action.openSettings', error.getSettingId());
+      await vscodeApi.commands.executeCommand(
+        'workbench.action.openSettings',
+        error.getSettingId()
+      );
     } else if (choice === ACTION_DISABLE_PROXY.id) {
       await vscodeApi.commands.executeCommand('proxyToggler.disable');
     }

@@ -1,6 +1,12 @@
 import { strict as assert } from 'node:assert';
 
-import type { ConfigurationTarget, Disposable, ExtensionContext, StatusBarAlignment, StatusBarItem } from 'vscode';
+import type {
+  ConfigurationTarget,
+  Disposable,
+  ExtensionContext,
+  StatusBarAlignment,
+  StatusBarItem
+} from 'vscode';
 
 import {
   COMMAND_CONFIGURE,
@@ -227,7 +233,10 @@ describe('extension command registration', () => {
       window: {
         showInformationMessage: async (): Promise<string | undefined> => undefined,
         showErrorMessage: async (): Promise<string | undefined> => undefined,
-        showWarningMessage: async (message: string, ...items: string[]): Promise<string | undefined> => {
+        showWarningMessage: async (
+          message: string,
+          ...items: string[]
+        ): Promise<string | undefined> => {
           warningMessages.push(`${message}:${items.join(',')}`);
           return 'Sync';
         },
@@ -489,7 +498,7 @@ describe('extension command registration', () => {
               return defaultValue as T;
             },
             inspect: <T>(key: string): { defaultValue?: T; globalValue?: T } => ({
-              defaultValue: (key === 'noProxy' ? ([] as unknown as T) : undefined),
+              defaultValue: key === 'noProxy' ? ([] as unknown as T) : undefined,
               globalValue: sectionStorage.get(key) as T
             }),
             update: async (key: string, value: unknown): Promise<void> => {

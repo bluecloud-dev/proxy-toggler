@@ -71,7 +71,9 @@ export class ConfigurationError extends Error {
     public readonly key: HttpConfigurationKey,
     public override readonly cause?: Error
   ) {
-    super(`Failed to ${operation} proxy: unable to update VS Code setting "${formatHttpSettingKey(key)}".`);
+    super(
+      `Failed to ${operation} proxy: unable to update VS Code setting "${formatHttpSettingKey(key)}".`
+    );
     this.name = 'ConfigurationError';
     Object.setPrototypeOf(this, new.target.prototype);
   }
@@ -153,7 +155,10 @@ export class ProxyManager {
     ValidationService.validateNoProxyPattern(normalizedConfiguration.noProxy);
 
     if (hasCredentialUpdate(options)) {
-      ValidationService.validateCredentials(options.credentials.username, options.credentials.password);
+      ValidationService.validateCredentials(
+        options.credentials.username,
+        options.credentials.password
+      );
     }
 
     await this.globalState.update(STORAGE_KEYS.proxyConfig, normalizedConfiguration);

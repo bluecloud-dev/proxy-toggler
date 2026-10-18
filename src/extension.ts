@@ -70,7 +70,10 @@ type VscodeApi = {
     };
   };
   window: {
-    showInformationMessage: (message: string, ...items: string[]) => PromiseLike<string | undefined>;
+    showInformationMessage: (
+      message: string,
+      ...items: string[]
+    ) => PromiseLike<string | undefined>;
     showErrorMessage: (message: string, ...items: string[]) => PromiseLike<string | undefined>;
     showWarningMessage: (message: string, ...items: string[]) => PromiseLike<string | undefined>;
     showInputBox: (options: InputBoxOptions) => Promise<string | undefined>;
@@ -104,7 +107,10 @@ export type ProxyTogglerApi = {
  * const api = registerCommands(vscode, context);
  * ```
  */
-export function registerCommands(vscodeApi: VscodeApi, context: vscode.ExtensionContext): ProxyTogglerApi {
+export function registerCommands(
+  vscodeApi: VscodeApi,
+  context: vscode.ExtensionContext
+): ProxyTogglerApi {
   const keychainService = new KeychainService(context.secrets);
   const httpConfiguration = createHttpConfiguration(vscodeApi);
   const proxyManager = new ProxyManager(context.globalState, keychainService, httpConfiguration);
@@ -117,12 +123,18 @@ export function registerCommands(vscodeApi: VscodeApi, context: vscode.Extension
   const refreshUi = async (): Promise<void> => {
     const state = proxyManager.getState();
     statusBarController.updateState(state);
-    await vscodeApi.commands.executeCommand('setContext', CONTEXT_HAS_CONFIGURATION, state.hasConfiguration);
+    await vscodeApi.commands.executeCommand(
+      'setContext',
+      CONTEXT_HAS_CONFIGURATION,
+      state.hasConfiguration
+    );
     await vscodeApi.commands.executeCommand('setContext', CONTEXT_IS_ENABLED, state.isEnabled);
   };
 
   void refreshUi().catch(() => {});
-  void detectDriftOnActivation(vscodeApi, proxyManager, notificationService, refreshUi).catch(() => {});
+  void detectDriftOnActivation(vscodeApi, proxyManager, notificationService, refreshUi).catch(
+    () => {}
+  );
 
   const register = (command: string, handler: () => Promise<void> | void): void => {
     context.subscriptions.push(vscodeApi.commands.registerCommand(command, handler));

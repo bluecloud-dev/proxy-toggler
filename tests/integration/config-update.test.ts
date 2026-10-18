@@ -6,10 +6,10 @@ import * as sinon from 'sinon';
 async function configureWithoutCredentials(
   sandbox: sinon.SinonSandbox,
   options: {
-  proxyUrl: string;
-  noProxy?: string;
-  strictSSL?: boolean;
-}
+    proxyUrl: string;
+    noProxy?: string;
+    strictSSL?: boolean;
+  }
 ): Promise<void> {
   sandbox.restore();
   sandbox.stub(vscode.window, 'showInformationMessage').resolves(undefined);
@@ -73,7 +73,10 @@ describe('VS Code http proxy updates', function () {
 
       const httpConfig = vscode.workspace.getConfiguration('http');
 
-      assert.equal(httpConfig.inspect<string>('proxy')?.globalValue, 'http://proxy.example.com:8080');
+      assert.equal(
+        httpConfig.inspect<string>('proxy')?.globalValue,
+        'http://proxy.example.com:8080'
+      );
       assert.equal(httpConfig.inspect<boolean>('proxyStrictSSL')?.globalValue, true);
       assert.equal(
         normalizeNoProxy(httpConfig.inspect<unknown>('noProxy')?.globalValue),

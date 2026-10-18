@@ -42,7 +42,10 @@ export class NotificationService {
    * const choice = await notifications.showSuccess('Proxy enabled', { id: 'disable', title: 'Disable Proxy' });
    * ```
    */
-  async showSuccess(message: string, ...actions: NotificationAction[]): Promise<string | undefined> {
+  async showSuccess(
+    message: string,
+    ...actions: NotificationAction[]
+  ): Promise<string | undefined> {
     const localizedActions = actions.map((action) => ({
       id: action.id,
       title: this.vscodeApi.l10n.t(action.title)
@@ -68,7 +71,10 @@ export class NotificationService {
    * await notifications.showWarning('No configuration found.', { id: 'configure', title: 'Configure Now' });
    * ```
    */
-  async showWarning(message: string, ...actions: NotificationAction[]): Promise<string | undefined> {
+  async showWarning(
+    message: string,
+    ...actions: NotificationAction[]
+  ): Promise<string | undefined> {
     const localizedActions = actions.map((action) => ({
       id: action.id,
       title: this.vscodeApi.l10n.t(action.title)

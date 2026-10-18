@@ -84,7 +84,9 @@ export class StatusBarController implements vscode.Disposable {
 
     if (!state.hasConfiguration) {
       this.statusBarItem.text = `$(warning) ${this.vscodeApi.l10n.t('Proxy: Not Configured')}`;
-      this.statusBarItem.tooltip = this.vscodeApi.l10n.t('Configure proxy settings to enable toggling.');
+      this.statusBarItem.tooltip = this.vscodeApi.l10n.t(
+        'Configure proxy settings to enable toggling.'
+      );
       this.statusBarItem.accessibilityInformation = {
         label: this.vscodeApi.l10n.t('Proxy status: not configured'),
         role: 'button'

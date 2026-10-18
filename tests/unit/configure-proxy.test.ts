@@ -350,7 +350,8 @@ function createProxyManagerStub(options?: {
 
   return {
     saveCalls,
-    loadConfiguration: async (): Promise<LoadedProxyConfiguration | undefined> => options?.loadResult,
+    loadConfiguration: async (): Promise<LoadedProxyConfiguration | undefined> =>
+      options?.loadResult,
     saveConfiguration: async (saveOptions: SaveConfigurationOptions): Promise<void> => {
       if (options?.saveImplementation) {
         await options.saveImplementation(saveOptions);
@@ -384,7 +385,9 @@ function createVscodeApiStub(options: {
         }
         return value;
       },
-      showQuickPick: async <T extends { label: string }>(items: readonly T[]): Promise<T | undefined> => {
+      showQuickPick: async <T extends { label: string }>(
+        items: readonly T[]
+      ): Promise<T | undefined> => {
         const selected = options.onQuickPick(
           items as unknown as ReadonlyArray<Record<string, unknown>>,
           quickPickIndex++

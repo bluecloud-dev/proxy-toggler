@@ -53,11 +53,13 @@
 ## :zap: Quick Start
 
 1. Install from the [VS Code Marketplace](#) or via VSIX:
+
    ```sh
    code --install-extension proxy-toggler-*.vsix
    ```
 
 2. Open Command Palette (`Cmd/Ctrl+Shift+P`) and run:
+
    ```
    Proxy Toggler: Configure Proxy Settings
    ```
@@ -71,17 +73,17 @@
 
 ## :keyboard: Commands
 
-| Command | Description |
-| --- | --- |
+| Command                                   | Description                                |
+| ----------------------------------------- | ------------------------------------------ |
 | `Proxy Toggler: Configure Proxy Settings` | Set up proxy URL, credentials, and options |
-| `Proxy Toggler: Enable Proxy` | Enable the configured proxy |
-| `Proxy Toggler: Disable Proxy` | Disable the proxy |
-| `Proxy Toggler: Toggle Proxy` | Toggle between enabled and disabled |
+| `Proxy Toggler: Enable Proxy`             | Enable the configured proxy                |
+| `Proxy Toggler: Disable Proxy`            | Disable the proxy                          |
+| `Proxy Toggler: Toggle Proxy`             | Toggle between enabled and disabled        |
 
 ## :gear: Settings
 
-| Setting | Type | Default | Description |
-| --- | --- | --- | --- |
+| Setting                            | Type    | Default | Description                                           |
+| ---------------------------------- | ------- | ------- | ----------------------------------------------------- |
 | `proxyToggler.confirmBeforeToggle` | boolean | `false` | Show confirmation prompt before switching proxy state |
 
 ### Managed VS Code Settings

@@ -1,5 +1,5 @@
 # See https://pre-commit.com for usage and installation.
-minimum_pre_commit_version: "3.7.0"
+minimum_pre_commit_version: '3.7.0'
 
 repos:
   - repo: https://github.com/pre-commit/pre-commit-hooks
