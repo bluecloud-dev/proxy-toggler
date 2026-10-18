@@ -48,7 +48,7 @@
 
 ## :clipboard: Requirements
 
-- VS Code **1.85** or later
+- VS Code **1.91** or later
 
 ## :zap: Quick Start
 
