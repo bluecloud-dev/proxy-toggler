@@ -37,7 +37,7 @@ describe('StatusBarController', () => {
     controller.initialize();
 
     assert.equal(createCalls.length, 1);
-    assert.equal(createCalls[0]?.alignment, 2 as unknown as StatusBarAlignment);
+    assert.equal(createCalls[0]?.alignment, 2);
     assert.equal(createCalls[0]?.priority, 100);
     assert.equal(item.command, 'proxyToggler.toggle');
 

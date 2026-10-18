@@ -1,7 +1,7 @@
 import { strict as assert } from 'node:assert';
 
-import * as vscode from 'vscode';
 import * as sinon from 'sinon';
+import * as vscode from 'vscode';
 
 type CommandPaletteItem = {
   command: string;

@@ -1,11 +1,11 @@
 import { strict as assert } from 'node:assert';
 
-import type { ProxyConfiguration, ProxyCredentials } from '../../src/types/proxy-configuration';
-import type { ToggleState } from '../../src/types/toggle-state';
 import type { KeychainService } from '../../src/services/keychain-service';
 import type { HttpConfiguration } from '../../src/services/proxy-manager';
 import { ConfigurationError, ProxyManager } from '../../src/services/proxy-manager';
 import { ValidationError } from '../../src/services/validation-service';
+import type { ProxyConfiguration, ProxyCredentials } from '../../src/types/proxy-configuration';
+import type { ToggleState } from '../../src/types/toggle-state';
 
 type MementoStub = {
   get: <T>(key: string) => T | undefined;

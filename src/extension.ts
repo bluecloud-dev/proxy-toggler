@@ -6,9 +6,9 @@ import { enableProxyCommand } from './commands/enable-proxy';
 import { toggleProxyCommand } from './commands/toggle-proxy';
 import { KeychainService } from './services/keychain-service';
 import { type HttpConfiguration, ProxyManager } from './services/proxy-manager';
+import type { ToggleState } from './types/toggle-state';
 import { NotificationService } from './ui/notification-service';
 import { StatusBarController } from './ui/status-bar-controller';
-import type { ToggleState } from './types/toggle-state';
 
 export const COMMAND_CONFIGURE = 'proxyToggler.configure';
 export const COMMAND_ENABLE = 'proxyToggler.enable';

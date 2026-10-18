@@ -1,5 +1,5 @@
-import type { ProxyManager as ProxyManagerService } from '../services/proxy-manager';
 import { KeychainError } from '../services/keychain-service';
+import type { ProxyManager as ProxyManagerService } from '../services/proxy-manager';
 import { ConfigurationError } from '../services/proxy-manager';
 import type { NotificationService as NotificationServiceService } from '../ui/notification-service';
 

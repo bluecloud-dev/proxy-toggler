@@ -1,7 +1,7 @@
-import type { ProxyConfiguration, ProxyCredentials } from '../types/proxy-configuration';
-import type { ProxyManager } from '../services/proxy-manager';
 import { KeychainError } from '../services/keychain-service';
+import type { ProxyManager } from '../services/proxy-manager';
 import { ValidationError, ValidationService } from '../services/validation-service';
+import type { ProxyConfiguration, ProxyCredentials } from '../types/proxy-configuration';
 import type {
   NotificationAction,
   NotificationService as NotificationServiceService

@@ -1,7 +1,7 @@
 import { strict as assert } from 'node:assert';
 
-import { NotificationService } from '../../src/ui/notification-service';
 import type { NotificationAction } from '../../src/ui/notification-service';
+import { NotificationService } from '../../src/ui/notification-service';
 
 describe('NotificationService', () => {
   it('localizes message and actions and returns selected action id', async () => {

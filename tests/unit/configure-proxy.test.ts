@@ -1,11 +1,11 @@
 import { strict as assert } from 'node:assert';
 
+import { configureProxyCommand } from '../../src/commands/configure-proxy';
+import { KeychainError, KeychainErrorReason } from '../../src/services/keychain-service';
 import type {
   LoadedProxyConfiguration,
   SaveConfigurationOptions
 } from '../../src/services/proxy-manager';
-import { configureProxyCommand } from '../../src/commands/configure-proxy';
-import { KeychainError, KeychainErrorReason } from '../../src/services/keychain-service';
 import { ValidationError } from '../../src/services/validation-service';
 import type { NotificationAction } from '../../src/ui/notification-service';
 
@@ -388,10 +388,7 @@ function createVscodeApiStub(options: {
       showQuickPick: async <T extends { label: string }>(
         items: readonly T[]
       ): Promise<T | undefined> => {
-        const selected = options.onQuickPick(
-          items as unknown as ReadonlyArray<Record<string, unknown>>,
-          quickPickIndex++
-        );
+        const selected = options.onQuickPick(items, quickPickIndex++);
         return selected as T | undefined;
       }
     },

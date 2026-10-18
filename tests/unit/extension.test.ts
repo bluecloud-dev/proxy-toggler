@@ -9,11 +9,11 @@ import type {
 } from 'vscode';
 
 import {
+  activate,
   COMMAND_CONFIGURE,
   COMMAND_DISABLE,
   COMMAND_ENABLE,
-  COMMAND_TOGGLE,
-  activate
+  COMMAND_TOGGLE
 } from '../../src/extension';
 
 describe('extension command registration', () => {
