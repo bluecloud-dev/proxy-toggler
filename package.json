@@ -139,6 +139,9 @@
     "typescript": "^5.9.3",
     "typescript-eslint": "^8.71.2"
   },
+  "overrides": {
+    "serialize-javascript": "^7.0.5"
+  },
   "allowScripts": {
     "@vscode/vsce-sign": false,
     "esbuild": false,
