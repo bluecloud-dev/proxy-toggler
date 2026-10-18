@@ -6,16 +6,11 @@ import {
   KeychainService
 } from '../../src/core/keychain-service';
 import { ValidationError } from '../../src/core/validation';
-
-type SecretsStub = {
-  get: (key: string) => Promise<string | undefined>;
-  store: (key: string, value: string) => Promise<void>;
-  delete: (key: string) => Promise<void>;
-};
+import { createSecretStorage } from '../support/fakes';
 
 describe('KeychainService', () => {
   it('stores, retrieves, and clears credentials', async () => {
-    const secrets = createSecretsStub();
+    const secrets = createSecretStorage();
     const service = new KeychainService(secrets);
 
     assert.equal(await service.hasCredentials(), false);
@@ -34,7 +29,7 @@ describe('KeychainService', () => {
   });
 
   it('rejects mismatched username/password', async () => {
-    const secrets = createSecretsStub();
+    const secrets = createSecretStorage();
     const service = new KeychainService(secrets);
 
     await assert.rejects(() => service.storeCredentials('alice', undefined), ValidationError);
@@ -42,9 +37,7 @@ describe('KeychainService', () => {
   });
 
   it('maps keychain errors by operation and reason', async () => {
-    const locked = createSecretsStub({
-      storeError: new Error('Keychain is locked')
-    });
+    const locked = createSecretStorage(new Map(), { store: new Error('Keychain is locked') });
 
     const lockedService = new KeychainService(locked);
     await assert.rejects(
@@ -58,9 +51,7 @@ describe('KeychainService', () => {
       }
     );
 
-    const denied = createSecretsStub({
-      deleteError: new Error('Permission denied')
-    });
+    const denied = createSecretStorage(new Map(), { delete: new Error('Permission denied') });
 
     const deniedService = new KeychainService(denied);
     await deniedService.storeCredentials('alice', 'secret');
@@ -76,9 +67,7 @@ describe('KeychainService', () => {
       }
     );
 
-    const unavailable = createSecretsStub({
-      getError: new Error('Service not available')
-    });
+    const unavailable = createSecretStorage(new Map(), { get: new Error('Service not available') });
 
     const unavailableService = new KeychainService(unavailable);
     await assert.rejects(
@@ -92,9 +81,7 @@ describe('KeychainService', () => {
       }
     );
 
-    const unknown = createSecretsStub({
-      getError: new Error('Something went wrong')
-    });
+    const unknown = createSecretStorage(new Map(), { get: new Error('Something went wrong') });
 
     const unknownService = new KeychainService(unknown);
     await assert.rejects(
@@ -109,32 +96,3 @@ describe('KeychainService', () => {
     );
   });
 });
-
-function createSecretsStub(errors?: {
-  getError?: Error;
-  storeError?: Error;
-  deleteError?: Error;
-}): SecretsStub {
-  const store = new Map<string, string>();
-
-  return {
-    get: async (key: string): Promise<string | undefined> => {
-      if (errors?.getError) {
-        throw errors.getError;
-      }
-      return store.get(key);
-    },
-    store: async (key: string, value: string): Promise<void> => {
-      if (errors?.storeError) {
-        throw errors.storeError;
-      }
-      store.set(key, value);
-    },
-    delete: async (key: string): Promise<void> => {
-      if (errors?.deleteError) {
-        throw errors.deleteError;
-      }
-      store.delete(key);
-    }
-  };
-}

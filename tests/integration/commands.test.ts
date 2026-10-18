@@ -3,6 +3,8 @@ import { strict as assert } from 'node:assert';
 import * as sinon from 'sinon';
 import * as vscode from 'vscode';
 
+import { activateExtension, EXTENSION_ID } from './support';
+
 type CommandPaletteItem = {
   command: string;
   when?: string;
@@ -14,9 +16,7 @@ type ExtensionManifest = {
 
 describe('command palette contributions', () => {
   it('registers proxy toggler commands', async () => {
-    const extension = vscode.extensions.getExtension('aymenhammouda.proxy-toggler');
-    assert.ok(extension, 'Expected extension to be available in VS Code test host');
-    await extension.activate();
+    await activateExtension();
 
     const commands = await vscode.commands.getCommands(true);
     assert.ok(commands.includes('proxyToggler.configure'));
@@ -45,8 +45,8 @@ describe('command palette contributions', () => {
     assert.ok(warnings.some((message) => /no proxy configuration/i.test(message)));
   });
 
-  it('gates enable/disable commands by proxy state context', async () => {
-    const extension = vscode.extensions.getExtension('aymenhammouda.proxy-toggler');
+  it('gates enable/disable commands by proxy state context', () => {
+    const extension = vscode.extensions.getExtension(EXTENSION_ID);
     assert.ok(extension, 'Expected extension to be available in VS Code test host');
 
     const manifest = extension.packageJSON as ExtensionManifest;
