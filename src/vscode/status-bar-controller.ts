@@ -1,6 +1,6 @@
 import type * as vscode from 'vscode';
 
-import type { ToggleState } from '../types/toggle-state';
+import type { ToggleState } from '../core/toggle-state';
 
 type L10n = {
   t: (message: string, ...args: (string | number)[]) => string;

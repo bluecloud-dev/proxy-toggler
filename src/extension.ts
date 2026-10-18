@@ -4,11 +4,11 @@ import { configureProxyCommand } from './commands/configure-proxy';
 import { disableProxyCommand } from './commands/disable-proxy';
 import { enableProxyCommand } from './commands/enable-proxy';
 import { toggleProxyCommand } from './commands/toggle-proxy';
-import { KeychainService } from './services/keychain-service';
-import { type HttpConfiguration, ProxyManager } from './services/proxy-manager';
-import type { ToggleState } from './types/toggle-state';
-import { NotificationService } from './ui/notification-service';
-import { StatusBarController } from './ui/status-bar-controller';
+import { KeychainService } from './core/keychain-service';
+import { type HttpConfiguration, ProxyManager } from './core/proxy-manager';
+import type { ToggleState } from './core/toggle-state';
+import { NotificationService } from './vscode/notification-service';
+import { StatusBarController } from './vscode/status-bar-controller';
 
 export const COMMAND_CONFIGURE = 'proxyToggler.configure';
 export const COMMAND_ENABLE = 'proxyToggler.enable';

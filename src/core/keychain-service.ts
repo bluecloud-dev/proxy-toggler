@@ -1,6 +1,6 @@
 import type * as vscode from 'vscode';
 
-import type { ProxyCredentials } from '../types/proxy-configuration';
+import type { ProxyCredentials } from './proxy-configuration';
 import { ValidationService } from './validation-service';
 
 const USERNAME_SECRET_KEY = 'proxyToggler.credentials.username';

@@ -1,11 +1,11 @@
-import { KeychainError } from '../services/keychain-service';
-import type { ProxyManager } from '../services/proxy-manager';
-import { ValidationError, ValidationService } from '../services/validation-service';
-import type { ProxyConfiguration, ProxyCredentials } from '../types/proxy-configuration';
+import { KeychainError } from '../core/keychain-service';
+import type { ProxyConfiguration, ProxyCredentials } from '../core/proxy-configuration';
+import type { ProxyManager } from '../core/proxy-manager';
+import { ValidationError, ValidationService } from '../core/validation-service';
 import type {
   NotificationAction,
   NotificationService as NotificationServiceService
-} from '../ui/notification-service';
+} from '../vscode/notification-service';
 
 const DEFAULT_NO_PROXY = 'localhost,127.0.0.1';
 // Stored credentials are never read back for display; the UI shows only this mask.

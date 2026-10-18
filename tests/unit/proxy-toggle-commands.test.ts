@@ -3,9 +3,9 @@ import { strict as assert } from 'node:assert';
 import { disableProxyCommand } from '../../src/commands/disable-proxy';
 import { enableProxyCommand } from '../../src/commands/enable-proxy';
 import { toggleProxyCommand } from '../../src/commands/toggle-proxy';
-import { KeychainError, KeychainErrorReason } from '../../src/services/keychain-service';
-import { ConfigurationError } from '../../src/services/proxy-manager';
-import type { NotificationAction } from '../../src/ui/notification-service';
+import { KeychainError, KeychainErrorReason } from '../../src/core/keychain-service';
+import { ConfigurationError } from '../../src/core/proxy-manager';
+import type { NotificationAction } from '../../src/vscode/notification-service';
 
 type ProxyManagerStub = {
   hasConfiguration: () => boolean;

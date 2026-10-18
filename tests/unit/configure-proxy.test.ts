@@ -1,13 +1,13 @@
 import { strict as assert } from 'node:assert';
 
 import { configureProxyCommand } from '../../src/commands/configure-proxy';
-import { KeychainError, KeychainErrorReason } from '../../src/services/keychain-service';
+import { KeychainError, KeychainErrorReason } from '../../src/core/keychain-service';
 import type {
   LoadedProxyConfiguration,
   SaveConfigurationOptions
-} from '../../src/services/proxy-manager';
-import { ValidationError } from '../../src/services/validation-service';
-import type { NotificationAction } from '../../src/ui/notification-service';
+} from '../../src/core/proxy-manager';
+import { ValidationError } from '../../src/core/validation-service';
+import type { NotificationAction } from '../../src/vscode/notification-service';
 
 type VscodeApiStub = Parameters<typeof configureProxyCommand>[0];
 type ProxyManagerParam = Parameters<typeof configureProxyCommand>[1];

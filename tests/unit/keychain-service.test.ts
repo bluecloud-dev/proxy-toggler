@@ -4,8 +4,8 @@ import {
   KeychainError,
   KeychainErrorReason,
   KeychainService
-} from '../../src/services/keychain-service';
-import { ValidationError } from '../../src/services/validation-service';
+} from '../../src/core/keychain-service';
+import { ValidationError } from '../../src/core/validation-service';
 
 type SecretsStub = {
   get: (key: string) => Promise<string | undefined>;

@@ -1,6 +1,6 @@
 import { strict as assert } from 'node:assert';
 
-import { ValidationError, ValidationService } from '../../src/services/validation-service';
+import { ValidationError, ValidationService } from '../../src/core/validation-service';
 
 function captureValidationError(operation: () => void): ValidationError {
   try {

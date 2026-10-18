@@ -1,13 +1,13 @@
 import { strict as assert } from 'node:assert';
 
 import { configureProxyCommand } from '../../src/commands/configure-proxy';
-import { KeychainService } from '../../src/services/keychain-service';
+import { KeychainService } from '../../src/core/keychain-service';
+import type { ProxyConfiguration } from '../../src/core/proxy-configuration';
 import type {
   LoadedProxyConfiguration,
   SaveConfigurationOptions
-} from '../../src/services/proxy-manager';
-import { ProxyManager } from '../../src/services/proxy-manager';
-import type { ProxyConfiguration } from '../../src/types/proxy-configuration';
+} from '../../src/core/proxy-manager';
+import { ProxyManager } from '../../src/core/proxy-manager';
 
 type SecretsStub = {
   get: (key: string) => Promise<string | undefined>;

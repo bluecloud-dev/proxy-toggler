@@ -1,8 +1,8 @@
 import type * as vscode from 'vscode';
 
-import type { ProxyConfiguration, ProxyCredentials } from '../types/proxy-configuration';
-import type { ToggleState } from '../types/toggle-state';
 import type { KeychainService } from './keychain-service';
+import type { ProxyConfiguration, ProxyCredentials } from './proxy-configuration';
+import type { ToggleState } from './toggle-state';
 import { ValidationService } from './validation-service';
 
 const DEFAULT_NO_PROXY = 'localhost,127.0.0.1';

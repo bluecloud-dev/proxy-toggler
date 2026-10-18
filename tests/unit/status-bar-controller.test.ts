@@ -2,7 +2,7 @@ import { strict as assert } from 'node:assert';
 
 import type { StatusBarAlignment } from 'vscode';
 
-import { StatusBarController } from '../../src/ui/status-bar-controller';
+import { StatusBarController } from '../../src/vscode/status-bar-controller';
 
 describe('StatusBarController', () => {
   it('creates a right-aligned status bar item and updates state text', () => {

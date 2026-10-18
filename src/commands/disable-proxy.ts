@@ -1,7 +1,7 @@
-import { KeychainError } from '../services/keychain-service';
-import type { ProxyManager as ProxyManagerService } from '../services/proxy-manager';
-import { ConfigurationError } from '../services/proxy-manager';
-import type { NotificationService as NotificationServiceService } from '../ui/notification-service';
+import { KeychainError } from '../core/keychain-service';
+import type { ProxyManager as ProxyManagerService } from '../core/proxy-manager';
+import { ConfigurationError } from '../core/proxy-manager';
+import type { NotificationService as NotificationServiceService } from '../vscode/notification-service';
 
 type VscodeApi = {
   commands: {
