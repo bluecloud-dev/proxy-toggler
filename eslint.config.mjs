@@ -6,6 +6,13 @@ import simpleImportSort from 'eslint-plugin-simple-import-sort';
 import globals from 'globals';
 import tseslint from 'typescript-eslint';
 
+const VSCODE_RUNTIME_IMPORT = {
+  name: 'vscode',
+  allowTypeImports: true,
+  message:
+    'Only src/extension.ts loads the VS Code API. Receive it as a parameter and import types only.'
+};
+
 export default defineConfig(
   globalIgnores(['.vscode-test/', 'coverage/', 'dist/', 'out/']),
   {
@@ -37,17 +44,22 @@ export default defineConfig(
   },
   {
     files: ['src/**/*.ts'],
-    ignores: ['src/extension.ts'],
+    ignores: ['src/extension.ts', 'src/core/**'],
+    rules: {
+      'no-restricted-imports': ['error', { paths: [VSCODE_RUNTIME_IMPORT] }]
+    }
+  },
+  {
+    files: ['src/core/**/*.ts'],
     rules: {
       'no-restricted-imports': [
         'error',
         {
-          paths: [
+          paths: [VSCODE_RUNTIME_IMPORT],
+          patterns: [
             {
-              name: 'vscode',
-              allowTypeImports: true,
-              message:
-                'Only src/extension.ts loads the VS Code API. Receive it as a parameter and import types only.'
+              group: ['../commands/*', '../vscode/*', '../proxy-toggler', '../extension'],
+              message: 'src/core must not depend on commands, VS Code adapters, or wiring.'
             }
           ]
         }
