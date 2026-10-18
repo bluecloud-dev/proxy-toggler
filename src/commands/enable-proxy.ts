@@ -1,16 +1,14 @@
 import { KeychainError } from '../core/keychain-service';
 import type { ProxyManager as ProxyManagerService } from '../core/proxy-manager';
 import { ConfigurationError } from '../core/proxy-manager';
+import type { VscodeApi } from '../vscode/api';
 import type {
   NotificationAction,
   NotificationService as NotificationServiceService
 } from '../vscode/notification-service';
+import { COMMANDS } from './command-ids';
 
-type VscodeApi = {
-  commands: {
-    executeCommand: (command: string, ...args: unknown[]) => PromiseLike<unknown>;
-  };
-};
+type CommandsApi = Pick<VscodeApi, 'commands'>;
 
 type ProxyManager = Pick<ProxyManagerService, 'hasConfiguration' | 'enableProxy'>;
 
@@ -26,7 +24,7 @@ const ACTION_DISABLE_PROXY: NotificationAction = { id: 'disableProxy', title: 'D
 const ACTION_OPEN_SETTINGS: NotificationAction = { id: 'openSettings', title: 'Open Settings' };
 
 export async function enableProxyCommand(
-  vscodeApi: VscodeApi,
+  vscodeApi: CommandsApi,
   proxyManager: ProxyManager,
   notificationService: NotificationService,
   refreshUi: RefreshUi
@@ -38,7 +36,7 @@ export async function enableProxyCommand(
     );
 
     if (choice === ACTION_CONFIGURE_NOW.id) {
-      await vscodeApi.commands.executeCommand('proxyToggler.configure');
+      await vscodeApi.commands.executeCommand(COMMANDS.configure);
     }
 
     return;
@@ -49,7 +47,7 @@ export async function enableProxyCommand(
     await refreshUi();
     const choice = await notificationService.showSuccess('Proxy enabled', ACTION_DISABLE_PROXY);
     if (choice === ACTION_DISABLE_PROXY.id) {
-      await vscodeApi.commands.executeCommand('proxyToggler.disable');
+      await vscodeApi.commands.executeCommand(COMMANDS.disable);
     }
   } catch (error: unknown) {
     await showEnableError(vscodeApi, notificationService, error);
@@ -57,7 +55,7 @@ export async function enableProxyCommand(
 }
 
 async function showEnableError(
-  vscodeApi: VscodeApi,
+  vscodeApi: CommandsApi,
   notificationService: NotificationService,
   error: unknown
 ): Promise<void> {
@@ -79,7 +77,7 @@ async function showEnableError(
         error.getSettingId()
       );
     } else if (choice === ACTION_DISABLE_PROXY.id) {
-      await vscodeApi.commands.executeCommand('proxyToggler.disable');
+      await vscodeApi.commands.executeCommand(COMMANDS.disable);
     }
     return;
   }

@@ -1,13 +1,10 @@
 import { KeychainError } from '../core/keychain-service';
 import type { ProxyManager as ProxyManagerService } from '../core/proxy-manager';
 import { ConfigurationError } from '../core/proxy-manager';
+import type { VscodeApi } from '../vscode/api';
 import type { NotificationService as NotificationServiceService } from '../vscode/notification-service';
 
-type VscodeApi = {
-  commands: {
-    executeCommand: (command: string, ...args: unknown[]) => PromiseLike<unknown>;
-  };
-};
+type CommandsApi = Pick<VscodeApi, 'commands'>;
 
 type ProxyManager = Pick<ProxyManagerService, 'disableProxy'>;
 
@@ -18,7 +15,7 @@ type RefreshUi = () => Promise<void>;
 const ACTION_OPEN_SETTINGS = { id: 'openSettings', title: 'Open Settings' } as const;
 
 export async function disableProxyCommand(
-  vscodeApi: VscodeApi,
+  vscodeApi: CommandsApi,
   proxyManager: ProxyManager,
   notificationService: NotificationService,
   refreshUi: RefreshUi
@@ -33,7 +30,7 @@ export async function disableProxyCommand(
 }
 
 async function showDisableError(
-  vscodeApi: VscodeApi,
+  vscodeApi: CommandsApi,
   notificationService: NotificationService,
   error: unknown
 ): Promise<void> {

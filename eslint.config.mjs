@@ -63,10 +63,6 @@ export default defineConfig(
     }
   },
   {
-    files: ['src/extension.ts', 'tests/unit/extension.test.ts'],
-    rules: { '@typescript-eslint/no-require-imports': 'off' }
-  },
-  {
     files: ['**/*.{js,cjs}'],
     languageOptions: { sourceType: 'commonjs', globals: globals.node }
   },

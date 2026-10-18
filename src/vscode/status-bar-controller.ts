@@ -1,35 +1,15 @@
 import type * as vscode from 'vscode';
 
 import type { ToggleState } from '../core/toggle-state';
+import type { StatusBarItem, VscodeApi } from './api';
 
-type L10n = {
-  t: (message: string, ...args: (string | number)[]) => string;
-};
-
-type StatusBarItem = {
-  text: string;
-  tooltip?: string | vscode.MarkdownString;
-  command?: string | vscode.Command;
-  accessibilityInformation?: vscode.AccessibilityInformation;
-  show: () => void;
-  dispose: () => void;
-};
-
-type WindowApi = {
-  createStatusBarItem: (alignment: vscode.StatusBarAlignment, priority?: number) => StatusBarItem;
-};
-
-type VscodeApi = {
-  StatusBarAlignment: { Right: vscode.StatusBarAlignment };
-  l10n: L10n;
-  window: WindowApi;
-};
+type StatusBarApi = Pick<VscodeApi, 'StatusBarAlignment' | 'l10n' | 'window'>;
 
 export class StatusBarController implements vscode.Disposable {
   private statusBarItem: StatusBarItem | undefined;
 
   constructor(
-    private readonly vscodeApi: VscodeApi,
+    private readonly vscodeApi: StatusBarApi,
     private readonly toggleCommandId: string
   ) {}
 

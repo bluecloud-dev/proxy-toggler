@@ -106,7 +106,8 @@
       "**/*.d.ts",
       "out/**",
       "dist/**",
-      "tests/**"
+      "tests/**",
+      "src/extension.ts"
     ],
     "include": [
       "src/**"

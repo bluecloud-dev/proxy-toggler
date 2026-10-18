@@ -1,51 +1,23 @@
+import type { InputBoxOptions, QuickPickItem } from 'vscode';
+
 import { KeychainError } from '../core/keychain-service';
 import type { ProxyConfiguration, ProxyCredentials } from '../core/proxy-configuration';
-import type { ProxyManager } from '../core/proxy-manager';
+import type { ProxyManager as ProxyManagerService } from '../core/proxy-manager';
 import { ValidationError, ValidationService } from '../core/validation-service';
+import type { VscodeApi } from '../vscode/api';
 import type {
   NotificationAction,
   NotificationService as NotificationServiceService
 } from '../vscode/notification-service';
+import { COMMANDS } from './command-ids';
 
 const DEFAULT_NO_PROXY = 'localhost,127.0.0.1';
 // Stored credentials are never read back for display; the UI shows only this mask.
 const MASKED_CREDENTIALS_PLACEHOLDER = '••••••';
 
-type InputBoxOptions = {
-  prompt: string;
-  value?: string;
-  placeHolder?: string;
-  password?: boolean;
-  ignoreFocusOut?: boolean;
-  validateInput?: (value: string) => string | undefined;
-};
+type ConfigureApi = Pick<VscodeApi, 'commands' | 'l10n' | 'window'>;
 
-type QuickPickItem = {
-  label: string;
-  description?: string;
-  detail?: string;
-};
-
-type QuickPickOptions = {
-  placeHolder?: string;
-  ignoreFocusOut?: boolean;
-};
-
-type VscodeApi = {
-  l10n: {
-    t: (message: string, ...args: (string | number)[]) => string;
-  };
-  window: {
-    showInputBox: (options: InputBoxOptions) => Promise<string | undefined>;
-    showQuickPick: <T extends QuickPickItem>(
-      items: readonly T[],
-      options: QuickPickOptions
-    ) => Promise<T | undefined>;
-  };
-  commands: {
-    executeCommand: (command: string, ...args: unknown[]) => PromiseLike<unknown>;
-  };
-};
+type ProxyManager = Pick<ProxyManagerService, 'loadConfiguration' | 'saveConfiguration'>;
 
 type CredentialsUpdate =
   { mode: 'keep' } | { mode: 'clear' } | { mode: 'set'; credentials: ProxyCredentials };
@@ -61,7 +33,7 @@ const ACTION_ENABLE: NotificationAction = { id: 'enable', title: 'Enable' };
 const ACTION_NOT_NOW: NotificationAction = { id: 'notNow', title: 'Not Now' };
 
 export async function configureProxyCommand(
-  vscodeApi: VscodeApi,
+  vscodeApi: ConfigureApi,
   proxyManager: ProxyManager,
   notificationService: NotificationService,
   refreshUi: RefreshUi
@@ -113,12 +85,12 @@ export async function configureProxyCommand(
   );
 
   if (enableNow === ACTION_ENABLE.id) {
-    await vscodeApi.commands.executeCommand('proxyToggler.enable');
+    await vscodeApi.commands.executeCommand(COMMANDS.enable);
   }
 }
 
 async function promptForProxyUrl(
-  vscodeApi: VscodeApi,
+  vscodeApi: ConfigureApi,
   initialValue?: string
 ): Promise<string | undefined> {
   return vscodeApi.window.showInputBox({
@@ -130,7 +102,7 @@ async function promptForProxyUrl(
   });
 }
 
-function validateProxyUrlInput(vscodeApi: VscodeApi, value: string): string | undefined {
+function validateProxyUrlInput(vscodeApi: ConfigureApi, value: string): string | undefined {
   try {
     ValidationService.validateProxyUrl(value);
     return undefined;
@@ -143,7 +115,7 @@ function validateProxyUrlInput(vscodeApi: VscodeApi, value: string): string | un
 }
 
 async function promptForCredentialsUpdate(
-  vscodeApi: VscodeApi,
+  vscodeApi: ConfigureApi,
   notificationService: NotificationService,
   hasStoredCredentials: boolean
 ): Promise<CredentialsUpdate | undefined> {
@@ -176,7 +148,7 @@ async function promptForCredentialsUpdate(
 }
 
 async function promptForCredentialAction(
-  vscodeApi: VscodeApi,
+  vscodeApi: ConfigureApi,
   notificationService: NotificationService
 ): Promise<CredentialsUpdate | undefined> {
   const items = [
@@ -243,7 +215,7 @@ async function promptForCredentialAction(
 }
 
 async function promptForUsername(
-  vscodeApi: VscodeApi,
+  vscodeApi: ConfigureApi,
   overrides?: Pick<InputBoxOptions, 'prompt'>
 ): Promise<string | undefined> {
   return vscodeApi.window.showInputBox({
@@ -255,7 +227,7 @@ async function promptForUsername(
   });
 }
 
-async function promptForPassword(vscodeApi: VscodeApi): Promise<string | undefined> {
+async function promptForPassword(vscodeApi: ConfigureApi): Promise<string | undefined> {
   return vscodeApi.window.showInputBox({
     prompt: vscodeApi.l10n.t('Enter proxy password'),
     placeHolder: vscodeApi.l10n.t('password'),
@@ -265,7 +237,7 @@ async function promptForPassword(vscodeApi: VscodeApi): Promise<string | undefin
   });
 }
 
-function validatePasswordInput(vscodeApi: VscodeApi, value: string): string | undefined {
+function validatePasswordInput(vscodeApi: ConfigureApi, value: string): string | undefined {
   if (value.trim().length === 0) {
     return vscodeApi.l10n.t('Password is required');
   }
@@ -273,7 +245,7 @@ function validatePasswordInput(vscodeApi: VscodeApi, value: string): string | un
 }
 
 async function promptForStrictSSL(
-  vscodeApi: VscodeApi,
+  vscodeApi: ConfigureApi,
   initialValue?: boolean
 ): Promise<boolean | undefined> {
   const items = buildStrictSSLItems(vscodeApi, initialValue);
@@ -286,7 +258,7 @@ async function promptForStrictSSL(
 }
 
 function buildStrictSSLItems(
-  vscodeApi: VscodeApi,
+  vscodeApi: ConfigureApi,
   initialValue?: boolean
 ): Array<QuickPickItem & { value: boolean }> {
   const yes = {
@@ -308,7 +280,7 @@ function buildStrictSSLItems(
 }
 
 async function promptForNoProxy(
-  vscodeApi: VscodeApi,
+  vscodeApi: ConfigureApi,
   initialValue?: string
 ): Promise<string | undefined> {
   return vscodeApi.window.showInputBox({
@@ -320,7 +292,7 @@ async function promptForNoProxy(
   });
 }
 
-function validateNoProxyInput(vscodeApi: VscodeApi, value: string): string | undefined {
+function validateNoProxyInput(vscodeApi: ConfigureApi, value: string): string | undefined {
   try {
     ValidationService.validateNoProxyPattern(value);
     return undefined;

@@ -1,26 +1,17 @@
 import { KeychainError } from '../core/keychain-service';
 import type { ProxyManager as ProxyManagerService } from '../core/proxy-manager';
 import { ConfigurationError } from '../core/proxy-manager';
+import type { VscodeApi } from '../vscode/api';
 import type {
   NotificationAction,
   NotificationService as NotificationServiceService
 } from '../vscode/notification-service';
+import { COMMANDS } from './command-ids';
 
 const CONFIRM_BEFORE_TOGGLE_SETTING = 'confirmBeforeToggle';
 const SETTINGS_SECTION = 'proxyToggler';
 
-type WorkspaceConfiguration = {
-  get: <T>(section: string, defaultValue?: T) => T;
-};
-
-type VscodeApi = {
-  commands: {
-    executeCommand: (command: string, ...args: unknown[]) => PromiseLike<unknown>;
-  };
-  workspace: {
-    getConfiguration: (section: string) => WorkspaceConfiguration;
-  };
-};
+type ToggleApi = Pick<VscodeApi, 'commands' | 'workspace'>;
 
 type ProxyManager = Pick<ProxyManagerService, 'hasConfiguration' | 'getState' | 'toggleProxy'>;
 
@@ -37,7 +28,7 @@ const ACTION_DISABLE_PROXY: NotificationAction = { id: 'disableProxy', title: 'D
 const ACTION_OPEN_SETTINGS: NotificationAction = { id: 'openSettings', title: 'Open Settings' };
 
 export async function toggleProxyCommand(
-  vscodeApi: VscodeApi,
+  vscodeApi: ToggleApi,
   proxyManager: ProxyManager,
   notificationService: NotificationService,
   refreshUi: RefreshUi
@@ -49,7 +40,7 @@ export async function toggleProxyCommand(
     );
 
     if (choice === ACTION_CONFIGURE_NOW.id) {
-      await vscodeApi.commands.executeCommand('proxyToggler.configure');
+      await vscodeApi.commands.executeCommand(COMMANDS.configure);
     }
 
     return;
@@ -68,7 +59,7 @@ export async function toggleProxyCommand(
     if (isEnabled) {
       const choice = await notificationService.showSuccess('Proxy enabled', ACTION_DISABLE_PROXY);
       if (choice === ACTION_DISABLE_PROXY.id) {
-        await vscodeApi.commands.executeCommand('proxyToggler.disable');
+        await vscodeApi.commands.executeCommand(COMMANDS.disable);
       }
     } else {
       await notificationService.showSuccess('Proxy disabled');
@@ -78,7 +69,7 @@ export async function toggleProxyCommand(
   }
 }
 
-function shouldConfirmToggle(vscodeApi: VscodeApi): boolean {
+function shouldConfirmToggle(vscodeApi: ToggleApi): boolean {
   const configuration = vscodeApi.workspace.getConfiguration(SETTINGS_SECTION);
   return configuration.get<boolean>(CONFIRM_BEFORE_TOGGLE_SETTING, false);
 }
@@ -96,7 +87,7 @@ async function confirmToggle(
 }
 
 async function showToggleError(
-  vscodeApi: VscodeApi,
+  vscodeApi: ToggleApi,
   notificationService: NotificationService,
   error: unknown
 ): Promise<void> {
@@ -118,7 +109,7 @@ async function showToggleError(
         error.getSettingId()
       );
     } else if (choice === ACTION_DISABLE_PROXY.id) {
-      await vscodeApi.commands.executeCommand('proxyToggler.disable');
+      await vscodeApi.commands.executeCommand(COMMANDS.disable);
     }
     return;
   }

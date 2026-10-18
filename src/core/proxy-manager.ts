@@ -1,6 +1,7 @@
 import type * as vscode from 'vscode';
 
 import type { KeychainService } from './keychain-service';
+import { parseNoProxyList } from './no-proxy';
 import type { ProxyConfiguration, ProxyCredentials } from './proxy-configuration';
 import type { ToggleState } from './toggle-state';
 import { ValidationService } from './validation-service';
@@ -14,10 +15,16 @@ const STORAGE_KEYS = {
 
 export type Memento = Pick<vscode.Memento, 'get' | 'update'>;
 
-export type HttpConfigurationKey = 'proxy' | 'proxyStrictSSL' | 'noProxy';
+export type CredentialStore = Pick<
+  KeychainService,
+  'storeCredentials' | 'clearCredentials' | 'hasCredentials'
+>;
 
-export type HttpConfiguration = {
-  update: (key: HttpConfigurationKey, value: string | boolean | undefined) => Promise<void>;
+export type HttpSettingKey = 'proxy' | 'proxyStrictSSL' | 'noProxy';
+
+export type HttpSettings = {
+  read(): Record<HttpSettingKey, unknown>;
+  update(key: HttpSettingKey, value: string | boolean | undefined): Promise<void>;
 };
 
 export type LoadedProxyConfiguration = ProxyConfiguration & {
@@ -44,7 +51,7 @@ export type SaveConfigurationOptions =
 export class ConfigurationError extends Error {
   constructor(
     public readonly operation: 'enable' | 'disable',
-    public readonly key: HttpConfigurationKey,
+    public readonly key: HttpSettingKey,
     public override readonly cause?: Error
   ) {
     super(
@@ -68,8 +75,8 @@ export class ConfigurationError extends Error {
 export class ProxyManager {
   constructor(
     private readonly globalState: Memento,
-    private readonly keychainService: KeychainService,
-    private readonly httpConfiguration: HttpConfiguration
+    private readonly keychainService: CredentialStore,
+    private readonly httpSettings: HttpSettings
   ) {}
 
   dispose(): void {
@@ -109,7 +116,7 @@ export class ProxyManager {
   }
 
   async loadConfiguration(): Promise<LoadedProxyConfiguration | undefined> {
-    const saved = this.globalState.get<ProxyConfiguration>(STORAGE_KEYS.proxyConfig);
+    const saved = this.savedConfiguration();
     if (!saved) {
       return undefined;
     }
@@ -120,21 +127,31 @@ export class ProxyManager {
     };
   }
 
-  // Unlike loadConfiguration, this never touches SecretStorage, so activation stays keychain-free.
-  getSavedConfiguration(): ProxyConfiguration | undefined {
-    return this.globalState.get<ProxyConfiguration>(STORAGE_KEYS.proxyConfig);
+  // Reads settings and globalState only, never SecretStorage, so activation can call it.
+  isConfigurationApplied(): boolean {
+    const saved = this.savedConfiguration();
+    if (!saved) {
+      return false;
+    }
+
+    const current = this.httpSettings.read();
+    return (
+      current.proxy === saved.proxyUrl &&
+      current.proxyStrictSSL === saved.strictSSL &&
+      parseNoProxyList(current.noProxy).join(',') === parseNoProxyList(saved.noProxy).join(',')
+    );
   }
 
   async enableProxy(): Promise<void> {
-    const configuration = this.globalState.get<ProxyConfiguration>(STORAGE_KEYS.proxyConfig);
+    const configuration = this.savedConfiguration();
 
     if (!configuration) {
       throw new Error('No proxy configuration found');
     }
 
-    await this.updateHttpConfiguration('enable', 'proxy', configuration.proxyUrl);
-    await this.updateHttpConfiguration('enable', 'proxyStrictSSL', configuration.strictSSL);
-    await this.updateHttpConfiguration('enable', 'noProxy', configuration.noProxy);
+    await this.updateHttpSetting('enable', 'proxy', configuration.proxyUrl);
+    await this.updateHttpSetting('enable', 'proxyStrictSSL', configuration.strictSSL);
+    await this.updateHttpSetting('enable', 'noProxy', configuration.noProxy);
 
     await this.globalState.update(STORAGE_KEYS.toggleState, {
       ...this.getState(),
@@ -143,9 +160,9 @@ export class ProxyManager {
   }
 
   async disableProxy(): Promise<void> {
-    await this.updateHttpConfiguration('disable', 'proxy', undefined);
-    await this.updateHttpConfiguration('disable', 'proxyStrictSSL', undefined);
-    await this.updateHttpConfiguration('disable', 'noProxy', undefined);
+    await this.updateHttpSetting('disable', 'proxy', undefined);
+    await this.updateHttpSetting('disable', 'proxyStrictSSL', undefined);
+    await this.updateHttpSetting('disable', 'noProxy', undefined);
 
     await this.globalState.update(STORAGE_KEYS.toggleState, {
       ...this.getState(),
@@ -177,9 +194,7 @@ export class ProxyManager {
 
   getState(): ToggleState {
     const stored = this.globalState.get<ToggleState>(STORAGE_KEYS.toggleState);
-    const hasConfiguration = Boolean(
-      this.globalState.get<ProxyConfiguration>(STORAGE_KEYS.proxyConfig)
-    );
+    const hasConfiguration = Boolean(this.savedConfiguration());
 
     if (stored) {
       return {
@@ -198,20 +213,24 @@ export class ProxyManager {
     return this.getState().hasConfiguration;
   }
 
-  private async updateHttpConfiguration(
+  private savedConfiguration(): ProxyConfiguration | undefined {
+    return this.globalState.get<ProxyConfiguration>(STORAGE_KEYS.proxyConfig);
+  }
+
+  private async updateHttpSetting(
     operation: ConfigurationError['operation'],
-    key: HttpConfigurationKey,
+    key: HttpSettingKey,
     value: string | boolean | undefined
   ): Promise<void> {
     try {
-      await this.httpConfiguration.update(key, value);
+      await this.httpSettings.update(key, value);
     } catch (error: unknown) {
       throw new ConfigurationError(operation, key, asError(error));
     }
   }
 }
 
-function formatHttpSettingKey(key: HttpConfigurationKey): string {
+function formatHttpSettingKey(key: HttpSettingKey): string {
   return `http.${key}`;
 }
 

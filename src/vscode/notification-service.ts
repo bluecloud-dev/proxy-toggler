@@ -1,17 +1,4 @@
-type L10n = {
-  t: (message: string, ...args: (string | number)[]) => string;
-};
-
-type WindowApi = {
-  showInformationMessage: (message: string, ...items: string[]) => PromiseLike<string | undefined>;
-  showWarningMessage: (message: string, ...items: string[]) => PromiseLike<string | undefined>;
-  showErrorMessage: (message: string, ...items: string[]) => PromiseLike<string | undefined>;
-};
-
-type VscodeApi = {
-  l10n: L10n;
-  window: WindowApi;
-};
+import type { VscodeApi } from './api';
 
 export type NotificationAction = {
   id: string;
@@ -20,7 +7,7 @@ export type NotificationAction = {
 };
 
 export class NotificationService {
-  constructor(private readonly vscodeApi: VscodeApi) {}
+  constructor(private readonly vscodeApi: Pick<VscodeApi, 'l10n' | 'window'>) {}
 
   async showSuccess(
     message: string,
