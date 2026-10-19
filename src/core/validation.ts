@@ -46,11 +46,12 @@ export function validateProxyUrl(url: string): void {
     throw invalidUrl('Missing hostname');
   }
 
-  if (!parsedUrl.port) {
+  const portText = explicitPort(trimmedUrl, parsedUrl);
+  if (!portText) {
     throw invalidUrl('Port number is required');
   }
 
-  const port = Number.parseInt(parsedUrl.port, 10);
+  const port = Number.parseInt(portText, 10);
   if (!Number.isInteger(port) || port < 1 || port > 65535) {
     throw invalidUrl('Port must be between 1 and 65535');
   }
@@ -63,6 +64,16 @@ export function validateProxyUrl(url: string): void {
   ) {
     throw new ValidationError('proxyUrl', 'URL must not include a path, query, or fragment');
   }
+}
+
+// The URL parser drops a port equal to the scheme default; http and https differ only in that
+// default, so reparsing the text as the other scheme keeps the port the user typed.
+function explicitPort(url: string, parsedUrl: URL): string {
+  if (parsedUrl.port) {
+    return parsedUrl.port;
+  }
+  const otherScheme = parsedUrl.protocol === 'http:' ? 'https:' : 'http:';
+  return new URL(url.replace(/^[^:]*:/, otherScheme)).port;
 }
 
 export function validateCredentials(username?: string, password?: string): void {

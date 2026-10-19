@@ -25,7 +25,20 @@ describe('validation', () => {
       assert.doesNotThrow(() => validateProxyUrl('https://10.0.0.1:3128'));
       assert.doesNotThrow(() => validateProxyUrl('http://[::1]:8080'));
       assert.doesNotThrow(() => validateProxyUrl('HTTP://proxy.example.com:8080'));
+      assert.doesNotThrow(() => validateProxyUrl('http://proxy.example.com:443'));
+      assert.doesNotThrow(() => validateProxyUrl('https://proxy.example.com:80'));
     });
+
+    for (const url of [
+      'http://proxy.example.com:80',
+      'https://proxy.example.com:443',
+      'http://[::1]:80',
+      'HTTP://proxy.example.com:80'
+    ]) {
+      it(`accepts ${url}, whose port is the scheme default`, () => {
+        assert.doesNotThrow(() => validateProxyUrl(url));
+      });
+    }
 
     it('rejects missing or malformed URLs', () => {
       const emptyError = captureValidationError(() => validateProxyUrl(''));
@@ -71,11 +84,30 @@ describe('validation', () => {
       assert.equal(tooHighPortError.field, 'proxyUrl');
     });
 
+    it('still requires a port when none is typed', () => {
+      for (const url of [
+        'http://proxy.example.com',
+        'https://proxy.example.com',
+        'http://proxy.example.com:',
+        'http://[::1]'
+      ]) {
+        const error = captureValidationError(() => validateProxyUrl(url));
+        assert.equal(error.reason, 'Port number is required', url);
+      }
+    });
+
     it('rejects credentials embedded in the URL', () => {
       const error = captureValidationError(() =>
         validateProxyUrl('http://user:pass@proxy.example.com:8080')
       );
       assert.equal(error.field, 'proxyUrl');
+      assert.match(error.reason, /credentials/i);
+    });
+
+    it('reports credentials, not the port, in a URL with a default port', () => {
+      const error = captureValidationError(() =>
+        validateProxyUrl('http://user:pass@proxy.example.com:80')
+      );
       assert.match(error.reason, /credentials/i);
     });
 
@@ -99,6 +131,18 @@ describe('validation', () => {
         validateProxyUrl('http://proxy.example.com:8080#frag')
       );
       assert.equal(fragmentError.field, 'proxyUrl');
+    });
+
+    it('reports a path after a default port as a path, not as a missing port', () => {
+      const trailingSlashError = captureValidationError(() =>
+        validateProxyUrl('http://proxy.example.com:80/')
+      );
+      assert.match(trailingSlashError.reason, /path/i);
+
+      const pathError = captureValidationError(() =>
+        validateProxyUrl('https://proxy.example.com:443/proxy')
+      );
+      assert.match(pathError.reason, /path/i);
     });
   });
 
