@@ -1,0 +1,50 @@
+name: Proxy lab
+
+# Runs the proxy lab probe (TESTING.md, "The probe") when started by hand. It never runs on pull
+# requests, so it cannot become a required check: the lab needs Linux containers, which GitHub's
+# macOS runners (no Docker) and Windows runners (no Linux containers) cannot run.
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  probe:
+    name: VS Code through the proxy lab
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: Setup Node
+        uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version-file: .nvmrc
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Install xvfb
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y xvfb
+
+      - name: Start the proxy lab
+        run: npm run proxy-lab:up
+
+      - name: Probe VS Code through the lab (minimum engine and stable)
+        run: xvfb-run -a npm run proxy-lab:probe
+
+      - name: Proxy logs
+        if: always()
+        run: npm run proxy-lab:logs
+
+      - name: Stop the proxy lab
+        if: always()
+        run: npm run proxy-lab:down
