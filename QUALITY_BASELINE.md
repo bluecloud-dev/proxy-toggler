@@ -113,7 +113,10 @@ The extension has no webviews or custom editors today. If one is added:
 ## Dependency standards
 
 - **Runtime footprint:** no runtime dependencies. The VSIX ships one bundled file,
-  `dist/extension.js`. Adding a runtime dependency needs a stated reason.
+  `dist/extension.js`. Adding a runtime dependency needs a stated reason. _Enforced by:_
+  `npm run package`, which runs `scripts/check-package.cjs`: the package must hold exactly the
+  listed files, stay under 256 KiB, and carry the name, publisher, version, and `main` of
+  `package.json`.
 - **Pinning:** `package-lock.json` is committed and CI installs with `npm ci`. Prettier and
   `@types/vscode` are pinned exactly; other dev dependencies use caret ranges.
 - **Install scripts:** npm 11.19 and later block dependency install scripts unless
