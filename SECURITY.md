@@ -31,13 +31,13 @@ advisory and the release notes.
 
 ## Security controls
 
-| Control                                                                                                      | Evidence                                                     |
-| ------------------------------------------------------------------------------------------------------------ | ------------------------------------------------------------ |
-| Credentials live only in VS Code SecretStorage and never reach `globalState`, messages, or logs.             | `tests/security/credentials.test.ts`                         |
-| The extension never sets `http.proxyAuthorization`.                                                          | `tests/integration/config-update.test.ts`                    |
-| Proxy URLs, bypass lists, and credentials are validated before anything is stored.                           | `tests/unit/validation.test.ts`                              |
-| A failed enable restores the user settings it already changed.                                               | `tests/unit/proxy-manager.test.ts`, integration tests        |
-| The extension reads no workspace files, so it runs in Restricted Mode.                                       | `npm run test:packaged`                                      |
-| No telemetry SDK is in the dependency tree.                                                                  | `npm run check:no-telemetry`                                 |
-| The VSIX holds only the bundled extension, its manifest, and its documentation.                              | `scripts/check-package.cjs`                                  |
-| Dependencies and workflows are scanned: npm audit, CodeQL, dependency review, OpenSSF Scorecard, Dependabot. | `.github/workflows/ci.yml`, `security.yml`, `dependabot.yml` |
+| Control                                                                                                      | Evidence                                                                               |
+| ------------------------------------------------------------------------------------------------------------ | -------------------------------------------------------------------------------------- |
+| Credentials live only in VS Code SecretStorage and never reach `globalState`, messages, or logs.             | `tests/security/credentials.test.ts`                                                   |
+| The extension never sets `http.proxyAuthorization`.                                                          | `tests/integration/config-update.test.ts`                                              |
+| Proxy URLs, bypass lists, and credentials are validated before anything is stored.                           | `tests/unit/validation.test.ts`                                                        |
+| A failed enable restores the user settings it already changed.                                               | `tests/unit/proxy-manager.test.ts`, integration tests                                  |
+| The extension reads no workspace files, so it runs in Restricted Mode.                                       | `npm run test:packaged`                                                                |
+| No telemetry SDK is in the dependency tree.                                                                  | `npm run check:no-telemetry`                                                           |
+| The VSIX holds only the bundled extension, its manifest, and its documentation.                              | `scripts/check-package.cjs`                                                            |
+| Dependencies and workflows are scanned: npm audit, CodeQL, dependency review, OpenSSF Scorecard, Dependabot. | `.github/workflows/ci.yml`, `.github/workflows/security.yml`, `.github/dependabot.yml` |
