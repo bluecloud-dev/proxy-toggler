@@ -16,8 +16,9 @@ export type FakeVscodeOptions = {
   // Answers for successive showInputBox calls; each answer also runs through validateInput.
   inputs?: Array<string | undefined>;
   pick?: (items: readonly QuickPickItem[], callIndex: number) => QuickPickItem | undefined;
-  // The button the user clicks for a notification; undefined means it was dismissed.
-  answer?: (message: RecordedMessage) => string | undefined;
+  // The button the user clicks for a notification; undefined means it was dismissed. A promise
+  // keeps the notification open until it settles.
+  answer?: (message: RecordedMessage) => string | undefined | Promise<string | undefined>;
   translate?: (message: string) => string;
   // Keyed by full setting id, for example 'http.proxy'.
   settings?: Record<string, unknown>;

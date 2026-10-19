@@ -170,15 +170,29 @@ describe('ProxyManager', () => {
     await assert.rejects(() => proxyManager.toggleProxy(), /No proxy configuration found/);
   });
 
-  it('records a synced state without touching the settings or the configuration', async () => {
-    const { globalState, httpSettings, proxyManager } = setup();
+  it('records that the settings are applied, without touching them or the configuration', async () => {
+    const { globalState, httpSettings, proxyManager } = setup({
+      http: {
+        current: { proxy: CONFIGURATION.proxyUrl, proxyStrictSSL: true, noProxy: ['localhost'] }
+      }
+    });
     await proxyManager.saveConfiguration(CONFIGURATION, { mode: 'keep' });
 
-    await proxyManager.syncToggleState(true);
+    await proxyManager.syncToggleState();
 
     assert.deepEqual(proxyManager.getState(), { isEnabled: true, hasConfiguration: true });
     assert.deepEqual(httpSettings.updates, []);
     assert.deepEqual(globalState.store.get('proxyToggler.savedProxy'), CONFIGURATION);
+  });
+
+  it('does not rewrite the state when it already matches the settings', async () => {
+    const { globalState, proxyManager } = setup();
+    await proxyManager.saveConfiguration(CONFIGURATION, { mode: 'keep' });
+    const writesBeforeSync = globalState.updates.length;
+
+    await proxyManager.syncToggleState();
+
+    assert.equal(globalState.updates.length, writesBeforeSync);
   });
 
   it('keeps state fields it does not manage, such as ones written by another version', async () => {
@@ -190,7 +204,7 @@ describe('ProxyManager', () => {
       lastProfile: 'work'
     });
 
-    await proxyManager.syncToggleState(false);
+    await proxyManager.syncToggleState();
 
     assert.deepEqual(globalState.store.get('proxyToggler.state'), {
       isEnabled: false,

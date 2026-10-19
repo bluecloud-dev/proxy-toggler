@@ -159,9 +159,13 @@ export class ProxyManager {
     return true;
   }
 
-  // Records the state found in VS Code settings without writing those settings.
-  async syncToggleState(isEnabled: boolean): Promise<void> {
-    await this.writeState({ isEnabled });
+  // Records the state found in VS Code settings without writing those settings. It reads them
+  // itself, so a caller that waited on a prompt cannot record a stale state.
+  async syncToggleState(): Promise<void> {
+    const isEnabled = this.isConfigurationApplied();
+    if (this.getState().isEnabled !== isEnabled) {
+      await this.writeState({ isEnabled });
+    }
   }
 
   getState(): ToggleState {
