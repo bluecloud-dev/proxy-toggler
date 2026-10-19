@@ -1,18 +1,40 @@
 import { strict as assert } from 'node:assert';
 
-import * as vscode from 'vscode';
 import * as sinon from 'sinon';
+import * as vscode from 'vscode';
+
+import { activateExtension, EXTENSION_ID } from './support';
 
 type CommandPaletteItem = {
   command: string;
   when?: string;
 };
 
+type ExtensionManifest = {
+  contributes?: { menus?: { commandPalette?: CommandPaletteItem[] } };
+};
+
 describe('command palette contributions', () => {
-  it('registers proxy toggler commands', async () => {
-    const extension = vscode.extensions.getExtension('aymenhammouda.proxy-toggler');
+  // Runs first: proves that contributed commands activate the extension without explicit
+  // onCommand activation events.
+  it('activates when one of its commands runs', async () => {
+    const extension = vscode.extensions.getExtension(EXTENSION_ID);
     assert.ok(extension, 'Expected extension to be available in VS Code test host');
-    await extension.activate();
+    assert.equal(extension.isActive, false);
+
+    const sandbox = sinon.createSandbox();
+    sandbox.stub(vscode.window, 'showWarningMessage').resolves(undefined);
+    try {
+      await vscode.commands.executeCommand('proxyToggler.toggle');
+    } finally {
+      sandbox.restore();
+    }
+
+    assert.equal(extension.isActive, true);
+  });
+
+  it('registers proxy toggler commands', async () => {
+    await activateExtension();
 
     const commands = await vscode.commands.getCommands(true);
     assert.ok(commands.includes('proxyToggler.configure'));
@@ -41,14 +63,16 @@ describe('command palette contributions', () => {
     assert.ok(warnings.some((message) => /no proxy configuration/i.test(message)));
   });
 
-  it('gates enable/disable commands by proxy state context', async () => {
-    const extension = vscode.extensions.getExtension('aymenhammouda.proxy-toggler');
+  it('gates enable/disable commands by proxy state context', () => {
+    const extension = vscode.extensions.getExtension(EXTENSION_ID);
     assert.ok(extension, 'Expected extension to be available in VS Code test host');
 
-    const commandPalette = extension.packageJSON?.contributes?.menus?.commandPalette as
-      | CommandPaletteItem[]
-      | undefined;
-    assert.ok(Array.isArray(commandPalette), 'Expected contributes.menus.commandPalette to be an array');
+    const manifest = extension.packageJSON as ExtensionManifest;
+    const commandPalette = manifest.contributes?.menus?.commandPalette;
+    assert.ok(
+      Array.isArray(commandPalette),
+      'Expected contributes.menus.commandPalette to be an array'
+    );
 
     const enable = commandPalette.find((item) => item.command === 'proxyToggler.enable');
     const disable = commandPalette.find((item) => item.command === 'proxyToggler.disable');

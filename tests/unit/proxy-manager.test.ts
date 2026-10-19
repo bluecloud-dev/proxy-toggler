@@ -1,199 +1,131 @@
 import { strict as assert } from 'node:assert';
 
-import type { ProxyConfiguration, ProxyCredentials } from '../../src/types/proxy-configuration';
-import type { ToggleState } from '../../src/types/toggle-state';
-import type { KeychainService } from '../../src/services/keychain-service';
-import type { HttpConfiguration } from '../../src/services/proxy-manager';
-import { ConfigurationError, ProxyManager } from '../../src/services/proxy-manager';
-import { ValidationError } from '../../src/services/validation-service';
+import type { ProxyCredentials } from '../../src/core/proxy-configuration';
+import { ConfigurationError, ProxyManager } from '../../src/core/proxy-manager';
+import { ValidationError } from '../../src/core/validation';
+import { createHttpSettings, createMemento } from '../support/fakes';
 
-type MementoStub = {
-  get: <T>(key: string) => T | undefined;
-  update: (key: string, value: unknown) => Promise<void>;
+const CONFIGURATION = {
+  proxyUrl: 'http://proxy.example.com:8080',
+  strictSSL: true,
+  noProxy: 'localhost'
 };
 
+function createKeychainStub(hasCredentials = false) {
+  const calls = { store: [] as ProxyCredentials[], clear: 0 };
+  return {
+    calls,
+    storeCredentials: async (username = '', password = ''): Promise<void> => {
+      calls.store.push({ username, password });
+    },
+    clearCredentials: async (): Promise<void> => {
+      calls.clear += 1;
+    },
+    hasCredentials: async (): Promise<boolean> => hasCredentials
+  };
+}
+
+function setup(
+  options: { hasCredentials?: boolean; http?: Parameters<typeof createHttpSettings>[0] } = {}
+) {
+  const globalState = createMemento();
+  const keychain = createKeychainStub(options.hasCredentials);
+  const httpSettings = createHttpSettings(options.http);
+  const proxyManager = new ProxyManager(globalState, keychain, httpSettings);
+  return { globalState, keychain, httpSettings, proxyManager };
+}
+
 describe('ProxyManager', () => {
-  it('saves non-sensitive config, stores credentials, and updates state', async () => {
-    const globalState = createMemento();
-    const keychain = createKeychainStub();
-    const httpConfiguration = createHttpConfigurationStub();
-    const proxyManager = new ProxyManager(globalState, keychain, httpConfiguration);
+  it('persists a trimmed configuration with the default bypass list and stores credentials', async () => {
+    const { globalState, keychain, proxyManager } = setup();
 
-    const configuration: ProxyConfiguration = {
-      proxyUrl: ' http://proxy.example.com:8080 ',
-      strictSSL: true,
-      noProxy: ''
-    };
+    await proxyManager.saveConfiguration(
+      { proxyUrl: ' http://proxy.example.com:8080 ', strictSSL: true, noProxy: '' },
+      { mode: 'set', credentials: { username: 'alice', password: 'secret' } }
+    );
 
-    const credentials: ProxyCredentials = {
-      username: 'alice',
-      password: 'secret'
-    };
-
-    await proxyManager.saveConfiguration({ configuration, credentials });
-
-    const savedConfig = globalState.get<ProxyConfiguration>('proxyToggler.savedProxy');
-    assert.deepEqual(savedConfig, {
+    assert.deepEqual(globalState.store.get('proxyToggler.savedProxy'), {
       proxyUrl: 'http://proxy.example.com:8080',
       strictSSL: true,
       noProxy: 'localhost,127.0.0.1'
     });
-
-    assert.deepEqual(keychain.storeCalls, [{ username: 'alice', password: 'secret' }]);
-    assert.equal(keychain.clearCalls, 0);
-
-    const state = globalState.get<ToggleState>('proxyToggler.state');
-    assert.deepEqual(state, { isEnabled: false, hasConfiguration: true });
+    assert.deepEqual(globalState.store.get('proxyToggler.state'), {
+      isEnabled: false,
+      hasConfiguration: true
+    });
+    assert.deepEqual(keychain.calls, {
+      store: [{ username: 'alice', password: 'secret' }],
+      clear: 0
+    });
   });
 
-  it('preserves existing credentials when saveConfiguration omits credential updates', async () => {
-    const globalState = createMemento();
-    const keychain = createKeychainStub();
-    const httpConfiguration = createHttpConfigurationStub();
-    const proxyManager = new ProxyManager(globalState, keychain, httpConfiguration);
+  it('leaves stored credentials alone when a save omits them', async () => {
+    const { keychain, proxyManager } = setup();
 
-    await proxyManager.saveConfiguration({
-      configuration: {
-        proxyUrl: 'http://proxy.example.com:8080',
-        strictSSL: false,
-        noProxy: 'localhost'
-      },
-      credentials: { username: 'alice', password: 'secret' }
-    });
+    await proxyManager.saveConfiguration(CONFIGURATION, { mode: 'keep' });
 
-    await proxyManager.saveConfiguration({
-      configuration: {
-        proxyUrl: 'http://proxy.example.com:8080',
-        strictSSL: true,
-        noProxy: 'localhost'
-      }
-    });
-
-    assert.equal(keychain.storeCalls.length, 1);
-    assert.equal(keychain.clearCalls, 0);
+    assert.deepEqual(keychain.calls, { store: [], clear: 0 });
   });
 
-  it('can clear stored credentials when requested', async () => {
-    const globalState = createMemento();
-    const keychain = createKeychainStub();
-    const httpConfiguration = createHttpConfigurationStub();
-    const proxyManager = new ProxyManager(globalState, keychain, httpConfiguration);
+  it('clears stored credentials on request', async () => {
+    const { keychain, proxyManager } = setup();
 
-    await proxyManager.saveConfiguration({
-      configuration: {
-        proxyUrl: 'http://proxy.example.com:8080',
-        strictSSL: true,
-        noProxy: 'localhost'
-      },
-      clearCredentials: true
-    });
+    await proxyManager.saveConfiguration(CONFIGURATION, { mode: 'clear' });
 
-    assert.equal(keychain.storeCalls.length, 0);
-    assert.equal(keychain.clearCalls, 1);
+    assert.deepEqual(keychain.calls, { store: [], clear: 1 });
   });
 
-  it('loads configuration without returning credentials', async () => {
-    const globalState = createMemento();
-    const keychain = createKeychainStub({ hasCredentials: true });
-    const httpConfiguration = createHttpConfigurationStub();
-    const proxyManager = new ProxyManager(globalState, keychain, httpConfiguration);
+  it('loads the configuration with credential presence but never the credentials', async () => {
+    const { proxyManager } = setup({ hasCredentials: true });
+    await proxyManager.saveConfiguration(CONFIGURATION, { mode: 'keep' });
 
-    await proxyManager.saveConfiguration({
-      configuration: {
-        proxyUrl: 'http://proxy.example.com:8080',
-        strictSSL: true,
-        noProxy: 'localhost'
-      }
-    });
-
-    const loaded = await proxyManager.loadConfiguration();
-    assert.deepEqual(loaded, {
-      proxyUrl: 'http://proxy.example.com:8080',
-      strictSSL: true,
-      noProxy: 'localhost',
+    assert.deepEqual(await proxyManager.loadConfiguration(), {
+      ...CONFIGURATION,
       hasStoredCredentials: true
     });
   });
 
-  it('reports default state based on saved configuration presence', async () => {
-    const globalState = createMemento();
-    const keychain = createKeychainStub();
-    const httpConfiguration = createHttpConfigurationStub();
-    const proxyManager = new ProxyManager(globalState, keychain, httpConfiguration);
-
+  it('derives hasConfiguration from the saved configuration', async () => {
+    const { proxyManager } = setup();
     assert.deepEqual(proxyManager.getState(), { isEnabled: false, hasConfiguration: false });
 
-    await proxyManager.saveConfiguration({
-      configuration: {
-        proxyUrl: 'http://proxy.example.com:8080',
-        strictSSL: true,
-        noProxy: 'localhost'
-      }
-    });
+    await proxyManager.saveConfiguration(CONFIGURATION, { mode: 'keep' });
 
     assert.deepEqual(proxyManager.getState(), { isEnabled: false, hasConfiguration: true });
     assert.equal(proxyManager.hasConfiguration(), true);
   });
 
-  it('validates proxy URLs before persisting', async () => {
-    const globalState = createMemento();
-    const keychain = createKeychainStub();
-    const httpConfiguration = createHttpConfigurationStub();
-    const proxyManager = new ProxyManager(globalState, keychain, httpConfiguration);
+  it('validates before persisting anything', async () => {
+    const { globalState, proxyManager } = setup();
 
     await assert.rejects(
       () =>
-        proxyManager.saveConfiguration({
-          configuration: {
-            proxyUrl: 'proxy.example.com:8080',
-            strictSSL: true,
-            noProxy: 'localhost'
-          }
-        }),
+        proxyManager.saveConfiguration(
+          { ...CONFIGURATION, proxyUrl: 'proxy.example.com:8080' },
+          { mode: 'keep' }
+        ),
       ValidationError
     );
-
-    assert.equal(globalState.updateCalls.length, 0);
+    assert.deepEqual(globalState.updates, []);
   });
 
-  it('enables proxy by updating VS Code http settings and state', async () => {
-    const globalState = createMemento();
-    const keychain = createKeychainStub();
-    const httpConfiguration = createHttpConfigurationStub();
-    const proxyManager = new ProxyManager(globalState, keychain, httpConfiguration);
-
-    await proxyManager.saveConfiguration({
-      configuration: {
-        proxyUrl: 'http://proxy.example.com:8080',
-        strictSSL: true,
-        noProxy: 'localhost'
-      }
-    });
+  it('enables by writing the http settings in order, then the state', async () => {
+    const { httpSettings, proxyManager } = setup();
+    await proxyManager.saveConfiguration(CONFIGURATION, { mode: 'keep' });
 
     await proxyManager.enableProxy();
 
-    assert.deepEqual(httpConfiguration.updateCalls, [
+    assert.deepEqual(httpSettings.updates, [
       { key: 'proxy', value: 'http://proxy.example.com:8080' },
       { key: 'proxyStrictSSL', value: true },
       { key: 'noProxy', value: 'localhost' }
     ]);
-
     assert.deepEqual(proxyManager.getState(), { isEnabled: true, hasConfiguration: true });
   });
 
-  it('wraps VS Code config update failures in ConfigurationError', async () => {
-    const globalState = createMemento();
-    const keychain = createKeychainStub();
-    const httpConfiguration = createHttpConfigurationStub({ failKey: 'noProxy' });
-    const proxyManager = new ProxyManager(globalState, keychain, httpConfiguration);
-
-    await proxyManager.saveConfiguration({
-      configuration: {
-        proxyUrl: 'http://proxy.example.com:8080',
-        strictSSL: true,
-        noProxy: 'localhost'
-      }
-    });
+  it('reports which setting failed as a ConfigurationError', async () => {
+    const { proxyManager } = setup({ http: { failKey: 'noProxy' } });
+    await proxyManager.saveConfiguration(CONFIGURATION, { mode: 'keep' });
 
     await assert.rejects(
       () => proxyManager.enableProxy(),
@@ -203,135 +135,97 @@ describe('ProxyManager', () => {
         assert.equal(error.key, 'noProxy');
         assert.equal(error.getSettingId(), 'http.noProxy');
         assert.match(error.toUserMessage(), /http\.noProxy/);
+        assert.match(String(error.cause), /Failed to update noProxy/);
         return true;
       }
     );
   });
 
-  it('disables proxy by clearing VS Code http settings and state', async () => {
-    const globalState = createMemento();
-    const keychain = createKeychainStub();
-    const httpConfiguration = createHttpConfigurationStub();
-    const proxyManager = new ProxyManager(globalState, keychain, httpConfiguration);
+  it('disables by clearing the http settings, then the state', async () => {
+    const { httpSettings, proxyManager } = setup();
 
     await proxyManager.disableProxy();
 
-    assert.deepEqual(httpConfiguration.updateCalls, [
+    assert.deepEqual(httpSettings.updates, [
       { key: 'proxy', value: undefined },
       { key: 'proxyStrictSSL', value: undefined },
       { key: 'noProxy', value: undefined }
     ]);
-
     assert.deepEqual(proxyManager.getState(), { isEnabled: false, hasConfiguration: false });
   });
 
-  it('toggles proxy enabled state when configured', async () => {
-    const globalState = createMemento();
-    const keychain = createKeychainStub();
-    const httpConfiguration = createHttpConfigurationStub();
-    const proxyManager = new ProxyManager(globalState, keychain, httpConfiguration);
-
-    await proxyManager.saveConfiguration({
-      configuration: {
-        proxyUrl: 'http://proxy.example.com:8080',
-        strictSSL: true,
-        noProxy: 'localhost'
-      }
-    });
+  it('toggles between enabled and disabled', async () => {
+    const { proxyManager } = setup();
+    await proxyManager.saveConfiguration(CONFIGURATION, { mode: 'keep' });
 
     assert.equal(await proxyManager.toggleProxy(), true);
-    assert.deepEqual(proxyManager.getState(), { isEnabled: true, hasConfiguration: true });
-
+    assert.equal(proxyManager.getState().isEnabled, true);
     assert.equal(await proxyManager.toggleProxy(), false);
-    assert.deepEqual(proxyManager.getState(), { isEnabled: false, hasConfiguration: true });
+    assert.equal(proxyManager.getState().isEnabled, false);
   });
 
-  it('can sync enabled state without changing saved configuration', async () => {
-    const globalState = createMemento();
-    const keychain = createKeychainStub();
-    const httpConfiguration = createHttpConfigurationStub();
-    const proxyManager = new ProxyManager(globalState, keychain, httpConfiguration);
+  it('refuses to toggle without a saved configuration', async () => {
+    const { proxyManager } = setup();
 
-    await proxyManager.saveConfiguration({
-      configuration: {
-        proxyUrl: 'http://proxy.example.com:8080',
-        strictSSL: true,
-        noProxy: 'localhost'
-      }
-    });
+    await assert.rejects(() => proxyManager.toggleProxy(), /No proxy configuration found/);
+  });
 
-    assert.deepEqual(proxyManager.getSavedConfiguration(), {
-      proxyUrl: 'http://proxy.example.com:8080',
-      strictSSL: true,
-      noProxy: 'localhost'
-    });
+  it('records a synced state without touching the settings or the configuration', async () => {
+    const { globalState, httpSettings, proxyManager } = setup();
+    await proxyManager.saveConfiguration(CONFIGURATION, { mode: 'keep' });
 
     await proxyManager.syncToggleState(true);
+
     assert.deepEqual(proxyManager.getState(), { isEnabled: true, hasConfiguration: true });
+    assert.deepEqual(httpSettings.updates, []);
+    assert.deepEqual(globalState.store.get('proxyToggler.savedProxy'), CONFIGURATION);
   });
 
-  it('throws when toggling without a saved configuration', async () => {
-    const globalState = createMemento();
-    const keychain = createKeychainStub();
-    const httpConfiguration = createHttpConfigurationStub();
-    const proxyManager = new ProxyManager(globalState, keychain, httpConfiguration);
+  it('keeps state fields it does not manage, such as ones written by another version', async () => {
+    const { globalState, proxyManager } = setup();
+    await proxyManager.saveConfiguration(CONFIGURATION, { mode: 'keep' });
+    globalState.store.set('proxyToggler.state', {
+      isEnabled: true,
+      hasConfiguration: false,
+      lastProfile: 'work'
+    });
 
-    await assert.rejects(() => proxyManager.toggleProxy(), Error);
+    await proxyManager.syncToggleState(false);
+
+    assert.deepEqual(globalState.store.get('proxyToggler.state'), {
+      isEnabled: false,
+      hasConfiguration: true,
+      lastProfile: 'work'
+    });
+  });
+
+  describe('isConfigurationApplied', () => {
+    it('is false when nothing is saved', () => {
+      assert.equal(setup().proxyManager.isConfigurationApplied(), false);
+    });
+
+    it('compares the bypass list entry by entry, whatever its shape', async () => {
+      const { proxyManager } = setup({
+        http: {
+          current: {
+            proxy: CONFIGURATION.proxyUrl,
+            proxyStrictSSL: true,
+            noProxy: [' localhost ']
+          }
+        }
+      });
+      await proxyManager.saveConfiguration(CONFIGURATION, { mode: 'keep' });
+
+      assert.equal(proxyManager.isConfigurationApplied(), true);
+    });
+
+    it('is false when any applied value differs', async () => {
+      const { proxyManager } = setup({
+        http: { current: { proxy: CONFIGURATION.proxyUrl, proxyStrictSSL: false, noProxy: [] } }
+      });
+      await proxyManager.saveConfiguration(CONFIGURATION, { mode: 'keep' });
+
+      assert.equal(proxyManager.isConfigurationApplied(), false);
+    });
   });
 });
-
-function createMemento(): MementoStub & { updateCalls: Array<{ key: string; value: unknown }> } {
-  const store = new Map<string, unknown>();
-  const updateCalls: Array<{ key: string; value: unknown }> = [];
-
-  return {
-    updateCalls,
-    get: <T>(key: string): T | undefined => store.get(key) as T | undefined,
-    update: async (key: string, value: unknown): Promise<void> => {
-      updateCalls.push({ key, value });
-      store.set(key, value);
-    }
-  };
-}
-
-function createKeychainStub(options?: { hasCredentials?: boolean }): KeychainService & {
-  storeCalls: ProxyCredentials[];
-  clearCalls: number;
-} {
-  const storeCalls: ProxyCredentials[] = [];
-  let clearCalls = 0;
-
-  return {
-    storeCalls,
-    get clearCalls(): number {
-      return clearCalls;
-    },
-    storeCredentials: async (username?: string, password?: string): Promise<void> => {
-      storeCalls.push({ username: username ?? '', password: password ?? '' });
-    },
-    retrieveCredentials: async (): Promise<ProxyCredentials | undefined> => undefined,
-    clearCredentials: async (): Promise<void> => {
-      clearCalls += 1;
-    },
-    hasCredentials: async (): Promise<boolean> => options?.hasCredentials ?? false
-  } as unknown as KeychainService & { storeCalls: ProxyCredentials[]; clearCalls: number };
-}
-
-function createHttpConfigurationStub(options?: { failKey?: 'proxy' | 'proxyStrictSSL' | 'noProxy' }): HttpConfiguration & {
-  updateCalls: Array<{ key: string; value: string | boolean | undefined }>;
-} {
-  const updateCalls: Array<{ key: string; value: string | boolean | undefined }> = [];
-
-  return {
-    updateCalls,
-    update: async (
-      key: 'proxy' | 'proxyStrictSSL' | 'noProxy',
-      value: string | boolean | undefined
-    ): Promise<void> => {
-      updateCalls.push({ key, value });
-      if (options?.failKey === key) {
-        throw new Error(`Failed to update ${key}`);
-      }
-    }
-  };
-}

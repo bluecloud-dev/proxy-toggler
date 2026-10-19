@@ -13,26 +13,21 @@
   },
   "icon": "assets/icon.png",
   "engines": {
-    "vscode": "^1.85.0"
+    "vscode": "^1.91.0"
   },
   "categories": [
     "Other"
   ],
-  "main": "./out/src/extension.js",
+  "main": "./dist/extension.js",
   "files": [
-    "out/src/**",
+    "dist/**",
     "assets/**",
     "LICENSE",
     "package.nls.json",
     "README.md",
     "CHANGELOG.md"
   ],
-  "activationEvents": [
-    "onCommand:proxyToggler.configure",
-    "onCommand:proxyToggler.enable",
-    "onCommand:proxyToggler.disable",
-    "onCommand:proxyToggler.toggle"
-  ],
+  "activationEvents": [],
   "contributes": {
     "commands": [
       {
@@ -76,17 +71,19 @@
     }
   },
   "scripts": {
-    "build": "tsc -p .",
-    "bundle": "node ./esbuild.js --production",
-    "bundle:watch": "node ./esbuild.js --watch",
+    "build": "npm run typecheck && node ./esbuild.js",
+    "watch": "node ./esbuild.js --watch",
+    "check": "npm run format:check && npm run lint && npm run lint:unused && npm run typecheck && npm run coverage",
     "check:no-telemetry": "node ./scripts/check-no-telemetry.cjs",
-    "lint": "eslint src tests --ext .ts",
-    "test": "npm run test:unit",
-    "test:unit": "mocha -r ts-node/register \"tests/unit/**/*.test.ts\" \"tests/security/**/*.test.ts\"",
-    "test:integration": "npm run build && ts-node ./tests/run-test.ts",
-    "coverage": "node -r ./scripts/patch-os-cpus.cjs ./node_modules/nyc/bin/nyc.js npm run test:unit",
-    "prepublish": "npm run lint && npm run test && npm run build && npm run bundle",
-    "vscode:prepublish": "npm run build && npm run bundle",
+    "format": "prettier --write .",
+    "format:check": "prettier --check .",
+    "lint": "eslint src tests scripts esbuild.js eslint.config.mjs",
+    "lint:unused": "knip",
+    "typecheck": "tsc -p . --noEmit",
+    "test": "mocha",
+    "test:integration": "node ./esbuild.js && tsc -p . && ts-node ./tests/run-test.ts",
+    "coverage": "node -r ./scripts/patch-os-cpus.cjs ./node_modules/nyc/bin/nyc.js npm test",
+    "vscode:prepublish": "npm run typecheck && node ./esbuild.js --production",
     "package": "node -r ./scripts/patch-os-cpus.cjs ./node_modules/@vscode/vsce/vsce package"
   },
   "nyc": {
@@ -104,7 +101,8 @@
       "**/*.d.ts",
       "out/**",
       "dist/**",
-      "tests/**"
+      "tests/**",
+      "src/extension.ts"
     ],
     "include": [
       "src/**"
@@ -120,22 +118,33 @@
     "instrument": true
   },
   "devDependencies": {
+    "@eslint/js": "^10.0.1",
     "@types/mocha": "^10.0.10",
-    "@types/node": "^18.19.76",
+    "@types/node": "^20.19.43",
     "@types/sinon": "^17.0.4",
-    "@types/vscode": "^1.85.0",
-    "@typescript-eslint/eslint-plugin": "^8.16.0",
-    "@typescript-eslint/parser": "^8.16.0",
-    "@vscode/test-electron": "^2.5.2",
+    "@types/vscode": "1.91.0",
+    "@vscode/test-electron": "^3.1.0",
     "@vscode/vsce": "^3.2.2",
     "esbuild": "^0.27.2",
-    "eslint": "^8.57.1",
-    "eslint-config-prettier": "^9.1.0",
-    "mocha": "^10.8.2",
+    "eslint": "^10.13.0",
+    "eslint-config-prettier": "^10.1.8",
+    "eslint-plugin-simple-import-sort": "^14.0.0",
+    "globals": "^17.13.0",
+    "knip": "^6.42.0",
+    "mocha": "^11.8.0",
     "nyc": "^17.1.0",
-    "prettier": "^3.4.2",
+    "prettier": "3.9.10",
     "sinon": "^19.0.2",
     "ts-node": "^10.9.2",
-    "typescript": "^5.7.2"
+    "typescript": "^5.9.3",
+    "typescript-eslint": "^8.71.2"
+  },
+  "overrides": {
+    "serialize-javascript": "^7.0.5"
+  },
+  "allowScripts": {
+    "@vscode/vsce-sign": false,
+    "esbuild": false,
+    "keytar": false
   }
 }

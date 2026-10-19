@@ -1,12 +1,22 @@
-node_modules/
-dist/
-out/
-build/
-coverage/
-*.min.js
-*.vsix
-
-package-lock.json
-yarn.lock
-pnpm-lock.yaml
-
+# Prettier formats only the paths re-included below, so `npm run format` never
+# rewrites untracked local files. Add new top-level files or folders here.
+/*
+!/.github/
+!/scripts/
+!/src/
+!/tests/
+!/.mocharc.json
+!/.pre-commit-config.yaml
+!/.prettierrc
+!/ARCHITECTURE.md
+!/CHANGELOG.md
+!/QUALITY_BASELINE.md
+!/README.md
+!/REFACTOR_REPORT.md
+!/TESTING.md
+!/esbuild.js
+!/eslint.config.mjs
+!/knip.json
+!/package.json
+!/package.nls.json
+!/tsconfig.json

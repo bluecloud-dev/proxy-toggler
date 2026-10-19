@@ -1,3 +1,4 @@
+// The extension collects no telemetry; fail if a telemetry SDK enters the dependency tree.
 const fs = require('node:fs');
 const path = require('node:path');
 
@@ -8,10 +9,7 @@ const bannedPackages = new Set([
   '@microsoft/applicationinsights-core-js'
 ]);
 
-/**
- * @param {string} modulePath The `package-lock.json` "packages" key path.
- * @returns {string | undefined}
- */
+// Lockfile keys look like "node_modules/a/node_modules/b"; the last segment names the package.
 function getPackageNameFromLockPath(modulePath) {
   if (!modulePath.includes('node_modules/')) {
     return undefined;
@@ -21,10 +19,6 @@ function getPackageNameFromLockPath(modulePath) {
   return parts.length ? parts[parts.length - 1] : undefined;
 }
 
-/**
- * @param {unknown} value
- * @returns {Record<string, unknown>}
- */
 function asRecord(value) {
   if (value && typeof value === 'object') {
     return value;
@@ -33,11 +27,6 @@ function asRecord(value) {
   return {};
 }
 
-/**
- * @param {string} lockPath Absolute path to `package-lock.json`.
- * @returns {string[]} Sorted list of banned packages found.
- * @throws {Error} If the lockfile cannot be read or parsed.
- */
 function findBannedPackages(lockPath) {
   const lockText = fs.readFileSync(lockPath, 'utf8');
   const lock = JSON.parse(lockText);
@@ -77,4 +66,3 @@ if (found.length === 0) {
 console.error('Telemetry dependencies are not allowed in this project.');
 console.error(`Found: ${found.join(', ')}`);
 process.exit(1);
-

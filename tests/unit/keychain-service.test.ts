@@ -1,33 +1,35 @@
 import { strict as assert } from 'node:assert';
 
-import { KeychainError, KeychainErrorReason, KeychainService } from '../../src/services/keychain-service';
-import { ValidationError } from '../../src/services/validation-service';
-
-type SecretsStub = {
-  get: (key: string) => Promise<string | undefined>;
-  store: (key: string, value: string) => Promise<void>;
-  delete: (key: string) => Promise<void>;
-};
+import {
+  KeychainError,
+  KeychainErrorReason,
+  KeychainService
+} from '../../src/core/keychain-service';
+import { ValidationError } from '../../src/core/validation';
+import { createSecretStorage } from '../support/fakes';
 
 describe('KeychainService', () => {
-  it('stores, retrieves, and clears credentials', async () => {
-    const secrets = createSecretsStub();
+  it('stores trimmed credentials under stable keys and clears them', async () => {
+    const secrets = createSecretStorage();
     const service = new KeychainService(secrets);
-
     assert.equal(await service.hasCredentials(), false);
-    assert.equal(await service.retrieveCredentials(), undefined);
 
     await service.storeCredentials(' alice ', ' secret ');
+
     assert.equal(await service.hasCredentials(), true);
-    assert.deepEqual(await service.retrieveCredentials(), { username: 'alice', password: 'secret' });
+    assert.deepEqual(Object.fromEntries(secrets.values), {
+      'proxyToggler.credentials.username': 'alice',
+      'proxyToggler.credentials.password': 'secret'
+    });
 
     await service.clearCredentials();
+
     assert.equal(await service.hasCredentials(), false);
-    assert.equal(await service.retrieveCredentials(), undefined);
+    assert.equal(secrets.values.size, 0);
   });
 
   it('rejects mismatched username/password', async () => {
-    const secrets = createSecretsStub();
+    const secrets = createSecretStorage();
     const service = new KeychainService(secrets);
 
     await assert.rejects(() => service.storeCredentials('alice', undefined), ValidationError);
@@ -35,9 +37,7 @@ describe('KeychainService', () => {
   });
 
   it('maps keychain errors by operation and reason', async () => {
-    const locked = createSecretsStub({
-      storeError: new Error('Keychain is locked')
-    });
+    const locked = createSecretStorage(new Map(), { store: new Error('Keychain is locked') });
 
     const lockedService = new KeychainService(locked);
     await assert.rejects(
@@ -46,14 +46,13 @@ describe('KeychainService', () => {
         assert.ok(error instanceof KeychainError);
         assert.equal(error.operation, 'store');
         assert.equal(error.reason, KeychainErrorReason.LOCKED);
+        assert.match(String(error.cause), /Keychain is locked/);
         assert.match(error.toUserMessage(), /locked/i);
         return true;
       }
     );
 
-    const denied = createSecretsStub({
-      deleteError: new Error('Permission denied')
-    });
+    const denied = createSecretStorage(new Map(), { delete: new Error('Permission denied') });
 
     const deniedService = new KeychainService(denied);
     await deniedService.storeCredentials('alice', 'secret');
@@ -69,9 +68,7 @@ describe('KeychainService', () => {
       }
     );
 
-    const unavailable = createSecretsStub({
-      getError: new Error('Service not available')
-    });
+    const unavailable = createSecretStorage(new Map(), { get: new Error('Service not available') });
 
     const unavailableService = new KeychainService(unavailable);
     await assert.rejects(
@@ -85,13 +82,11 @@ describe('KeychainService', () => {
       }
     );
 
-    const unknown = createSecretsStub({
-      getError: new Error('Something went wrong')
-    });
+    const unknown = createSecretStorage(new Map(), { get: new Error('Something went wrong') });
 
     const unknownService = new KeychainService(unknown);
     await assert.rejects(
-      () => unknownService.retrieveCredentials(),
+      () => unknownService.hasCredentials(),
       (error: unknown) => {
         assert.ok(error instanceof KeychainError);
         assert.equal(error.operation, 'retrieve');
@@ -102,32 +97,3 @@ describe('KeychainService', () => {
     );
   });
 });
-
-function createSecretsStub(errors?: {
-  getError?: Error;
-  storeError?: Error;
-  deleteError?: Error;
-}): SecretsStub {
-  const store = new Map<string, string>();
-
-  return {
-    get: async (key: string): Promise<string | undefined> => {
-      if (errors?.getError) {
-        throw errors.getError;
-      }
-      return store.get(key);
-    },
-    store: async (key: string, value: string): Promise<void> => {
-      if (errors?.storeError) {
-        throw errors.storeError;
-      }
-      store.set(key, value);
-    },
-    delete: async (key: string): Promise<void> => {
-      if (errors?.deleteError) {
-        throw errors.deleteError;
-      }
-      store.delete(key);
-    }
-  };
-}

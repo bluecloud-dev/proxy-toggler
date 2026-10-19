@@ -1,52 +1,41 @@
-/* eslint-disable no-console */
-
+const fs = require('node:fs');
 const path = require('node:path');
 
 const esbuild = require('esbuild');
 
-/**
- * Bundles the VS Code extension entrypoint for production packaging.
- *
- * @param {string[]} args CLI args (e.g., `--watch`, `--production`).
- * @returns {Promise<void>}
- * @throws {Error} If bundling fails.
- * @example
- * ```sh
- * node esbuild.js --production
- * ```
- */
-async function bundleExtension(args) {
-  const isProduction = args.includes('--production');
-  const isWatch = args.includes('--watch');
+const production = process.argv.includes('--production');
+const watch = process.argv.includes('--watch');
 
-  const entryPoint = path.join(__dirname, 'src', 'extension.ts');
-  const outfile = path.join(__dirname, 'out', 'src', 'extension.js');
+async function main() {
+  // Start from an empty folder so files from earlier builds are never packaged.
+  fs.rmSync(path.join(__dirname, 'dist'), { recursive: true, force: true });
 
-  const buildOptions = {
-    entryPoints: [entryPoint],
-    outfile,
+  const context = await esbuild.context({
+    absWorkingDir: __dirname,
+    entryPoints: ['src/extension.ts'],
+    outfile: 'dist/extension.js',
     bundle: true,
-    platform: 'node',
     format: 'cjs',
-    target: 'node18',
-    sourcemap: true,
-    minify: isProduction,
+    platform: 'node',
+    // VS Code 1.91, the engines.vscode minimum, runs extensions on Node 20.9.
+    target: 'node20',
     external: ['vscode'],
+    minify: production,
+    sourcemap: !production,
+    sourcesContent: false,
     logLevel: 'info'
-  };
+  });
 
-  if (!isWatch) {
-    await esbuild.build(buildOptions);
+  if (watch) {
+    await context.watch();
     return;
   }
 
-  const context = await esbuild.context(buildOptions);
-  await context.watch();
-  console.log('esbuild: watching for changes...');
+  await context.rebuild();
+  await context.dispose();
 }
 
-bundleExtension(process.argv.slice(2)).catch((error) => {
-  console.error('esbuild: failed to bundle extension.', error);
+main().catch((error) => {
+  console.error(error);
   process.exitCode = 1;
 });
-

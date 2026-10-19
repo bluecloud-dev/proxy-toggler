@@ -1,87 +1,31 @@
-import type { ProxyConfiguration, ProxyCredentials } from '../types/proxy-configuration';
-import type { ProxyManager } from '../services/proxy-manager';
-import { KeychainError } from '../services/keychain-service';
-import { ValidationError, ValidationService } from '../services/validation-service';
-import type {
-  NotificationAction,
-  NotificationService as NotificationServiceService
-} from '../ui/notification-service';
+import type { QuickPickItem } from 'vscode';
 
-const DEFAULT_NO_PROXY = 'localhost,127.0.0.1';
+import { KeychainError } from '../core/keychain-service';
+import { DEFAULT_NO_PROXY } from '../core/no-proxy';
+import type { CredentialsUpdate, ProxyManager } from '../core/proxy-manager';
+import {
+  validateCredentials,
+  validateNoProxyList,
+  validateProxyUrl,
+  ValidationError
+} from '../core/validation';
+import type { VscodeApi } from '../vscode/api';
+import type { NotificationAction, Notifier } from '../vscode/notification-service';
+import { COMMANDS } from './command-ids';
+
+// Stored credentials are never read back for display; the UI shows only this mask.
 const MASKED_CREDENTIALS_PLACEHOLDER = '••••••';
-
-type InputBoxOptions = {
-  prompt: string;
-  value?: string;
-  placeHolder?: string;
-  password?: boolean;
-  ignoreFocusOut?: boolean;
-  validateInput?: (value: string) => string | undefined;
-};
-
-type QuickPickItem = {
-  label: string;
-  description?: string;
-  detail?: string;
-};
-
-type QuickPickOptions = {
-  placeHolder?: string;
-  ignoreFocusOut?: boolean;
-};
-
-type VscodeApi = {
-  l10n: {
-    t: (message: string, ...args: (string | number)[]) => string;
-  };
-  window: {
-    showInputBox: (options: InputBoxOptions) => Promise<string | undefined>;
-    showQuickPick: <T extends QuickPickItem>(
-      items: readonly T[],
-      options: QuickPickOptions
-    ) => Promise<T | undefined>;
-  };
-  commands: {
-    executeCommand: (command: string, ...args: unknown[]) => PromiseLike<unknown>;
-  };
-};
-
-type CredentialsUpdate =
-  | { mode: 'keep' }
-  | { mode: 'clear' }
-  | { mode: 'set'; credentials: ProxyCredentials };
-
-type NotificationService = Pick<
-  NotificationServiceService,
-  'showSuccess' | 'showWarning' | 'showError'
->;
-
-type RefreshUi = () => Promise<void>;
 
 const ACTION_ENABLE: NotificationAction = { id: 'enable', title: 'Enable' };
 const ACTION_NOT_NOW: NotificationAction = { id: 'notNow', title: 'Not Now' };
 
-/**
- * Prompts the user to configure proxy settings and saves them securely.
- *
- * Credentials are stored in SecretStorage (OS keychain) and are never displayed back to the user.
- *
- * @param vscodeApi VS Code API surface used for prompts and command execution.
- * @param proxyManager ProxyManager instance.
- * @param notificationService Notification helper (localized UI).
- * @param refreshUi Callback to refresh status bar and context keys.
- * @returns void
- * @throws {Error} If VS Code APIs reject unexpectedly.
- * @example
- * ```ts
- * await configureProxyCommand(vscode, proxyManager, notifications, refreshUi);
- * ```
- */
+type ConfigureApi = Pick<VscodeApi, 'commands' | 'l10n' | 'window'>;
+
 export async function configureProxyCommand(
-  vscodeApi: VscodeApi,
-  proxyManager: ProxyManager,
-  notificationService: NotificationService,
-  refreshUi: RefreshUi
+  vscodeApi: ConfigureApi,
+  proxyManager: Pick<ProxyManager, 'loadConfiguration' | 'saveConfiguration'>,
+  notificationService: Notifier,
+  refreshUi: () => Promise<void>
 ): Promise<void> {
   const existing = await proxyManager.loadConfiguration();
 
@@ -104,19 +48,13 @@ export async function configureProxyCommand(
     return;
   }
 
-  const noProxyInput = await promptForNoProxy(vscodeApi, existing?.noProxy);
-  if (noProxyInput === undefined) {
+  const noProxy = await promptForNoProxy(vscodeApi, existing?.noProxy);
+  if (noProxy === undefined) {
     return;
   }
 
-  const configuration: ProxyConfiguration = {
-    proxyUrl,
-    strictSSL,
-    noProxy: normalizeNoProxy(noProxyInput)
-  };
-
   try {
-    await saveConfiguration(proxyManager, configuration, credentialsUpdate);
+    await proxyManager.saveConfiguration({ proxyUrl, strictSSL, noProxy }, credentialsUpdate);
   } catch (error: unknown) {
     await showConfigurationSaveError(notificationService, error);
     return;
@@ -130,73 +68,61 @@ export async function configureProxyCommand(
   );
 
   if (enableNow === ACTION_ENABLE.id) {
-    await vscodeApi.commands.executeCommand('proxyToggler.enable');
+    await vscodeApi.commands.executeCommand(COMMANDS.enable);
   }
 }
 
-async function promptForProxyUrl(vscodeApi: VscodeApi, initialValue?: string): Promise<string | undefined> {
+async function promptForProxyUrl(
+  vscodeApi: ConfigureApi,
+  initialValue?: string
+): Promise<string | undefined> {
   return vscodeApi.window.showInputBox({
     prompt: vscodeApi.l10n.t('Enter proxy URL (e.g., http://proxy.example.com:8080)'),
     placeHolder: vscodeApi.l10n.t('http://proxy.example.com:8080'),
     ignoreFocusOut: true,
     value: initialValue,
-    validateInput: (value) => validateProxyUrlInput(vscodeApi, value)
+    validateInput: inputValidator(
+      vscodeApi,
+      validateProxyUrl,
+      vscodeApi.l10n.t('Invalid proxy URL')
+    )
   });
 }
 
-function validateProxyUrlInput(vscodeApi: VscodeApi, value: string): string | undefined {
-  try {
-    ValidationService.validateProxyUrl(value);
-    return undefined;
-  } catch (error: unknown) {
-    if (error instanceof ValidationError) {
-      return vscodeApi.l10n.t(error.message);
-    }
-    return vscodeApi.l10n.t('Invalid proxy URL');
-  }
-}
-
 async function promptForCredentialsUpdate(
-  vscodeApi: VscodeApi,
-  notificationService: NotificationService,
+  vscodeApi: ConfigureApi,
+  notificationService: Notifier,
   hasStoredCredentials: boolean
 ): Promise<CredentialsUpdate | undefined> {
-  if (hasStoredCredentials) {
-    return promptForCredentialAction(vscodeApi, notificationService);
+  if (!hasStoredCredentials) {
+    return promptForNewCredentials(vscodeApi, notificationService, {
+      usernamePrompt: vscodeApi.l10n.t('Enter proxy username (leave empty if no authentication)'),
+      whenUsernameEmpty: { mode: 'keep' }
+    });
   }
 
-  const username = await promptForUsername(vscodeApi);
-  if (username === undefined) {
+  const choice = await vscodeApi.window.showQuickPick(storedCredentialChoices(vscodeApi), {
+    placeHolder: vscodeApi.l10n.t('Proxy authentication credentials')
+  });
+  if (!choice) {
     return undefined;
   }
 
-  if (username.trim().length === 0) {
-    return { mode: 'keep' };
+  if (choice.id !== 'set') {
+    return { mode: choice.id };
   }
 
-  const password = await promptForPassword(vscodeApi);
-  if (password === undefined) {
-    return undefined;
-  }
-
-  try {
-    ValidationService.validateCredentials(username, password);
-  } catch (error: unknown) {
-    await showValidationError(notificationService, error);
-    return undefined;
-  }
-
-  return { mode: 'set', credentials: { username, password } };
+  return promptForNewCredentials(vscodeApi, notificationService, {
+    usernamePrompt: vscodeApi.l10n.t('Enter proxy username (leave empty to remove credentials)'),
+    whenUsernameEmpty: { mode: 'clear' }
+  });
 }
 
-async function promptForCredentialAction(
-  vscodeApi: VscodeApi,
-  notificationService: NotificationService
-): Promise<CredentialsUpdate | undefined> {
-  const items = [
+function storedCredentialChoices(vscodeApi: ConfigureApi) {
+  return [
     {
       label: vscodeApi.l10n.t('Keep existing credentials'),
-      description: vscodeApi.l10n.t(`Stored: ${MASKED_CREDENTIALS_PLACEHOLDER}`),
+      description: vscodeApi.l10n.t('Stored: {0}', MASKED_CREDENTIALS_PLACEHOLDER),
       detail: vscodeApi.l10n.t('Keep the saved username/password unchanged.'),
       id: 'keep'
     },
@@ -213,42 +139,44 @@ async function promptForCredentialAction(
       id: 'clear'
     }
   ] as const;
+}
 
-  const choice = await vscodeApi.window.showQuickPick(items, {
-    placeHolder: vscodeApi.l10n.t('Proxy authentication credentials')
-  });
-
-  if (!choice) {
-    return undefined;
-  }
-
-  if (choice.id === 'keep') {
-    return { mode: 'keep' };
-  }
-
-  if (choice.id === 'clear') {
-    return { mode: 'clear' };
-  }
-
-  const username = await promptForUsername(vscodeApi, {
-    prompt: vscodeApi.l10n.t('Enter proxy username (leave empty to remove credentials)')
+async function promptForNewCredentials(
+  vscodeApi: ConfigureApi,
+  notificationService: Notifier,
+  options: { usernamePrompt: string; whenUsernameEmpty: CredentialsUpdate }
+): Promise<CredentialsUpdate | undefined> {
+  const username = await vscodeApi.window.showInputBox({
+    prompt: options.usernamePrompt,
+    placeHolder: vscodeApi.l10n.t('username (optional)'),
+    ignoreFocusOut: true
   });
   if (username === undefined) {
     return undefined;
   }
 
   if (username.trim().length === 0) {
-    return { mode: 'clear' };
+    return options.whenUsernameEmpty;
   }
 
-  const password = await promptForPassword(vscodeApi);
+  const password = await vscodeApi.window.showInputBox({
+    prompt: vscodeApi.l10n.t('Enter proxy password'),
+    placeHolder: vscodeApi.l10n.t('password'),
+    password: true,
+    ignoreFocusOut: true,
+    validateInput: (value) =>
+      value.trim().length === 0 ? vscodeApi.l10n.t('Password is required') : undefined
+  });
   if (password === undefined) {
     return undefined;
   }
 
   try {
-    ValidationService.validateCredentials(username, password);
+    validateCredentials(username, password);
   } catch (error: unknown) {
+    if (!(error instanceof ValidationError)) {
+      throw error;
+    }
     await showValidationError(notificationService, error);
     return undefined;
   }
@@ -256,52 +184,10 @@ async function promptForCredentialAction(
   return { mode: 'set', credentials: { username, password } };
 }
 
-async function promptForUsername(
-  vscodeApi: VscodeApi,
-  overrides?: Pick<InputBoxOptions, 'prompt'>
-): Promise<string | undefined> {
-  return vscodeApi.window.showInputBox({
-    prompt:
-      overrides?.prompt ?? vscodeApi.l10n.t('Enter proxy username (leave empty if no authentication)'),
-    placeHolder: vscodeApi.l10n.t('username (optional)'),
-    ignoreFocusOut: true
-  });
-}
-
-async function promptForPassword(vscodeApi: VscodeApi): Promise<string | undefined> {
-  return vscodeApi.window.showInputBox({
-    prompt: vscodeApi.l10n.t('Enter proxy password'),
-    placeHolder: vscodeApi.l10n.t('password'),
-    password: true,
-    ignoreFocusOut: true,
-    validateInput: (value) => validatePasswordInput(vscodeApi, value)
-  });
-}
-
-function validatePasswordInput(vscodeApi: VscodeApi, value: string): string | undefined {
-  if (value.trim().length === 0) {
-    return vscodeApi.l10n.t('Password is required');
-  }
-  return undefined;
-}
-
 async function promptForStrictSSL(
-  vscodeApi: VscodeApi,
+  vscodeApi: ConfigureApi,
   initialValue?: boolean
 ): Promise<boolean | undefined> {
-  const items = buildStrictSSLItems(vscodeApi, initialValue);
-
-  const choice = await vscodeApi.window.showQuickPick(items, {
-    placeHolder: vscodeApi.l10n.t('Verify SSL/TLS certificates?')
-  });
-
-  return choice?.value;
-}
-
-function buildStrictSSLItems(
-  vscodeApi: VscodeApi,
-  initialValue?: boolean
-): Array<QuickPickItem & { value: boolean }> {
   const yes = {
     label: vscodeApi.l10n.t('Yes'),
     value: true,
@@ -312,60 +198,53 @@ function buildStrictSSLItems(
     value: false,
     description: vscodeApi.l10n.t('Skip SSL verification (insecure)')
   };
+  // The current choice comes first so that Enter keeps it.
+  const items: Array<QuickPickItem & { value: boolean }> =
+    initialValue === false ? [no, yes] : [yes, no];
 
-  if (initialValue === false) {
-    return [no, yes];
-  }
-
-  return [yes, no];
+  const choice = await vscodeApi.window.showQuickPick(items, {
+    placeHolder: vscodeApi.l10n.t('Verify SSL/TLS certificates?')
+  });
+  return choice?.value;
 }
 
-async function promptForNoProxy(vscodeApi: VscodeApi, initialValue?: string): Promise<string | undefined> {
+async function promptForNoProxy(
+  vscodeApi: ConfigureApi,
+  initialValue?: string
+): Promise<string | undefined> {
   return vscodeApi.window.showInputBox({
     prompt: vscodeApi.l10n.t('Enter domains/IPs to bypass proxy (comma-separated, optional)'),
     placeHolder: DEFAULT_NO_PROXY,
     ignoreFocusOut: true,
     value: initialValue ?? DEFAULT_NO_PROXY,
-    validateInput: (value) => validateNoProxyInput(vscodeApi, value)
+    validateInput: inputValidator(
+      vscodeApi,
+      validateNoProxyList,
+      vscodeApi.l10n.t('Invalid bypass pattern')
+    )
   });
 }
 
-function validateNoProxyInput(vscodeApi: VscodeApi, value: string): string | undefined {
-  try {
-    ValidationService.validateNoProxyPattern(value);
-    return undefined;
-  } catch (error: unknown) {
-    if (error instanceof ValidationError) {
-      return vscodeApi.l10n.t(error.message);
+// Adapts a throwing validator to VS Code's validateInput, which returns a message or undefined.
+function inputValidator(
+  vscodeApi: ConfigureApi,
+  validate: (value: string) => void,
+  fallbackMessage: string
+): (value: string) => string | undefined {
+  return (value) => {
+    try {
+      validate(value);
+      return undefined;
+    } catch (error: unknown) {
+      return error instanceof ValidationError ? vscodeApi.l10n.t(error.message) : fallbackMessage;
     }
-    return vscodeApi.l10n.t('Invalid bypass pattern');
-  }
+  };
 }
 
-function normalizeNoProxy(value: string): string {
-  const trimmed = value.trim();
-  return trimmed.length > 0 ? trimmed : DEFAULT_NO_PROXY;
-}
-
-async function saveConfiguration(
-  proxyManager: ProxyManager,
-  configuration: ProxyConfiguration,
-  credentialsUpdate: CredentialsUpdate
+async function showConfigurationSaveError(
+  notificationService: Notifier,
+  error: unknown
 ): Promise<void> {
-  if (credentialsUpdate.mode === 'keep') {
-    await proxyManager.saveConfiguration({ configuration });
-    return;
-  }
-
-  if (credentialsUpdate.mode === 'clear') {
-    await proxyManager.saveConfiguration({ configuration, clearCredentials: true });
-    return;
-  }
-
-  await proxyManager.saveConfiguration({ configuration, credentials: credentialsUpdate.credentials });
-}
-
-async function showConfigurationSaveError(notificationService: NotificationService, error: unknown): Promise<void> {
   if (error instanceof ValidationError) {
     await showValidationError(notificationService, error);
     return;
@@ -376,15 +255,13 @@ async function showConfigurationSaveError(notificationService: NotificationServi
     return;
   }
 
-  await notificationService.showError('Failed to save proxy configuration.');
+  throw error;
 }
 
-async function showValidationError(notificationService: NotificationService, error: unknown): Promise<void> {
-  if (error instanceof ValidationError) {
-    const message = error.examples?.length ? `${error.message} Examples: ${error.examples.join(', ')}` : error.message;
-    await notificationService.showError(message);
-    return;
-  }
-
-  await notificationService.showError('Invalid configuration input.');
+async function showValidationError(
+  notificationService: Notifier,
+  error: ValidationError
+): Promise<void> {
+  const examples = error.examples?.length ? ` Examples: ${error.examples.join(', ')}` : '';
+  await notificationService.showError(`${error.message}${examples}`);
 }

@@ -1,428 +1,205 @@
 import { strict as assert } from 'node:assert';
 
-import type {
-  LoadedProxyConfiguration,
-  SaveConfigurationOptions
-} from '../../src/services/proxy-manager';
+import type { QuickPickItem } from 'vscode';
+
 import { configureProxyCommand } from '../../src/commands/configure-proxy';
-import { KeychainError, KeychainErrorReason } from '../../src/services/keychain-service';
-import { ValidationError } from '../../src/services/validation-service';
-import type { NotificationAction } from '../../src/ui/notification-service';
+import { KeychainError, KeychainErrorReason } from '../../src/core/keychain-service';
+import type { ProxyConfiguration } from '../../src/core/proxy-configuration';
+import type { CredentialsUpdate, LoadedProxyConfiguration } from '../../src/core/proxy-manager';
+import { ValidationError } from '../../src/core/validation';
+import { createFakeVscode } from '../support/fake-vscode';
+import { createNotificationRecorder } from '../support/fakes';
 
-type VscodeApiStub = Parameters<typeof configureProxyCommand>[0];
-type ProxyManagerParam = Parameters<typeof configureProxyCommand>[1];
+const PROXY_URL = 'http://proxy.example.com:8080';
 
-describe('configureProxyCommand', () => {
-  it('saves configuration with defaults when user skips credentials', async () => {
-    const inputs = ['http://proxy.example.com:8080', '', ''];
-    const infoMessages: Array<{ message: string; actions: NotificationAction[] }> = [];
-    const executedCommands: string[] = [];
-    let refreshed = 0;
+type Pick = (items: readonly QuickPickItem[]) => QuickPickItem | undefined;
 
-    const proxyManager = createProxyManagerStub();
-    const vscodeApi = createVscodeApiStub({
-      inputs,
-      onExecuteCommand: (command) => {
-        executedCommands.push(command);
-      },
-      onQuickPick: (items) => findByValue(items, true)
-    });
-    const notificationService = createNotificationServiceStub({
-      onSuccess: async (message, actions) => {
-        infoMessages.push({ message, actions });
-        return 'notNow';
-      }
-    });
+type Scenario = {
+  inputs: Array<string | undefined>;
+  // In order: the stored-credentials action (asked only when credentials exist), then strict SSL.
+  picks: Pick[];
+  existing?: LoadedProxyConfiguration;
+  saveError?: Error;
+  notificationAnswer?: string;
+};
 
-    await configureProxyCommand(
-      vscodeApi,
-      proxyManager as unknown as ProxyManagerParam,
-      notificationService,
-      async () => {
-        refreshed += 1;
-      }
-    );
+const strictSSL =
+  (value: boolean): Pick =>
+  (items) =>
+    items.find((item) => (item as { value?: boolean }).value === value);
 
-    assert.equal(proxyManager.saveCalls.length, 1);
-    assert.deepEqual(proxyManager.saveCalls[0], {
-      configuration: {
-        proxyUrl: 'http://proxy.example.com:8080',
-        strictSSL: true,
-        noProxy: 'localhost,127.0.0.1'
-      }
-    });
+const itemAt =
+  (index: number): Pick =>
+  (items) =>
+    items[index];
 
-    assert.equal(infoMessages.length, 1);
-    assert.match(infoMessages[0].message, /saved/i);
-    assert.equal(executedCommands.length, 0);
-    assert.equal(refreshed, 1);
+const storedCredentials: LoadedProxyConfiguration = {
+  proxyUrl: PROXY_URL,
+  strictSSL: true,
+  noProxy: 'localhost',
+  hasStoredCredentials: true
+};
+
+async function runConfigure(scenario: Scenario) {
+  const saveCalls: Array<{ configuration: ProxyConfiguration; credentials: CredentialsUpdate }> =
+    [];
+  let refreshes = 0;
+  const vscode = createFakeVscode({
+    inputs: scenario.inputs,
+    pick: (items, index) => scenario.picks[index]?.(items)
   });
-
-  it('saves configuration with credentials when provided', async () => {
-    const inputs = ['http://proxy.example.com:8080', 'alice', 'secret', ''];
-    let refreshed = 0;
-
-    const proxyManager = createProxyManagerStub();
-    const vscodeApi = createVscodeApiStub({
-      inputs,
-      onQuickPick: (items) => findByValue(items, true)
-    });
-    const notificationService = createNotificationServiceStub({
-      onSuccess: async (): Promise<string | undefined> => 'notNow'
-    });
-
-    await configureProxyCommand(
-      vscodeApi,
-      proxyManager as unknown as ProxyManagerParam,
-      notificationService,
-      async () => {
-        refreshed += 1;
+  const notifications = createNotificationRecorder(() => scenario.notificationAnswer);
+  const proxyManager = {
+    loadConfiguration: async () => scenario.existing,
+    saveConfiguration: async (
+      configuration: ProxyConfiguration,
+      credentials: CredentialsUpdate
+    ) => {
+      if (scenario.saveError) {
+        throw scenario.saveError;
       }
-    );
+      saveCalls.push({ configuration, credentials });
+    }
+  };
 
-    assert.equal(proxyManager.saveCalls.length, 1);
-    assert.deepEqual(proxyManager.saveCalls[0], {
-      configuration: {
-        proxyUrl: 'http://proxy.example.com:8080',
-        strictSSL: true,
-        noProxy: 'localhost,127.0.0.1'
-      },
-      credentials: {
-        username: 'alice',
-        password: 'secret'
-      }
-    });
-    assert.equal(refreshed, 1);
+  await configureProxyCommand(vscode, proxyManager, notifications, async () => {
+    refreshes += 1;
   });
-
-  it('can keep stored credentials without retrieving them', async () => {
-    const inputs = ['http://proxy.example.com:8080', 'localhost'];
-    let refreshed = 0;
-    const proxyManager = createProxyManagerStub({
-      loadResult: {
-        proxyUrl: 'http://proxy.example.com:8080',
-        strictSSL: false,
-        noProxy: 'localhost',
-        hasStoredCredentials: true
-      }
-    });
-
-    const vscodeApi = createVscodeApiStub({
-      inputs,
-      onQuickPick: (items, callIndex) => {
-        if (callIndex === 0) {
-          return items[0];
-        }
-        return findByValue(items, false);
-      }
-    });
-    const notificationService = createNotificationServiceStub({
-      onSuccess: async (): Promise<string | undefined> => 'notNow'
-    });
-
-    await configureProxyCommand(
-      vscodeApi,
-      proxyManager as unknown as ProxyManagerParam,
-      notificationService,
-      async () => {
-        refreshed += 1;
-      }
-    );
-
-    assert.equal(proxyManager.saveCalls.length, 1);
-    assert.deepEqual(proxyManager.saveCalls[0], {
-      configuration: {
-        proxyUrl: 'http://proxy.example.com:8080',
-        strictSSL: false,
-        noProxy: 'localhost'
-      }
-    });
-    assert.equal(refreshed, 1);
-  });
-
-  it('can remove stored credentials', async () => {
-    const inputs = ['http://proxy.example.com:8080', 'localhost'];
-    let refreshed = 0;
-    const proxyManager = createProxyManagerStub({
-      loadResult: {
-        proxyUrl: 'http://proxy.example.com:8080',
-        strictSSL: true,
-        noProxy: 'localhost',
-        hasStoredCredentials: true
-      }
-    });
-
-    const vscodeApi = createVscodeApiStub({
-      inputs,
-      onQuickPick: (items, callIndex) => {
-        if (callIndex === 0) {
-          return items[2];
-        }
-        return findByValue(items, true);
-      }
-    });
-    const notificationService = createNotificationServiceStub({
-      onSuccess: async (): Promise<string | undefined> => 'notNow'
-    });
-
-    await configureProxyCommand(
-      vscodeApi,
-      proxyManager as unknown as ProxyManagerParam,
-      notificationService,
-      async () => {
-        refreshed += 1;
-      }
-    );
-
-    assert.equal(proxyManager.saveCalls.length, 1);
-    assert.deepEqual(proxyManager.saveCalls[0], {
-      configuration: {
-        proxyUrl: 'http://proxy.example.com:8080',
-        strictSSL: true,
-        noProxy: 'localhost'
-      },
-      clearCredentials: true
-    });
-    assert.equal(refreshed, 1);
-  });
-
-  it('can update stored credentials when requested', async () => {
-    const inputs = ['http://proxy.example.com:8080', 'bob', 'secret', 'localhost'];
-    let refreshed = 0;
-    const proxyManager = createProxyManagerStub({
-      loadResult: {
-        proxyUrl: 'http://proxy.example.com:8080',
-        strictSSL: true,
-        noProxy: 'localhost',
-        hasStoredCredentials: true
-      }
-    });
-
-    const vscodeApi = createVscodeApiStub({
-      inputs,
-      onQuickPick: (items, callIndex) => {
-        if (callIndex === 0) {
-          return items[1];
-        }
-        return findByValue(items, true);
-      }
-    });
-    const notificationService = createNotificationServiceStub({
-      onSuccess: async (): Promise<string | undefined> => 'notNow'
-    });
-
-    await configureProxyCommand(
-      vscodeApi,
-      proxyManager as unknown as ProxyManagerParam,
-      notificationService,
-      async () => {
-        refreshed += 1;
-      }
-    );
-
-    assert.equal(proxyManager.saveCalls.length, 1);
-    assert.deepEqual(proxyManager.saveCalls[0], {
-      configuration: {
-        proxyUrl: 'http://proxy.example.com:8080',
-        strictSSL: true,
-        noProxy: 'localhost'
-      },
-      credentials: {
-        username: 'bob',
-        password: 'secret'
-      }
-    });
-    assert.equal(refreshed, 1);
-  });
-
-  it('executes enable command when user accepts the prompt', async () => {
-    const inputs = ['http://proxy.example.com:8080', '', 'localhost'];
-    const executedCommands: string[] = [];
-    let refreshed = 0;
-
-    const proxyManager = createProxyManagerStub();
-    const vscodeApi = createVscodeApiStub({
-      inputs,
-      onExecuteCommand: (command) => {
-        executedCommands.push(command);
-      },
-      onQuickPick: (items) => findByValue(items, true)
-    });
-    const notificationService = createNotificationServiceStub({
-      onSuccess: async (): Promise<string | undefined> => 'enable'
-    });
-
-    await configureProxyCommand(
-      vscodeApi,
-      proxyManager as unknown as ProxyManagerParam,
-      notificationService,
-      async () => {
-        refreshed += 1;
-      }
-    );
-
-    assert.deepEqual(executedCommands, ['proxyToggler.enable']);
-    assert.equal(refreshed, 1);
-  });
-
-  it('shows keychain errors without leaking secrets', async () => {
-    const inputs = ['http://proxy.example.com:8080', '', 'localhost'];
-    const errorMessages: string[] = [];
-    let refreshed = 0;
-
-    const proxyManager = createProxyManagerStub({
-      saveImplementation: async () => {
-        throw new KeychainError('store', KeychainErrorReason.PERMISSION_DENIED);
-      }
-    });
-
-    const vscodeApi = createVscodeApiStub({
-      inputs,
-      onQuickPick: (items) => findByValue(items, true)
-    });
-    const notificationService = createNotificationServiceStub({
-      onError: async (message) => {
-        errorMessages.push(message);
-      }
-    });
-
-    await configureProxyCommand(
-      vscodeApi,
-      proxyManager as unknown as ProxyManagerParam,
-      notificationService,
-      async () => {
-        refreshed += 1;
-      }
-    );
-
-    assert.equal(errorMessages.length, 1);
-    assert.match(errorMessages[0], /permission/i);
-    assert.doesNotMatch(errorMessages[0], /secret/i);
-    assert.equal(refreshed, 0);
-  });
-
-  it('shows validation errors from saveConfiguration', async () => {
-    const inputs = ['http://proxy.example.com:8080', '', 'localhost'];
-    const errorMessages: string[] = [];
-    let refreshed = 0;
-
-    const proxyManager = createProxyManagerStub({
-      saveImplementation: async () => {
-        throw new ValidationError('proxyUrl', 'URL is required', ['http://proxy.example.com:8080']);
-      }
-    });
-
-    const vscodeApi = createVscodeApiStub({
-      inputs,
-      onQuickPick: (items) => findByValue(items, true)
-    });
-    const notificationService = createNotificationServiceStub({
-      onError: async (message) => {
-        errorMessages.push(message);
-      }
-    });
-
-    await configureProxyCommand(
-      vscodeApi,
-      proxyManager as unknown as ProxyManagerParam,
-      notificationService,
-      async () => {
-        refreshed += 1;
-      }
-    );
-
-    assert.equal(errorMessages.length, 1);
-    assert.match(errorMessages[0], /invalid proxyurl/i);
-    assert.match(errorMessages[0], /examples/i);
-    assert.equal(refreshed, 0);
-  });
-});
-
-function createProxyManagerStub(options?: {
-  loadResult?: LoadedProxyConfiguration;
-  saveImplementation?: (options: SaveConfigurationOptions) => Promise<void>;
-}): {
-  saveCalls: SaveConfigurationOptions[];
-  loadConfiguration: () => Promise<LoadedProxyConfiguration | undefined>;
-  saveConfiguration: (options: SaveConfigurationOptions) => Promise<void>;
-} {
-  const saveCalls: SaveConfigurationOptions[] = [];
 
   return {
     saveCalls,
-    loadConfiguration: async (): Promise<LoadedProxyConfiguration | undefined> => options?.loadResult,
-    saveConfiguration: async (saveOptions: SaveConfigurationOptions): Promise<void> => {
-      if (options?.saveImplementation) {
-        await options.saveImplementation(saveOptions);
-        return;
-      }
-      saveCalls.push(saveOptions);
-    }
+    refreshes,
+    notifications: notifications.notifications,
+    executed: vscode.executedCommands.map((call) => call.command)
   };
 }
 
-function createVscodeApiStub(options: {
-  inputs: string[];
-  onExecuteCommand?: (command: string) => void;
-  onQuickPick: (
-    items: ReadonlyArray<Record<string, unknown>>,
-    callIndex: number
-  ) => Record<string, unknown> | undefined;
-}): VscodeApiStub {
-  let inputIndex = 0;
-  let quickPickIndex = 0;
+describe('configureProxyCommand', () => {
+  it('saves without credentials when the username is left empty', async () => {
+    const result = await runConfigure({ inputs: [PROXY_URL, '', ''], picks: [strictSSL(true)] });
 
-  return {
-    l10n: {
-      t: (message: string): string => message
-    },
-    window: {
-      showInputBox: async (inputOptions): Promise<string | undefined> => {
-        const value = options.inputs[inputIndex++];
-        if (typeof value === 'string' && inputOptions.validateInput) {
-          inputOptions.validateInput(value);
-        }
-        return value;
-      },
-      showQuickPick: async <T extends { label: string }>(items: readonly T[]): Promise<T | undefined> => {
-        const selected = options.onQuickPick(
-          items as unknown as ReadonlyArray<Record<string, unknown>>,
-          quickPickIndex++
-        );
-        return selected as T | undefined;
+    assert.deepEqual(result.saveCalls, [
+      {
+        configuration: { proxyUrl: PROXY_URL, strictSSL: true, noProxy: '' },
+        credentials: { mode: 'keep' }
       }
-    },
-    commands: {
-      executeCommand: async (command: string): Promise<unknown> => {
-        options.onExecuteCommand?.(command);
-        return undefined;
+    ]);
+    assert.deepEqual(
+      result.notifications.map((notification) => notification.message),
+      ['Proxy configuration saved. Enable now?']
+    );
+    assert.deepEqual(result.executed, []);
+    assert.equal(result.refreshes, 1);
+  });
+
+  it('saves credentials when both are entered', async () => {
+    const result = await runConfigure({
+      inputs: [PROXY_URL, 'alice', 'secret', ''],
+      picks: [strictSSL(true)]
+    });
+
+    assert.deepEqual(result.saveCalls, [
+      {
+        configuration: { proxyUrl: PROXY_URL, strictSSL: true, noProxy: '' },
+        credentials: { mode: 'set', credentials: { username: 'alice', password: 'secret' } }
       }
-    }
-  };
-}
+    ]);
+    assert.equal(result.refreshes, 1);
+  });
 
-function createNotificationServiceStub(options?: {
-  onSuccess?: (message: string, actions: NotificationAction[]) => Promise<string | undefined>;
-  onError?: (message: string, actions: NotificationAction[]) => Promise<void>;
-}): {
-  showSuccess: (message: string, ...actions: NotificationAction[]) => Promise<string | undefined>;
-  showWarning: (message: string, ...actions: NotificationAction[]) => Promise<string | undefined>;
-  showError: (message: string, ...actions: NotificationAction[]) => Promise<string | undefined>;
-} {
-  return {
-    showSuccess: async (message, ...actions) =>
-      options?.onSuccess ? options.onSuccess(message, actions) : undefined,
-    showWarning: async (): Promise<string | undefined> => undefined,
-    showError: async (message, ...actions) => {
-      await options?.onError?.(message, actions);
-      return undefined;
-    }
-  };
-}
+  it('keeps stored credentials without reading them', async () => {
+    const result = await runConfigure({
+      existing: storedCredentials,
+      inputs: [PROXY_URL, 'localhost'],
+      picks: [itemAt(0), strictSSL(false)]
+    });
 
-function findByValue(
-  items: ReadonlyArray<Record<string, unknown>>,
-  value: boolean
-): Record<string, unknown> | undefined {
-  return items.find((item) => item.value === value);
-}
+    assert.deepEqual(result.saveCalls, [
+      {
+        configuration: { proxyUrl: PROXY_URL, strictSSL: false, noProxy: 'localhost' },
+        credentials: { mode: 'keep' }
+      }
+    ]);
+  });
+
+  it('removes stored credentials', async () => {
+    const result = await runConfigure({
+      existing: storedCredentials,
+      inputs: [PROXY_URL, 'localhost'],
+      picks: [itemAt(2), strictSSL(true)]
+    });
+
+    assert.deepEqual(result.saveCalls, [
+      {
+        configuration: { proxyUrl: PROXY_URL, strictSSL: true, noProxy: 'localhost' },
+        credentials: { mode: 'clear' }
+      }
+    ]);
+  });
+
+  it('replaces stored credentials', async () => {
+    const result = await runConfigure({
+      existing: storedCredentials,
+      inputs: [PROXY_URL, 'bob', 'secret', 'localhost'],
+      picks: [itemAt(1), strictSSL(true)]
+    });
+
+    assert.deepEqual(result.saveCalls, [
+      {
+        configuration: { proxyUrl: PROXY_URL, strictSSL: true, noProxy: 'localhost' },
+        credentials: { mode: 'set', credentials: { username: 'bob', password: 'secret' } }
+      }
+    ]);
+  });
+
+  it('enables the proxy when the user accepts the follow-up prompt', async () => {
+    const result = await runConfigure({
+      inputs: [PROXY_URL, '', 'localhost'],
+      picks: [strictSSL(true)],
+      notificationAnswer: 'enable'
+    });
+
+    assert.deepEqual(result.executed, ['proxyToggler.enable']);
+    assert.equal(result.refreshes, 1);
+  });
+
+  it('shows keychain errors without leaking secrets', async () => {
+    const result = await runConfigure({
+      inputs: [PROXY_URL, '', 'localhost'],
+      picks: [strictSSL(true)],
+      saveError: new KeychainError('store', KeychainErrorReason.PERMISSION_DENIED)
+    });
+
+    const [error] = result.notifications;
+    assert.equal(result.notifications.length, 1);
+    assert.equal(error?.kind, 'error');
+    assert.match(error?.message ?? '', /permission/i);
+    assert.doesNotMatch(error?.message ?? '', /secret/i);
+    assert.equal(result.refreshes, 0);
+  });
+
+  it('shows validation errors with examples', async () => {
+    const result = await runConfigure({
+      inputs: [PROXY_URL, '', 'localhost'],
+      picks: [strictSSL(true)],
+      saveError: new ValidationError('proxyUrl', 'URL is required', [PROXY_URL])
+    });
+
+    const [error] = result.notifications;
+    assert.equal(result.notifications.length, 1);
+    assert.match(error?.message ?? '', /invalid proxyurl/i);
+    assert.match(error?.message ?? '', /examples/i);
+    assert.equal(result.refreshes, 0);
+  });
+
+  it('rethrows save errors it cannot explain', async () => {
+    await assert.rejects(
+      runConfigure({
+        inputs: [PROXY_URL, '', 'localhost'],
+        picks: [strictSSL(true)],
+        saveError: new Error('disk full')
+      }),
+      /disk full/
+    );
+  });
+});
