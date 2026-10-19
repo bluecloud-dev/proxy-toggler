@@ -10,7 +10,7 @@ const STORAGE_KEYS = {
   toggleState: 'proxyToggler.state'
 } as const;
 
-// Written in this order on enable and disable.
+// Written in this order on enable and disable, and restored in this order after a failed enable.
 const HTTP_SETTING_KEYS = ['proxy', 'proxyStrictSSL', 'noProxy'] as const;
 
 export type HttpSettingKey = (typeof HTTP_SETTING_KEYS)[number];
@@ -25,8 +25,11 @@ export type CredentialStore = Pick<
 >;
 
 export type HttpSettings = {
+  // Effective values, defaults and workspace settings included.
   read(): Record<HttpSettingKey, unknown>;
-  update(key: HttpSettingKey, value: string | boolean | undefined): Promise<void>;
+  // Values in user settings, the target that update writes; undefined where there is none.
+  readUserSettings(): Record<HttpSettingKey, unknown>;
+  update(key: HttpSettingKey, value: unknown): Promise<void>;
 };
 
 export type LoadedProxyConfiguration = ProxyConfiguration & {
@@ -40,7 +43,9 @@ export class ConfigurationError extends Error {
   constructor(
     public readonly operation: 'enable' | 'disable',
     public readonly key: HttpSettingKey,
-    options?: ErrorOptions
+    options?: ErrorOptions,
+    // Settings a failed enable could not restore, each with the error its restore raised.
+    public readonly restoreErrors: ReadonlyMap<HttpSettingKey, unknown> = new Map()
   ) {
     super(
       `Failed to ${operation} proxy: unable to update VS Code setting "${formatHttpSettingKey(key)}".`,
@@ -50,7 +55,15 @@ export class ConfigurationError extends Error {
   }
 
   toUserMessage(): string {
-    return `Unable to ${this.operation} the proxy because VS Code setting "${this.getSettingId()}" could not be updated. Your settings may be managed by policy.`;
+    const message = `Unable to ${this.operation} the proxy because VS Code setting "${this.getSettingId()}" could not be updated. Your settings may be managed by policy.`;
+    if (this.restoreErrors.size === 0) {
+      return message;
+    }
+
+    const unrestored = [...this.restoreErrors.keys()]
+      .map((key) => `"${formatHttpSettingKey(key)}"`)
+      .join(', ');
+    return `${message} Settings that could not be restored to their earlier values: ${unrestored}.`;
   }
 
   getSettingId(): string {
@@ -191,11 +204,15 @@ export class ProxyManager {
       throw new Error('No proxy configuration found');
     }
 
-    await this.writeHttpSettings('enable', {
-      proxy: configuration.proxyUrl,
-      proxyStrictSSL: configuration.strictSSL,
-      noProxy: configuration.noProxy
-    });
+    await this.writeHttpSettings(
+      'enable',
+      {
+        proxy: configuration.proxyUrl,
+        proxyStrictSSL: configuration.strictSSL,
+        noProxy: configuration.noProxy
+      },
+      this.httpSettings.readUserSettings()
+    );
     await this.writeState({ isEnabled: true });
   }
 
@@ -216,17 +233,39 @@ export class ProxyManager {
     await this.globalState.update(STORAGE_KEYS.toggleState, { ...this.getState(), ...change });
   }
 
+  // Given `previous`, a failed write first restores the settings already written, so enabling
+  // never leaves the proxy half applied. See ARCHITECTURE.md (Error model).
   private async writeHttpSettings(
     operation: ConfigurationError['operation'],
-    values: HttpSettingValues
+    values: HttpSettingValues,
+    previous?: Record<HttpSettingKey, unknown>
   ): Promise<void> {
-    for (const key of HTTP_SETTING_KEYS) {
+    for (const [index, key] of HTTP_SETTING_KEYS.entries()) {
       try {
         await this.httpSettings.update(key, values[key]);
       } catch (error: unknown) {
-        throw new ConfigurationError(operation, key, { cause: error });
+        const restoreErrors = previous
+          ? await this.restoreHttpSettings(HTTP_SETTING_KEYS.slice(0, index), previous)
+          : undefined;
+        throw new ConfigurationError(operation, key, { cause: error }, restoreErrors);
       }
     }
+  }
+
+  // Keeps going when a restore fails, so one failure does not leave the other settings changed.
+  private async restoreHttpSettings(
+    keys: readonly HttpSettingKey[],
+    previous: Record<HttpSettingKey, unknown>
+  ): Promise<Map<HttpSettingKey, unknown>> {
+    const restoreErrors = new Map<HttpSettingKey, unknown>();
+    for (const key of keys) {
+      try {
+        await this.httpSettings.update(key, previous[key]);
+      } catch (error: unknown) {
+        restoreErrors.set(key, error);
+      }
+    }
+    return restoreErrors;
   }
 }
 

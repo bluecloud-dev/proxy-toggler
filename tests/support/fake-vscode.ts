@@ -22,6 +22,8 @@ export type FakeVscodeOptions = {
   translate?: (message: string) => string;
   // Keyed by full setting id, for example 'http.proxy'.
   settings?: Record<string, unknown>;
+  // Registered defaults by full setting id; `get` falls back to them, as VS Code does.
+  defaults?: Record<string, unknown>;
 };
 
 export type FakeVscode = VscodeApi & {
@@ -40,6 +42,7 @@ export function createFakeVscode(options: FakeVscodeOptions = {}): FakeVscode {
   const executedCommands: FakeVscode['executedCommands'] = [];
   const messages: RecordedMessage[] = [];
   const settings = new Map(Object.entries(options.settings ?? {}));
+  const defaults = new Map(Object.entries(options.defaults ?? {}));
   const settingUpdates: FakeVscode['settingUpdates'] = [];
   const statusBarItems: FakeStatusBarItem[] = [];
   const logs: string[] = [];
@@ -57,8 +60,17 @@ export function createFakeVscode(options: FakeVscodeOptions = {}): FakeVscode {
   const getConfiguration = (section: string): WorkspaceConfiguration => {
     const id = (key: string): string => `${section}.${key}`;
     const configuration = {
-      get: (key: string, defaultValue?: unknown) =>
-        settings.has(id(key)) ? settings.get(id(key)) : defaultValue,
+      get: (key: string, defaultValue?: unknown) => {
+        if (settings.has(id(key))) {
+          return settings.get(id(key));
+        }
+        return defaults.has(id(key)) ? defaults.get(id(key)) : defaultValue;
+      },
+      inspect: (key: string) => ({
+        key: id(key),
+        defaultValue: defaults.get(id(key)),
+        globalValue: settings.get(id(key))
+      }),
       update: async (key: string, value: unknown, target?: unknown) => {
         settingUpdates.push({ id: id(key), value, target });
         if (value === undefined) {
@@ -68,7 +80,8 @@ export function createFakeVscode(options: FakeVscodeOptions = {}): FakeVscode {
         }
       }
     };
-    // `get` is overloaded in VS Code's typings; one implementation serves both overloads.
+    // `get` is overloaded and `inspect` is generic in VS Code's typings; one implementation
+    // serves every signature.
     return configuration as WorkspaceConfiguration;
   };
 

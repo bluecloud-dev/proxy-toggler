@@ -11,6 +11,13 @@ const CONFIGURATION = {
   noProxy: 'localhost'
 };
 
+// User settings that differ from CONFIGURATION, so a test can tell a restore from a clear.
+const PREVIOUS_SETTINGS = {
+  proxy: 'http://old.example.com:3128',
+  proxyStrictSSL: false,
+  noProxy: ['old.internal']
+};
+
 function createKeychainStub(hasCredentials = false) {
   const calls = { store: [] as ProxyCredentials[], clear: 0 };
   return {
@@ -139,6 +146,67 @@ describe('ProxyManager', () => {
         return true;
       }
     );
+  });
+
+  it('restores the settings it already wrote when a later write fails', async () => {
+    const { httpSettings, proxyManager } = setup({
+      http: { failKey: 'noProxy', current: PREVIOUS_SETTINGS }
+    });
+    await proxyManager.saveConfiguration(CONFIGURATION, { mode: 'keep' });
+
+    await assert.rejects(() => proxyManager.enableProxy(), ConfigurationError);
+
+    assert.deepEqual(httpSettings.current, PREVIOUS_SETTINGS);
+    assert.deepEqual(proxyManager.getState(), { isEnabled: false, hasConfiguration: true });
+  });
+
+  it('keeps restoring after a restore fails and names the settings it could not restore', async () => {
+    const { httpSettings, proxyManager } = setup({
+      http: {
+        current: PREVIOUS_SETTINGS,
+        // http.noProxy cannot be written, and writing the earlier http.proxy back fails too.
+        failWhen: ({ key, value }) =>
+          key === 'noProxy' || (key === 'proxy' && value === PREVIOUS_SETTINGS.proxy)
+      }
+    });
+    await proxyManager.saveConfiguration(CONFIGURATION, { mode: 'keep' });
+
+    await assert.rejects(
+      () => proxyManager.enableProxy(),
+      (error: unknown) => {
+        assert.ok(error instanceof ConfigurationError);
+        assert.equal(error.key, 'noProxy');
+        assert.match(String(error.cause), /Failed to update noProxy/);
+        assert.match(error.toUserMessage(), /"http\.proxy"/);
+        assert.doesNotMatch(error.toUserMessage(), /"http\.proxyStrictSSL"/);
+        assert.deepEqual([...error.restoreErrors.keys()], ['proxy']);
+        assert.match(String(error.restoreErrors.get('proxy')), /Failed to update proxy/);
+        return true;
+      }
+    );
+    assert.equal(httpSettings.current.proxy, CONFIGURATION.proxyUrl);
+    assert.equal(httpSettings.current.proxyStrictSSL, PREVIOUS_SETTINGS.proxyStrictSSL);
+  });
+
+  it('leaves the proxy cleared when a later write fails during disable', async () => {
+    const { httpSettings, proxyManager } = setup({
+      http: { failKey: 'proxyStrictSSL', current: PREVIOUS_SETTINGS }
+    });
+
+    await assert.rejects(
+      () => proxyManager.disableProxy(),
+      (error: unknown) => {
+        assert.ok(error instanceof ConfigurationError);
+        assert.equal(error.operation, 'disable');
+        assert.equal(error.key, 'proxyStrictSSL');
+        return true;
+      }
+    );
+    assert.deepEqual(httpSettings.current, {
+      proxy: undefined,
+      proxyStrictSSL: false,
+      noProxy: ['old.internal']
+    });
   });
 
   it('disables by clearing the http settings, then the state', async () => {

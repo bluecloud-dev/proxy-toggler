@@ -17,6 +17,14 @@ export function createHttpSettings(
         noProxy: http.get('noProxy')
       };
     },
+    readUserSettings: () => {
+      const http = httpConfiguration();
+      return {
+        proxy: http.inspect('proxy')?.globalValue,
+        proxyStrictSSL: http.inspect('proxyStrictSSL')?.globalValue,
+        noProxy: http.inspect('noProxy')?.globalValue
+      };
+    },
     update: async (key, value) => {
       // http.noProxy has been an array setting since VS Code 1.91 introduced it.
       const resolvedValue =

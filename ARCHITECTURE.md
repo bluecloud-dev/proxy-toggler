@@ -103,6 +103,22 @@ Credentials never go to `globalState`, settings, logs, or messages.
 
 Errors carry the original failure as the standard ES2022 `cause`.
 
+### Failed setting writes
+
+- Enabling writes `http.proxy`, `http.proxyStrictSSL`, and `http.noProxy` in that order, and
+  records `isEnabled` only after all three succeed.
+- If a write fails, `ProxyManager` writes the earlier user-settings values back to the settings it
+  already changed, then throws the `ConfigurationError` for the setting that failed. It reads the
+  earlier values with `inspect().globalValue`, not `get()`: `get()` returns defaults and
+  workspace values, and writing those back would copy them into user settings.
+- If writing an earlier value back fails too, `ProxyManager` still restores the other settings and
+  still throws the same `ConfigurationError`, because the setting that failed first is the one the
+  user can act on. The error's `restoreErrors` holds each setting it could not restore, with the
+  error that write raised, and its message names those settings.
+- Disabling has no rollback. It clears `http.proxy` first, so a partial disable leaves the proxy
+  off while the stored state still says enabled; the drift check offers to sync at the next
+  activation.
+
 ## Design decisions
 
 - **VS Code-shaped ports instead of custom wrappers.** The configure wizard calls `showInputBox`

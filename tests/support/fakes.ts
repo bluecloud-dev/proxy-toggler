@@ -52,11 +52,17 @@ export function createSecretStorage(
 
 export type FakeHttpSettings = HttpSettings & {
   current: Record<HttpSettingKey, unknown>;
-  updates: Array<{ key: HttpSettingKey; value: string | boolean | undefined }>;
+  updates: Array<{ key: HttpSettingKey; value: unknown }>;
 };
 
 export function createHttpSettings(
-  options: { failKey?: HttpSettingKey; current?: Partial<Record<HttpSettingKey, unknown>> } = {}
+  options: {
+    // Every write to this setting fails.
+    failKey?: HttpSettingKey;
+    // Writes it matches fail, for failures that depend on the value written.
+    failWhen?: (update: { key: HttpSettingKey; value: unknown }) => boolean;
+    current?: Partial<Record<HttpSettingKey, unknown>>;
+  } = {}
 ): FakeHttpSettings {
   const current = {
     proxy: undefined,
@@ -69,9 +75,11 @@ export function createHttpSettings(
     current,
     updates,
     read: () => ({ ...current }),
+    // Without defaults or workspace settings, user settings are the effective values.
+    readUserSettings: () => ({ ...current }),
     update: async (key, value) => {
       updates.push({ key, value });
-      if (options.failKey === key) {
+      if (options.failKey === key || options.failWhen?.({ key, value })) {
         throw new Error(`Failed to update ${key}`);
       }
       current[key] = value;
