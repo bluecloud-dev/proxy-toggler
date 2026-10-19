@@ -22,10 +22,18 @@ describe('status bar state', function () {
     });
 
     const showsState = async (command: string, text: RegExp, label: RegExp): Promise<void> => {
+      // The notifications are stubbed, so a failed command would otherwise only show as a wrong
+      // status; the message names the stored state and any error that was shown.
+      const shownErrors = vscode.window.showErrorMessage as unknown as sinon.SinonStub;
+      const errorsBefore = shownErrors.callCount;
       await vscode.commands.executeCommand(command);
       await api.refreshUi();
-      assert.match(api.getStatusBarText() ?? '', text);
-      assert.match(api.getStatusBarAccessibilityLabel() ?? '', label);
+      const details = `after ${command}: ${JSON.stringify({
+        state: api.getState(),
+        errors: shownErrors.args.slice(errorsBefore)
+      })}`;
+      assert.match(api.getStatusBarText() ?? '', text, details);
+      assert.match(api.getStatusBarAccessibilityLabel() ?? '', label, details);
     };
 
     await showsState('proxyToggler.disable', /proxy: off/i, /disabled/i);

@@ -76,6 +76,10 @@ reviewer checks it because no tool does yet.
 - **Configuration.** Read extension settings through the injected `workspace.getConfiguration`
   with an explicit default. Write `http.*` settings only through `vscode/http-settings.ts`, which
   always targets user (global) settings and writes `http.noProxy` as an array.
+- **Workspace Trust.** `capabilities` declares `untrustedWorkspaces` and `virtualWorkspaces`. A
+  change that reads workspace files or acts on a workspace-scoped setting must revisit that
+  declaration: use `limited` and list such settings in `restrictedConfigurations`. _Enforced by:_
+  `npm run test:packaged`, which runs the installed VSIX in Restricted Mode.
 - **Secrets.** Credentials live only in `context.secrets`; `globalState` and settings are
   plaintext. Display stored credentials only as a mask.
 - **Localization.** Pass string literals to `l10n.t`, with `{0}` placeholders for values, so
@@ -113,9 +117,15 @@ The extension has no webviews or custom editors today. If one is added:
 ## Dependency standards
 
 - **Runtime footprint:** no runtime dependencies. The VSIX ships one bundled file,
-  `dist/extension.js`. Adding a runtime dependency needs a stated reason.
+  `dist/extension.js`. Adding a runtime dependency needs a stated reason. _Enforced by:_
+  `npm run package`, which runs `scripts/check-package.cjs`: the package must hold exactly the
+  listed files, stay under 256 KiB, and carry the name, publisher, version, and `main` of
+  `package.json`.
 - **Pinning:** `package-lock.json` is committed and CI installs with `npm ci`. Prettier and
-  `@types/vscode` are pinned exactly; other dev dependencies use caret ranges.
+  `@types/vscode` are pinned exactly; other dev dependencies use caret ranges. Workflows pin every
+  action to a full commit SHA with the version in a comment, which Dependabot updates together;
+  pick a release at least two weeks old. Workflows default to a read-only token, check out
+  without persisting credentials, and set `timeout-minutes` on every job.
 - **Install scripts:** npm 11.19 and later block dependency install scripts unless
   `allowScripts` allows them. All three are denied (`esbuild`, `keytar`, `@vscode/vsce-sign`),
   because building, testing, and packaging work without them. Approve one only for a tool that
@@ -124,12 +134,17 @@ The extension has no webviews or custom editors today. If one is added:
   package cannot be upgraded, and record why. Current entry: `serialize-javascript` `^7.0.5`,
   because Mocha 11 pins `^6` and Mocha 12 cannot load in VS Code 1.91's extension host. Remove it
   when the runner moves to Mocha 12.
-- **Updates:** review `npm outdated` and GitHub Actions versions at least monthly, and before each
-  release. Upgrade one major version per change, with the full check suite and the integration
-  tests on both VS Code versions. A Dependabot configuration for npm and GitHub Actions is the
-  recommended next step (see the refactor report).
+- **Updates:** Dependabot (`.github/dependabot.yml`) opens weekly pull requests for npm and GitHub
+  Actions, grouping minor and patch updates. It skips `@types/vscode`, major updates of
+  `@types/node`, and major updates of Mocha, for the reasons above. Upgrade one major version per
+  change, with the full check suite and the integration tests on both VS Code versions. Merge
+  Dependabot pull requests yourself, not with the `@dependabot squash and merge` comment: a commit
+  that Dependabot authors runs its workflows with a read-only token, so the CodeQL upload fails
+  with "Resource not accessible by integration".
 - **Security scanning:** CI fails on high or critical advisories (`npm audit --audit-level=high`).
-  Fix moderate advisories when a non-major fix exists.
+  Fix moderate advisories when a non-major fix exists. `.github/workflows/security.yml` runs
+  CodeQL with the `security-extended` queries on the TypeScript and on the workflows, dependency
+  review on pull requests (failing on high severity), and OpenSSF Scorecard on `main` and weekly.
 - **Toolchain:** Node comes from `.nvmrc` (24 LTS), locally and in CI.
 
 ## Documentation conventions

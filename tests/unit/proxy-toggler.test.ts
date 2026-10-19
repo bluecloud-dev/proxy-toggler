@@ -138,6 +138,46 @@ describe('createProxyToggler', () => {
     assert.deepEqual(vscode.settings.get('http.noProxy'), ['localhost', '127.0.0.1']);
   });
 
+  describe('when VS Code echoes an older stored state after a newer write', () => {
+    // VS Code sends every change of the extension's state back to the extension host, and an echo
+    // of an earlier write can arrive after a newer one and replace it for a moment.
+    const STALE_ECHO = { isEnabled: false, hasConfiguration: true };
+
+    it('still shows the latest state', async () => {
+      const { vscode, context, api } = activateWith(
+        {},
+        {
+          'proxyToggler.savedProxy': SAVED_PROXY,
+          'proxyToggler.state': { isEnabled: false, hasConfiguration: true }
+        }
+      );
+
+      await vscode.commandHandlers.get(COMMANDS.enable)?.();
+      context.globalState.store.set('proxyToggler.state', STALE_ECHO);
+      await api.refreshUi();
+
+      assert.equal(api.getState().isEnabled, true);
+      assert.match(api.getStatusBarText() ?? '', /proxy: on/i);
+    });
+
+    it('toggles from the latest state, not from the echo', async () => {
+      const { vscode, context, api } = activateWith(
+        {},
+        {
+          'proxyToggler.savedProxy': SAVED_PROXY,
+          'proxyToggler.state': { isEnabled: false, hasConfiguration: true }
+        }
+      );
+
+      await vscode.commandHandlers.get(COMMANDS.toggle)?.();
+      context.globalState.store.set('proxyToggler.state', STALE_ECHO);
+      await vscode.commandHandlers.get(COMMANDS.toggle)?.();
+
+      assert.equal(api.getState().isEnabled, false);
+      assert.equal(vscode.settings.has('http.proxy'), false);
+    });
+  });
+
   it('shows the keychain message and logs when the keychain cannot be read', async () => {
     const vscode = createFakeVscode();
     const context = createExtensionContext({

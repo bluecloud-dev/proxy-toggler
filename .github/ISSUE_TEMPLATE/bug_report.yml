@@ -1,0 +1,51 @@
+name: Bug report
+description: Report something that did not work in Proxy Toggler.
+title: 'Bug: '
+labels: [bug]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thanks for helping improve Proxy Toggler. Remove proxy credentials, internal host names, and other private details from settings, screenshots, and logs before you post. Report security problems privately instead; see SECURITY.md.
+  - type: textarea
+    id: steps
+    attributes:
+      label: Steps to reproduce
+      description: Give the smallest set of steps that shows the problem.
+      placeholder: |
+        1. Run "Proxy Toggler: Configure Proxy Settings"
+        2. ...
+        3. ...
+    validations:
+      required: true
+  - type: textarea
+    id: actual
+    attributes:
+      label: What happened?
+      description: Include the message Proxy Toggler showed, if any.
+    validations:
+      required: true
+  - type: textarea
+    id: expected
+    attributes:
+      label: What did you expect?
+    validations:
+      required: true
+  - type: input
+    id: versions
+    attributes:
+      label: Proxy Toggler and VS Code versions
+      placeholder: Proxy Toggler 0.1.0; VS Code 1.xx.x
+    validations:
+      required: true
+  - type: input
+    id: platform
+    attributes:
+      label: Operating system
+      placeholder: Windows, macOS, or Linux, and the version if you know it
+  - type: textarea
+    id: output
+    attributes:
+      label: Proxy Toggler output
+      description: Lines from View > Output > Proxy Toggler, if any. Credentials are never logged, but check for host names you do not want to share.
+      render: text

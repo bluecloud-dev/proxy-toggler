@@ -1,0 +1,5 @@
+blank_issues_enabled: true
+contact_links:
+  - name: Report a security vulnerability
+    url: https://github.com/bluecloud-dev/proxy-toggler/security/advisories/new
+    about: Report vulnerabilities privately instead of in a public issue.

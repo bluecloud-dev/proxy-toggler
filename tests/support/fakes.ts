@@ -13,7 +13,10 @@ export function createMemento(store = new Map<string, unknown>()): FakeMemento {
   return {
     store,
     updates,
-    get: <T>(key: string): T | undefined => store.get(key) as T | undefined,
+    get: <T>(key: string, defaultValue?: T): T | undefined => {
+      const value = store.get(key) as T | undefined;
+      return value === undefined ? defaultValue : value;
+    },
     update: async (key: string, value: unknown): Promise<void> => {
       updates.push({ key, value });
       store.set(key, value);

@@ -6,10 +6,13 @@
   "publisher": "aymenhammouda",
   "private": true,
   "license": "MIT",
-  "homepage": "https://github.com/ayhammouda/proxy-toggler",
+  "homepage": "https://github.com/bluecloud-dev/proxy-toggler#readme",
   "repository": {
     "type": "git",
-    "url": "https://github.com/ayhammouda/proxy-toggler.git"
+    "url": "https://github.com/bluecloud-dev/proxy-toggler.git"
+  },
+  "bugs": {
+    "url": "https://github.com/bluecloud-dev/proxy-toggler/issues"
   },
   "icon": "assets/icon.png",
   "engines": {
@@ -28,6 +31,12 @@
     "CHANGELOG.md"
   ],
   "activationEvents": [],
+  "capabilities": {
+    "untrustedWorkspaces": {
+      "supported": true
+    },
+    "virtualWorkspaces": true
+  },
   "contributes": {
     "commands": [
       {
@@ -82,9 +91,10 @@
     "typecheck": "tsc -p . --noEmit",
     "test": "mocha",
     "test:integration": "node ./esbuild.js && tsc -p . && ts-node ./tests/run-test.ts",
+    "test:packaged": "tsc -p . && ts-node ./tests/run-packaged-test.ts",
     "coverage": "node -r ./scripts/patch-os-cpus.cjs ./node_modules/nyc/bin/nyc.js npm test",
     "vscode:prepublish": "npm run typecheck && node ./esbuild.js --production",
-    "package": "node -r ./scripts/patch-os-cpus.cjs ./node_modules/@vscode/vsce/vsce package"
+    "package": "node -r ./scripts/patch-os-cpus.cjs ./node_modules/@vscode/vsce/vsce package && node ./scripts/check-package.cjs"
   },
   "nyc": {
     "all": true,
@@ -137,7 +147,8 @@
     "sinon": "^19.0.2",
     "ts-node": "^10.9.2",
     "typescript": "^5.9.3",
-    "typescript-eslint": "^8.71.2"
+    "typescript-eslint": "^8.71.2",
+    "yauzl": "^2.10.0"
   },
   "overrides": {
     "serialize-javascript": "^7.0.5"

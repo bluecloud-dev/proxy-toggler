@@ -2,14 +2,18 @@
 
 ## Layers
 
-| Layer       | Location             | Runs in                                                    | Command                    |
-| ----------- | -------------------- | ---------------------------------------------------------- | -------------------------- |
-| Unit        | `tests/unit/`        | Node, with Mocha and ts-node, against fakes                | `npm test`                 |
-| Security    | `tests/security/`    | Same as unit                                               | `npm test`                 |
-| Integration | `tests/integration/` | A real VS Code Extension Development Host, on two versions | `npm run test:integration` |
+| Layer       | Location             | Runs in                                                        | Command                                    |
+| ----------- | -------------------- | -------------------------------------------------------------- | ------------------------------------------ |
+| Unit        | `tests/unit/`        | Node, with Mocha and ts-node, against fakes                    | `npm test`                                 |
+| Security    | `tests/security/`    | Same as unit                                                   | `npm test`                                 |
+| Integration | `tests/integration/` | A real VS Code Extension Development Host, on two versions     | `npm run test:integration`                 |
+| Packaged    | `tests/packaged/`    | A real VS Code with the VSIX installed, in an untrusted folder | `npm run package && npm run test:packaged` |
 
 `npm run check` runs the format check, lint, the unused-code check, the type check, and the unit
-and security tests with coverage. CI runs the same steps, then the integration tests.
+and security tests with coverage. CI runs the same steps, then the integration tests, the
+no-telemetry guard, the high-severity `npm audit`, and the packaged tests on the VSIX it built. On
+Windows and macOS, CI runs the integration and packaged tests too, because credential storage and
+settings files differ by operating system.
 
 ## Coverage
 
@@ -28,6 +32,17 @@ integration tests run it.
 - Every `*.test.ts` file under `tests/integration/` is loaded; `support.ts` holds shared helpers.
 - The tests change real user settings in the throwaway profile only.
 
+## Packaged tests
+
+- `tests/run-packaged-test.ts` installs the VSIX that `npm run package` built into a fresh
+  profile and opens an empty folder that nobody has trusted, so VS Code is in Restricted Mode. It
+  runs on the same two VS Code versions as the integration tests.
+- They test the installed package because VS Code ignores Workspace Trust for an extension loaded
+  with `--extensionDevelopmentPath`: the integration tests would pass even if the manifest did not
+  declare trust support. VS Code loads extension tests only in a development host, so the empty
+  extension in `tests/packaged/host/` loads `tests/packaged/index.ts`.
+- On Linux without a display, use `xvfb-run -a npm run test:packaged`.
+
 ## Writing tests
 
 - Use the shared fakes instead of writing new stubs:
@@ -36,6 +51,8 @@ integration tests run it.
     pass.
   - `tests/support/fakes.ts`: `createMemento`, `createSecretStorage`, `createHttpSettings`,
     `createNotificationRecorder`, `createExtensionContext`, and `flushBackgroundTasks`.
+- To simulate VS Code echoing an older stored state, set that state in the `store` of the fake
+  memento (`createMemento`) after the action under test.
 - To test what happens while a notification is open, return a promise from the `answer` option
   and settle it after the action under test. To make setting writes fail, pass `failKey` (every
   write to one setting) or `failWhen` (the writes it matches) to `createHttpSettings`.

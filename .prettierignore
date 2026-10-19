@@ -10,9 +10,11 @@
 !/.prettierrc
 !/ARCHITECTURE.md
 !/CHANGELOG.md
+!/CONTRIBUTING.md
 !/QUALITY_BASELINE.md
 !/README.md
 !/REFACTOR_REPORT.md
+!/SECURITY.md
 !/TESTING.md
 !/esbuild.js
 !/eslint.config.mjs
