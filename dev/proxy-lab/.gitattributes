@@ -1,0 +1,3 @@
+# The containers read these files as Linux files: a shell script or Squid configuration checked
+# out with CRLF line endings would break them.
+* text=auto eol=lf
