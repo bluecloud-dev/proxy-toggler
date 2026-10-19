@@ -106,8 +106,8 @@ The extension has no webviews or custom editors today. If one is added:
 
 - Unit and security tests cover `src/core`, `src/commands`, and the `src/vscode` adapters against
   the fakes in `tests/support/`. Integration tests cover activation, command registration, the
-  settings round trip, and the status bar in a real VS Code, on the minimum engine and on stable.
-  Details are in [TESTING.md](TESTING.md).
+  settings round trip, the status bar, and whether VS Code's traffic follows the proxy settings,
+  in a real VS Code, on the minimum engine and on stable. Details are in [TESTING.md](TESTING.md).
 - **Minimum coverage:** 80% for statements, branches, functions, and lines, enforced by
   `npm run coverage` in CI. Coverage must not drop in a change unless the drop is explained in
   that change.

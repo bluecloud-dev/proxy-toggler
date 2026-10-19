@@ -32,6 +32,61 @@ integration tests run it.
 - Every `*.test.ts` file under `tests/integration/` is loaded; `support.ts` holds shared helpers.
 - The tests change real user settings in the throwaway profile only.
 
+## Network tests
+
+`tests/integration/network.test.ts` checks that VS Code's traffic follows the settings the
+extension writes; the other integration tests only check the settings. It runs with them, on both
+VS Code versions, and sends requests from the extension host through a local proxy:
+
+- With the proxy enabled, a request for `http://origin.invalid/hello` reaches the proxy, which
+  answers it. After **Disable**, the same request goes direct, fails with `ENOTFOUND`, and the
+  proxy sees nothing new.
+- A host in the bypass list goes direct, while other hosts still go through the proxy.
+- An HTTPS request asks the proxy for a tunnel: `CONNECT origin.invalid:443`.
+- Credentials inside the `http.proxy` URL authenticate that `CONNECT`. The test writes
+  `http.proxy` itself, because the extension refuses credentials in the URL on purpose.
+- VS Code's own requests follow the setting too: a search in the Extensions view reaches the proxy
+  as a `CONNECT` to `marketplace.visualstudio.com`.
+
+The proxy is `tests/support/test-proxy.ts`, which has no dependencies. `startTestProxy()` listens
+on a free port of 127.0.0.1 and records every request as `{ method, url, host, authorized }`. It
+answers plain-HTTP proxy requests itself with `PROXY_ANSWER`, so no origin server is needed. It
+refuses `CONNECT` with 502, or tunnels it to the local port given as `tunnelTo`. With
+`credentials`, it answers 407 with `Proxy-Authenticate: Basic` until the right
+`Proxy-Authorization` arrives, on plain requests and on `CONNECT`. `close()` also closes open
+connections and tunnels. `tests/unit/test-proxy.test.ts` pins this behavior in plain Node.
+
+Rules for network tests:
+
+- Send requests to a `.invalid` host, which the proxy answers itself. Such a name never resolves,
+  so a request that skips the proxy fails. Loopback hosts do not work: VS Code never sends them
+  through a proxy, and the extension's default bypass list is `localhost,127.0.0.1`.
+- Assert only on the proxy's entries for your own host (`requestsFor(host)`). Once the proxy is
+  enabled, VS Code's own background traffic reaches it too; an assertion on the whole log broke on
+  VS Code 1.142.0.
+- Allow for VS Code's own processes to apply a settings change after the extension host does. For
+  a host without a proxy setting, the extension host asks the main process for a route and caches
+  the answer per host, so one request sent too early keeps the stale route. On 1.91.0, the first
+  requests after **Disable** still went through a proxy that an earlier test had enabled. The
+  tests therefore probe new `.invalid` names until one goes direct before they check the host
+  under test, and the test of VS Code's own traffic repeats its search.
+- Clean up in `afterEach`: disable the proxy, remove every `http.*` user setting the test set, and
+  close the servers. Disable before `sandbox.restore()`: otherwise a real "Proxy disabled"
+  notification waits for a click and the hook times out.
+- Generate credentials at run time, and commit no keys or certificates: GitGuardian and CodeQL
+  scan this public repository.
+- Do not assert that `http.proxyAuthorization` works: the extension host does not apply it. The
+  `lookupProxyAuthorization` of VS Code 1.91.0 only handles Kerberos and Negotiate challenges, and
+  an experiment saw a 407 with no `Proxy-Authorization` header even with the setting present.
+  This is known VS Code behavior.
+- Do not test `http.proxyStrictSSL` here: the extension host's network stack ignores it, and a
+  self-signed origin and a self-signed HTTPS proxy behaved the same with either value. VS Code's
+  own request service and some bundled extensions read it, so testing it needs another probe,
+  such as a Docker lab or the VS Code CLI.
+
+On a machine where `HTTP_PROXY` or `HTTPS_PROXY` is set, the checks that expect a direct request
+fail, because VS Code uses those variables when `http.proxy` is empty. CI runners set neither.
+
 ## Packaged tests
 
 - `tests/run-packaged-test.ts` installs the VSIX that `npm run package` built into a fresh
@@ -51,6 +106,8 @@ integration tests run it.
     pass.
   - `tests/support/fakes.ts`: `createMemento`, `createSecretStorage`, `createHttpSettings`,
     `createNotificationRecorder`, `createExtensionContext`, and `flushBackgroundTasks`.
+- For a test that needs a real proxy, use `startTestProxy()` from `tests/support/test-proxy.ts`
+  and follow the rules in [Network tests](#network-tests).
 - To simulate VS Code echoing an older stored state, set that state in the `store` of the fake
   memento (`createMemento`) after the action under test.
 - To test what happens while a notification is open, return a promise from the `answer` option
