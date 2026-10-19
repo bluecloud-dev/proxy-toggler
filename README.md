@@ -112,6 +112,8 @@ flowchart LR
 - **No credentials in plain text** — never written to `settings.json`, `globalState`, logs, or URLs
 - **No `http.proxyAuthorization`** header is set by this extension
 - VS Code/Electron may still prompt for authentication depending on your proxy configuration
+- **Works in Restricted Mode**: the extension reads no workspace files, so it stays available in folders you have not trusted
+- **Report vulnerabilities privately**; see [SECURITY.md](SECURITY.md)
 
 ## :wrench: Troubleshooting
 
@@ -159,15 +161,18 @@ npm run check
 | Unit and security tests                           | `npm test`                 |
 | The same, with the coverage gate                  | `npm run coverage`         |
 | Integration tests in VS Code (minimum and stable) | `npm run test:integration` |
-| Build the VSIX                                    | `npm run package`          |
+| Build the VSIX and check its contents             | `npm run package`          |
+| Run the built VSIX in Restricted Mode             | `npm run test:packaged`    |
 
-On Linux without a display, run the integration tests as `xvfb-run -a npm run test:integration`. The first run downloads VS Code into `.vscode-test/`.
+On Linux without a display, prefix the integration and packaged tests with `xvfb-run -a`. The first run downloads VS Code into `.vscode-test/`.
 
 ### Where to look next
 
 - [ARCHITECTURE.md](ARCHITECTURE.md): layers, persisted data, the error model, and design decisions.
 - [TESTING.md](TESTING.md): how the tests are organized, the shared fakes, and the manual QA checklist.
 - [QUALITY_BASELINE.md](QUALITY_BASELINE.md): the coding, TypeScript, extension, and dependency standards.
+- [CONTRIBUTING.md](CONTRIBUTING.md): what to read and run before a pull request.
+- [SECURITY.md](SECURITY.md): how to report a vulnerability, and the security controls with their tests.
 - [CHANGELOG.md](CHANGELOG.md): version history.
 
 ## :page_facing_up: License
@@ -177,7 +182,9 @@ On Linux without a display, run the integration tests as `xvfb-run -a npm run te
 ---
 
 <p align="center">
-  <a href="https://github.com/bluecloud-dev/proxy-toggler/issues">Report a Bug</a>
+  <a href="https://github.com/bluecloud-dev/proxy-toggler/issues/new?template=bug_report.yml">Report a Bug</a>
   ·
-  <a href="https://github.com/bluecloud-dev/proxy-toggler/issues">Request a Feature</a>
+  <a href="https://github.com/bluecloud-dev/proxy-toggler/issues/new?template=feature_request.yml">Request a Feature</a>
+  ·
+  <a href="https://github.com/bluecloud-dev/proxy-toggler/security/advisories/new">Report a Vulnerability</a>
 </p>
