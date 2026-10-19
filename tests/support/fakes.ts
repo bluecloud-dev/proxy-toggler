@@ -61,7 +61,11 @@ export function createHttpSettings(
     failKey?: HttpSettingKey;
     // Writes it matches fail, for failures that depend on the value written.
     failWhen?: (update: { key: HttpSettingKey; value: unknown }) => boolean;
+    // User settings; a key left out is unset.
     current?: Partial<Record<HttpSettingKey, unknown>>;
+    // What VS Code reports for a setting nobody has set: read() falls back to these, while
+    // readUserSettings() does not.
+    defaults?: Partial<Record<HttpSettingKey, unknown>>;
   } = {}
 ): FakeHttpSettings {
   const current = {
@@ -70,12 +74,16 @@ export function createHttpSettings(
     noProxy: undefined,
     ...options.current
   };
+  const defaults = options.defaults ?? {};
   const updates: FakeHttpSettings['updates'] = [];
   return {
     current,
     updates,
-    read: () => ({ ...current }),
-    // Without defaults or workspace settings, user settings are the effective values.
+    read: () => ({
+      proxy: current.proxy ?? defaults.proxy,
+      proxyStrictSSL: current.proxyStrictSSL ?? defaults.proxyStrictSSL,
+      noProxy: current.noProxy ?? defaults.noProxy
+    }),
     readUserSettings: () => ({ ...current }),
     update: async (key, value) => {
       updates.push({ key, value });

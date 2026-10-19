@@ -188,6 +188,45 @@ describe('ProxyManager', () => {
     assert.equal(httpSettings.current.proxyStrictSSL, PREVIOUS_SETTINGS.proxyStrictSSL);
   });
 
+  it('restores unset settings as unset, not as the defaults VS Code reports for them', async () => {
+    const { httpSettings, proxyManager } = setup({
+      http: { failKey: 'noProxy', defaults: { proxyStrictSSL: true } }
+    });
+    await proxyManager.saveConfiguration(CONFIGURATION, { mode: 'keep' });
+
+    await assert.rejects(() => proxyManager.enableProxy(), ConfigurationError);
+
+    assert.deepEqual(httpSettings.current, {
+      proxy: undefined,
+      proxyStrictSSL: undefined,
+      noProxy: undefined
+    });
+  });
+
+  it('finishes rolling back a failed enable before a disable queued behind it starts', async () => {
+    const { httpSettings, proxyManager } = setup({
+      http: {
+        current: PREVIOUS_SETTINGS,
+        // Only enable's write of http.noProxy fails; disable's clearing write succeeds.
+        failWhen: ({ key, value }) => key === 'noProxy' && value !== undefined
+      }
+    });
+    await proxyManager.saveConfiguration(CONFIGURATION, { mode: 'keep' });
+
+    const [enable, disable] = await Promise.allSettled([
+      proxyManager.enableProxy(),
+      proxyManager.disableProxy()
+    ]);
+
+    assert.equal(enable.status, 'rejected');
+    assert.equal(disable.status, 'fulfilled');
+    assert.deepEqual(httpSettings.current, {
+      proxy: undefined,
+      proxyStrictSSL: undefined,
+      noProxy: undefined
+    });
+  });
+
   it('leaves the proxy cleared when a later write fails during disable', async () => {
     const { httpSettings, proxyManager } = setup({
       http: { failKey: 'proxyStrictSSL', current: PREVIOUS_SETTINGS }
@@ -250,6 +289,34 @@ describe('ProxyManager', () => {
       ['proxy', 'proxyStrictSSL', 'noProxy', 'proxy', 'proxyStrictSSL', 'noProxy']
     );
     assert.deepEqual(proxyManager.getState(), { isEnabled: false, hasConfiguration: true });
+  });
+
+  it('finishes each kind of change before the next starts, even when the first is slow', async () => {
+    const slowKeychain = {
+      ...createKeychainStub(),
+      storeCredentials: async (): Promise<void> => {
+        await new Promise((resolve) => setImmediate(resolve));
+      }
+    };
+    const proxyManager = new ProxyManager(createMemento(), slowKeychain, createHttpSettings());
+    const finished: string[] = [];
+    const record = (name: string) => (): void => {
+      finished.push(name);
+    };
+
+    await Promise.all([
+      proxyManager
+        .saveConfiguration(CONFIGURATION, {
+          mode: 'set',
+          credentials: { username: 'alice', password: 'secret' }
+        })
+        .then(record('save')),
+      proxyManager.syncToggleState().then(record('sync')),
+      proxyManager.enableProxy().then(record('enable')),
+      proxyManager.disableProxy().then(record('disable'))
+    ]);
+
+    assert.deepEqual(finished, ['save', 'sync', 'enable', 'disable']);
   });
 
   it('runs a queued state change after the one before it fails', async () => {
