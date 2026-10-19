@@ -10,9 +10,10 @@
 | Packaged    | `tests/packaged/`    | A real VS Code with the VSIX installed, in an untrusted folder | `npm run package && npm run test:packaged` |
 
 `npm run check` runs the format check, lint, the unused-code check, the type check, and the unit
-and security tests with coverage. CI runs the same steps, then the integration tests, then the
-packaged tests on the VSIX it built. On Windows and macOS, CI runs the integration and packaged
-tests too, because credential storage and settings files differ by operating system.
+and security tests with coverage. CI runs the same steps, then the integration tests, the
+no-telemetry guard, the high-severity `npm audit`, and the packaged tests on the VSIX it built. On
+Windows and macOS, CI runs the integration and packaged tests too, because credential storage and
+settings files differ by operating system.
 
 ## Coverage
 
