@@ -15,6 +15,9 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 - Require VS Code 1.91 or later. Earlier releases have no `http.noProxy` setting, so enabling the
   proxy failed after `http.proxy` had already been written.
 - The extension package contains only the bundled `dist/extension.js` (12 files instead of 45).
+- The source repository moved to
+  [github.com/bluecloud-dev/proxy-toggler](https://github.com/bluecloud-dev/proxy-toggler); old
+  links redirect.
 
 ### Fixed
 

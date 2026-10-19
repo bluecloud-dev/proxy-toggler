@@ -1,14 +1,14 @@
 # Proxy Toggler
 
 <p align="center">
-  <a href="https://github.com/ayhammouda/proxy-toggler/actions/workflows/ci.yml">
-    <img src="https://github.com/ayhammouda/proxy-toggler/actions/workflows/ci.yml/badge.svg" alt="CI status">
+  <a href="https://github.com/bluecloud-dev/proxy-toggler/actions/workflows/ci.yml">
+    <img src="https://github.com/bluecloud-dev/proxy-toggler/actions/workflows/ci.yml/badge.svg" alt="CI status">
   </a>
-  <a href="https://github.com/ayhammouda/proxy-toggler/releases">
-    <img src="https://img.shields.io/github/v/release/ayhammouda/proxy-toggler?include_prereleases&label=release" alt="Latest release">
+  <a href="https://github.com/bluecloud-dev/proxy-toggler/releases">
+    <img src="https://img.shields.io/github/v/release/bluecloud-dev/proxy-toggler?include_prereleases&label=release" alt="Latest release">
   </a>
   <a href="LICENSE">
-    <img src="https://img.shields.io/github/license/ayhammouda/proxy-toggler" alt="License">
+    <img src="https://img.shields.io/github/license/bluecloud-dev/proxy-toggler" alt="License">
   </a>
 </p>
 
@@ -134,7 +134,7 @@ Open **View → Output** and pick **Proxy Toggler** in the dropdown. Errors are 
 You need Node.js 24 (the version in `.nvmrc`; run `nvm use` if you use nvm) and VS Code 1.91 or later.
 
 ```sh
-git clone https://github.com/ayhammouda/proxy-toggler.git
+git clone https://github.com/bluecloud-dev/proxy-toggler.git
 cd proxy-toggler
 npm ci
 npm run check
@@ -177,7 +177,7 @@ On Linux without a display, run the integration tests as `xvfb-run -a npm run te
 ---
 
 <p align="center">
-  <a href="https://github.com/ayhammouda/proxy-toggler/issues">Report a Bug</a>
+  <a href="https://github.com/bluecloud-dev/proxy-toggler/issues">Report a Bug</a>
   ·
-  <a href="https://github.com/ayhammouda/proxy-toggler/issues">Request a Feature</a>
+  <a href="https://github.com/bluecloud-dev/proxy-toggler/issues">Request a Feature</a>
 </p>

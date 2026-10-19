@@ -6,10 +6,13 @@
   "publisher": "aymenhammouda",
   "private": true,
   "license": "MIT",
-  "homepage": "https://github.com/ayhammouda/proxy-toggler",
+  "homepage": "https://github.com/bluecloud-dev/proxy-toggler#readme",
   "repository": {
     "type": "git",
-    "url": "https://github.com/ayhammouda/proxy-toggler.git"
+    "url": "https://github.com/bluecloud-dev/proxy-toggler.git"
+  },
+  "bugs": {
+    "url": "https://github.com/bluecloud-dev/proxy-toggler/issues"
   },
   "icon": "assets/icon.png",
   "engines": {
