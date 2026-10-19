@@ -21,6 +21,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 - The source repository moved to
   [github.com/bluecloud-dev/proxy-toggler](https://github.com/bluecloud-dev/proxy-toggler); old
   links redirect.
+- GitHub releases include a `SHA256SUMS` file for the VSIX.
 
 ### Fixed
 

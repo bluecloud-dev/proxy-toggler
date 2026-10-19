@@ -277,12 +277,17 @@ importance.
    made outside the extension with `onDidChangeConfiguration`.
 8. **Supply chain.** Actions are three major versions behind (`checkout`, `setup-node`, and
    `upload-artifact` v4 to v7; `action-gh-release` v2 to v3) and are not pinned to commit SHAs.
-   Add Dependabot for npm and GitHub Actions; a ready configuration is below.
+   Add Dependabot for npm and GitHub Actions; a ready configuration is below. _Done on branch
+   `chore/security-and-ci`: actions are on current releases pinned to commit SHAs, Dependabot
+   runs weekly, and the release workflow uses the `gh` CLI instead of `action-gh-release`._
 9. **Dev dependency majors.** nyc 18 (which clears the remaining moderate `uuid` advisory),
    `@vscode/vsce` 4, sinon 22, and a replacement for the unmaintained ts-node (tsx, or Node's own
    type stripping).
 10. **TypeScript 6 and 7.** The tsconfig is already compatible with TypeScript 6's deprecations.
-11. **Publishing.** Marketplace and Open VSX publishing from the release workflow.
+11. **Publishing.** Marketplace and Open VSX publishing from the release workflow. _Partly done on
+    branch `chore/security-and-ci`: a tag must name the `package.json` version, and the release
+    publishes the tested VSIX with its checksum to GitHub Releases. Marketplace publishing
+    (Muninn uses Entra OIDC instead of a token) and Open VSX publishing still need credentials._
 12. **Drift detection reads effective values.** Workspace settings can override the global
     settings the extension writes. `HttpSettings.readUserSettings()`, added for the enable
     rollback, reads the user-settings values the extension writes.
