@@ -76,6 +76,10 @@ reviewer checks it because no tool does yet.
 - **Configuration.** Read extension settings through the injected `workspace.getConfiguration`
   with an explicit default. Write `http.*` settings only through `vscode/http-settings.ts`, which
   always targets user (global) settings and writes `http.noProxy` as an array.
+- **Workspace Trust.** `capabilities` declares `untrustedWorkspaces` and `virtualWorkspaces`. A
+  change that reads workspace files or acts on a workspace-scoped setting must revisit that
+  declaration: use `limited` and list such settings in `restrictedConfigurations`. _Enforced by:_
+  `npm run test:packaged`, which runs the installed VSIX in Restricted Mode.
 - **Secrets.** Credentials live only in `context.secrets`; `globalState` and settings are
   plaintext. Display stored credentials only as a mask.
 - **Localization.** Pass string literals to `l10n.t`, with `{0}` placeholders for values, so

@@ -4,6 +4,8 @@ import * as path from 'node:path';
 
 import { runTests } from '@vscode/test-electron';
 
+import { versionsToTest } from './vscode-versions';
+
 const extensionDevelopmentPath = path.resolve(__dirname, '..');
 const extensionTestsPath = path.join(
   extensionDevelopmentPath,
@@ -17,16 +19,6 @@ async function main(): Promise<void> {
   for (const version of await versionsToTest()) {
     await runInFreshProfile(version);
   }
-}
-
-// The engines.vscode minimum catches use of newer APIs; stable catches host regressions.
-async function versionsToTest(): Promise<string[]> {
-  const manifestPath = path.join(extensionDevelopmentPath, 'package.json');
-  const manifest = JSON.parse(await fs.readFile(manifestPath, 'utf8')) as {
-    engines: { vscode: string };
-  };
-  const minimum = manifest.engines.vscode.replace(/^[^\d]*/, '');
-  return [minimum, 'stable'];
 }
 
 async function runInFreshProfile(version: string): Promise<void> {

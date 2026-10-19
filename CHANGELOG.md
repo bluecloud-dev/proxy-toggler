@@ -9,6 +9,9 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 ### Added
 
 - A **Proxy Toggler** output channel that logs unexpected errors. Credentials are never logged.
+- Proxy Toggler works in Restricted Mode, when a folder is not trusted, and in virtual
+  workspaces; VS Code used to disable it there. It reads no workspace files, and a workspace can
+  only turn the toggle confirmation on or off.
 
 ### Changed
 

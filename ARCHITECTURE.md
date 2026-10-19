@@ -126,6 +126,12 @@ Errors carry the original failure as the standard ES2022 `cause`.
   application-specific interface would add a parallel API without adding any guarantee.
 - **Minimum VS Code 1.91.** `http.noProxy` first shipped in 1.91; on older releases enabling the
   proxy cannot complete.
+- **Supported in Restricted Mode and virtual workspaces.** The extension reads no workspace files
+  and writes only user settings, `globalState`, and SecretStorage, so the manifest declares
+  `untrustedWorkspaces.supported: true` and `virtualWorkspaces: true`. In Restricted Mode VS Code
+  ignores workspace values of the `http.*` settings, which it marks restricted, so a workspace can
+  change only `proxyToggler.confirmBeforeToggle`, which adds or removes a confirmation prompt.
+  Without the declaration, VS Code disables the extension in every untrusted folder.
 - **Bypass list stored as a string.** The stored shape predates VS Code's array setting and is kept
   for compatibility; it is converted to an array when written.
 - **State changes run one at a time.** VS Code runs commands concurrently, and a double click on

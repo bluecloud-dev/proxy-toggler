@@ -1,0 +1,11 @@
+{
+  "name": "packaged-test-host",
+  "displayName": "Proxy Toggler packaged test host",
+  "description": "Empty development extension, so VS Code loads the tests for the installed VSIX.",
+  "version": "0.0.0",
+  "publisher": "proxy-toggler-tests",
+  "private": true,
+  "engines": {
+    "vscode": "^1.91.0"
+  }
+}
