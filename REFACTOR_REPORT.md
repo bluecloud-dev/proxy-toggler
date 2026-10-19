@@ -261,11 +261,14 @@ importance.
    asking for them.
 2. **Stale drift sync.** The drift check computes the applied state before awaiting the user's
    answer and writes it afterwards. If the user toggles in between, the write is stale. Recompute
-   after the answer.
+   after the answer. _Done on branch `fix/state-races`: `syncToggleState()` reads the settings
+   when it runs._
 3. **Concurrent commands.** Two quick toggles interleave read-modify-write cycles. Serialize state
-   transitions.
+   transitions. _Done on branch `fix/state-races`: `ProxyManager` runs state changes one at a
+   time._
 4. **Partial enable.** If the second or third `http.*` write fails, the earlier writes stay. Roll
-   them back, or report the partial state.
+   them back, or report the partial state. _Done on branch `fix/state-races`: a failed enable
+   restores the user-settings values it overwrote; see ARCHITECTURE.md (Error model)._
 5. **Passwords are trimmed** before storage, so leading or trailing spaces are lost.
 6. **Localization is only partly extractable.** There is no `l10n` bundle yet, and messages passed
    through `NotificationService`, as well as `ValidationError` text, reach `l10n.t` as variables.
@@ -281,7 +284,8 @@ importance.
 10. **TypeScript 6 and 7.** The tsconfig is already compatible with TypeScript 6's deprecations.
 11. **Publishing.** Marketplace and Open VSX publishing from the release workflow.
 12. **Drift detection reads effective values.** Workspace settings can override the global
-    settings the extension writes.
+    settings the extension writes. `HttpSettings.readUserSettings()`, added for the enable
+    rollback, reads the user-settings values the extension writes.
 
 A ready Dependabot configuration (`.github/dependabot.yml`):
 

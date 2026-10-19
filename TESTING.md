@@ -36,6 +36,9 @@ integration tests run it.
     pass.
   - `tests/support/fakes.ts`: `createMemento`, `createSecretStorage`, `createHttpSettings`,
     `createNotificationRecorder`, `createExtensionContext`, and `flushBackgroundTasks`.
+- To test what happens while a notification is open, return a promise from the `answer` option
+  and settle it after the action under test. To make setting writes fail, pass `failKey` (every
+  write to one setting) or `failWhen` (the writes it matches) to `createHttpSettings`.
 - Test through exported functions and classes, and assert on what the user or VS Code would see
   (messages, settings, persisted values), not on private state.
 - Keep one test file per source module, named after the module, and name each test after the
