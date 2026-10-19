@@ -1,9 +1,9 @@
 import * as fs from 'node:fs/promises';
-import * as os from 'node:os';
 import * as path from 'node:path';
 
 import { runVSCodeCommand } from '@vscode/test-electron';
 
+import { makeTempDir, removeTempDir } from './temp-dir';
 import { versionsToTest } from './vscode-versions';
 
 const root = path.resolve(__dirname, '..');
@@ -36,7 +36,7 @@ async function main(): Promise<void> {
 // package shows whether the manifest's trust declaration works. VS Code runs extension tests only
 // in a development host, so an empty development extension loads the tests.
 async function runInRestrictedMode(version: string, vsix: string): Promise<void> {
-  const temp = await fs.mkdtemp(path.join(os.tmpdir(), 'proxy-toggler-packaged-'));
+  const temp = await makeTempDir('pkg');
   const userDataDir = path.join(temp, 'user-data');
   const profile = [
     `--user-data-dir=${userDataDir}`,
@@ -66,11 +66,16 @@ async function runInRestrictedMode(version: string, vsix: string): Promise<void>
     );
     console.log(`The packaged extension works in Restricted Mode on VS Code ${version}.`);
   } finally {
-    await fs.rm(temp, { recursive: true, force: true });
+    await removeTempDir(temp);
   }
 }
 
-main().catch((error: unknown) => {
-  console.error('Packaged extension tests failed.', error);
-  process.exitCode = 1;
-});
+// runVSCodeCommand, unlike runTests, leaves VS Code's output pipes open, and on Windows they can
+// keep Node alive after the tests are done, so the process exits explicitly.
+main().then(
+  () => process.exit(0),
+  (error: unknown) => {
+    console.error('Packaged extension tests failed.', error);
+    process.exit(1);
+  }
+);

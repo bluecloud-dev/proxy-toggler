@@ -1,9 +1,8 @@
-import * as fs from 'node:fs/promises';
-import * as os from 'node:os';
 import * as path from 'node:path';
 
 import { runTests } from '@vscode/test-electron';
 
+import { makeTempDir, removeTempDir } from './temp-dir';
 import { versionsToTest } from './vscode-versions';
 
 const extensionDevelopmentPath = path.resolve(__dirname, '..');
@@ -22,8 +21,8 @@ async function main(): Promise<void> {
 }
 
 async function runInFreshProfile(version: string): Promise<void> {
-  const userDataDir = await fs.mkdtemp(path.join(os.tmpdir(), 'proxy-toggler-user-data-'));
-  const extensionsDir = await fs.mkdtemp(path.join(os.tmpdir(), 'proxy-toggler-extensions-'));
+  const userDataDir = await makeTempDir('data');
+  const extensionsDir = await makeTempDir('ext');
 
   try {
     await runTests({
@@ -33,8 +32,8 @@ async function runInFreshProfile(version: string): Promise<void> {
       launchArgs: ['--user-data-dir', userDataDir, '--extensions-dir', extensionsDir]
     });
   } finally {
-    await fs.rm(userDataDir, { recursive: true, force: true });
-    await fs.rm(extensionsDir, { recursive: true, force: true });
+    await removeTempDir(userDataDir);
+    await removeTempDir(extensionsDir);
   }
 }
 
