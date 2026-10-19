@@ -56,6 +56,8 @@ integration tests run it.
 - To test what happens while a notification is open, return a promise from the `answer` option
   and settle it after the action under test. To make setting writes fail, pass `failKey` (every
   write to one setting) or `failWhen` (the writes it matches) to `createHttpSettings`.
+- Answers in `inputs` run through the prompt's `validateInput`. One that it rejects throws,
+  because a user could not submit it in VS Code.
 - Test through exported functions and classes, and assert on what the user or VS Code would see
   (messages, settings, persisted values), not on private state.
 - Keep one test file per source module, named after the module, and name each test after the

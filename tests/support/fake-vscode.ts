@@ -13,7 +13,8 @@ type FakeStatusBarItem = StatusBarItem & {
 };
 
 export type FakeVscodeOptions = {
-  // Answers for successive showInputBox calls; each answer also runs through validateInput.
+  // Answers for successive showInputBox calls. Each answer runs through validateInput, and one it
+  // rejects throws: VS Code keeps the input box open, so that answer could never be submitted.
   inputs?: Array<string | undefined>;
   pick?: (items: readonly QuickPickItem[], callIndex: number) => QuickPickItem | undefined;
   // The button the user clicks for a notification; undefined means it was dismissed. A promise
@@ -135,8 +136,11 @@ export function createFakeVscode(options: FakeVscodeOptions = {}): FakeVscode {
       showWarningMessage: showMessage('warning'),
       showInputBox: async (inputOptions) => {
         const value = inputs.shift();
-        if (value !== undefined) {
-          await inputOptions.validateInput?.(value);
+        const rejection =
+          value === undefined ? undefined : await inputOptions.validateInput?.(value);
+        if (rejection) {
+          const reason = typeof rejection === 'string' ? rejection : rejection.message;
+          throw new Error(`The input box rejects the answer: ${reason}`);
         }
         return value;
       },

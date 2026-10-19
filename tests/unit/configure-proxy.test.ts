@@ -92,6 +92,19 @@ describe('configureProxyCommand', () => {
     assert.equal(result.refreshes, 1);
   });
 
+  it('saves a proxy URL on the scheme default port as typed', async () => {
+    const proxyUrl = 'http://proxy.example.com:80';
+
+    const result = await runConfigure({ inputs: [proxyUrl, '', ''], picks: [strictSSL(true)] });
+
+    assert.deepEqual(result.saveCalls, [
+      {
+        configuration: { proxyUrl, strictSSL: true, noProxy: '' },
+        credentials: { mode: 'keep' }
+      }
+    ]);
+  });
+
   it('saves credentials when both are entered', async () => {
     const result = await runConfigure({
       inputs: [PROXY_URL, 'alice', 'secret', ''],

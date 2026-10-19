@@ -41,6 +41,10 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 - A failed enable no longer leaves the proxy half applied. When VS Code refuses one of the
   `http.*` settings, for example because a policy manages it, Proxy Toggler restores the settings
   it had already changed. If it cannot restore one, the error message names it.
+- Configure now accepts a proxy URL with its scheme's default port, such as
+  `http://proxy.example.com:80` or `https://proxy.example.com:443`. It used to reject the URL with
+  "Port number is required", so an HTTP proxy on port 80 or an HTTPS proxy on port 443 could not
+  be configured.
 
 ## [0.1.0] - 2025-12-19
 
