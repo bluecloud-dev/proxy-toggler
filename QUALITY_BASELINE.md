@@ -131,12 +131,14 @@ The extension has no webviews or custom editors today. If one is added:
   package cannot be upgraded, and record why. Current entry: `serialize-javascript` `^7.0.5`,
   because Mocha 11 pins `^6` and Mocha 12 cannot load in VS Code 1.91's extension host. Remove it
   when the runner moves to Mocha 12.
-- **Updates:** review `npm outdated` and GitHub Actions versions at least monthly, and before each
-  release. Upgrade one major version per change, with the full check suite and the integration
-  tests on both VS Code versions. A Dependabot configuration for npm and GitHub Actions is the
-  recommended next step (see the refactor report).
+- **Updates:** Dependabot (`.github/dependabot.yml`) opens weekly pull requests for npm and GitHub
+  Actions, grouping minor and patch updates. It skips `@types/vscode`, major updates of
+  `@types/node`, and major updates of Mocha, for the reasons above. Upgrade one major version per
+  change, with the full check suite and the integration tests on both VS Code versions.
 - **Security scanning:** CI fails on high or critical advisories (`npm audit --audit-level=high`).
-  Fix moderate advisories when a non-major fix exists.
+  Fix moderate advisories when a non-major fix exists. `.github/workflows/security.yml` runs
+  CodeQL with the `security-extended` queries on the TypeScript and on the workflows, dependency
+  review on pull requests (failing on high severity), and OpenSSF Scorecard on `main` and weekly.
 - **Toolchain:** Node comes from `.nvmrc` (24 LTS), locally and in CI.
 
 ## Documentation conventions
