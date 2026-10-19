@@ -122,7 +122,10 @@ The extension has no webviews or custom editors today. If one is added:
   listed files, stay under 256 KiB, and carry the name, publisher, version, and `main` of
   `package.json`.
 - **Pinning:** `package-lock.json` is committed and CI installs with `npm ci`. Prettier and
-  `@types/vscode` are pinned exactly; other dev dependencies use caret ranges.
+  `@types/vscode` are pinned exactly; other dev dependencies use caret ranges. Workflows pin every
+  action to a full commit SHA with the version in a comment, which Dependabot updates together;
+  pick a release at least two weeks old. Workflows default to a read-only token, check out
+  without persisting credentials, and set `timeout-minutes` on every job.
 - **Install scripts:** npm 11.19 and later block dependency install scripts unless
   `allowScripts` allows them. All three are denied (`esbuild`, `keytar`, `@vscode/vsce-sign`),
   because building, testing, and packaging work without them. Approve one only for a tool that
