@@ -58,6 +58,9 @@ jobs:
       - name: VS Code integration tests (minimum engine and stable)
         run: xvfb-run -a npm run test:integration
 
+      - name: No-telemetry guard
+        run: npm run check:no-telemetry
+
       - name: Security audit
         run: npm audit --audit-level=high
 
@@ -110,7 +113,8 @@ jobs:
   publish:
     name: Publish GitHub release
     needs: build
-    if: github.ref_type == 'tag'
+    # A manual run started on a tag has ref_type 'tag' too, and must stay a rehearsal.
+    if: github.event_name == 'push' && github.ref_type == 'tag'
     runs-on: ubuntu-latest
     timeout-minutes: 10
     permissions:

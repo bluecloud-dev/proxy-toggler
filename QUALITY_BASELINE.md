@@ -137,7 +137,10 @@ The extension has no webviews or custom editors today. If one is added:
 - **Updates:** Dependabot (`.github/dependabot.yml`) opens weekly pull requests for npm and GitHub
   Actions, grouping minor and patch updates. It skips `@types/vscode`, major updates of
   `@types/node`, and major updates of Mocha, for the reasons above. Upgrade one major version per
-  change, with the full check suite and the integration tests on both VS Code versions.
+  change, with the full check suite and the integration tests on both VS Code versions. Merge
+  Dependabot pull requests yourself, not with the `@dependabot squash and merge` comment: a commit
+  that Dependabot authors runs its workflows with a read-only token, so the CodeQL upload fails
+  with "Resource not accessible by integration".
 - **Security scanning:** CI fails on high or critical advisories (`npm audit --audit-level=high`).
   Fix moderate advisories when a non-major fix exists. `.github/workflows/security.yml` runs
   CodeQL with the `security-extended` queries on the TypeScript and on the workflows, dependency

@@ -70,6 +70,8 @@ jobs:
         uses: actions/dependency-review-action@a1d282b36b6f3519aa1f3fc636f609c47dddb294 # v5.0.0
         with:
           fail-on-severity: high
+          # The default scope is runtime, and every dependency here is a development dependency.
+          fail-on-scopes: runtime, development
 
   scorecard:
     name: OpenSSF Scorecard
