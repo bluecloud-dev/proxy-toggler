@@ -67,7 +67,7 @@ Core classes depend on small structural types rather than on VS Code objects:
 
 | Consumer          | Port              | Real implementation                              |
 | ----------------- | ----------------- | ------------------------------------------------ |
-| `ProxyManager`    | `Memento`         | `context.globalState`                            |
+| `ProxyManager`    | `Memento`         | `readYourWrites(context.globalState)`            |
 | `ProxyManager`    | `CredentialStore` | `KeychainService`                                |
 | `ProxyManager`    | `HttpSettings`    | `createHttpSettings(vscode)`                     |
 | `KeychainService` | `SecretStorage`   | `context.secrets`                                |
@@ -142,6 +142,15 @@ Errors carry the original failure as the standard ES2022 `cause`.
   extension's own prompts never hold up the queue. The one wait it does not control is SecretStorage
   inside `saveConfiguration`: while the operating system's keychain prompt for storing credentials
   is open, toggles wait behind it.
+- **Reads see the extension's own writes.** VS Code sends every change of an extension's
+  `globalState` back to the extension host (`MainThreadStorage` calls `$acceptValue`), and the host
+  replaces its in-memory value with it. The echo of an earlier write can arrive after a newer
+  write, so `get` can briefly return the older value, and nothing refreshes the status bar when the
+  correct value returns. On a macOS CI runner, 13 of 1,800 status checks after back-to-back
+  `disable` and `enable` commands showed the previous state, on VS Code 1.91.0 and 1.142.0, and 3
+  of them still did 500 ms later. `readYourWrites` wraps the `Memento` port and serves a written
+  value from memory for five seconds. After that the host's value wins, so a change made by another
+  window is still seen.
 - **Lazy activation.** Only commands activate the extension, so the status bar item appears after
   the first command in a session.
 - **Credentials are stored but not applied.** The extension keeps credentials in the OS keychain

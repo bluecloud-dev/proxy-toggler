@@ -11,6 +11,7 @@ import type { ExtensionContext, VscodeApi } from './vscode/api';
 import { createCommandRegistrar, runInBackground } from './vscode/error-reporting';
 import { createHttpSettings } from './vscode/http-settings';
 import { NotificationService } from './vscode/notification-service';
+import { readYourWrites } from './vscode/read-your-writes-memento';
 import { StatusBarController } from './vscode/status-bar-controller';
 
 // Returned from activate(); integration tests read it through the extension's exports.
@@ -27,7 +28,7 @@ export function createProxyToggler(
 ): ProxyTogglerApi {
   const logger = vscodeApi.window.createOutputChannel('Proxy Toggler', { log: true });
   const proxyManager = new ProxyManager(
-    context.globalState,
+    readYourWrites(context.globalState),
     new KeychainService(context.secrets),
     createHttpSettings(vscodeApi)
   );

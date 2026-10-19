@@ -34,6 +34,10 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 - Proxy changes no longer overlap. A command that starts while another is still writing settings
   now waits and starts from its result, so clicking the status bar item twice quickly enables and
   then disables the proxy instead of enabling it twice.
+- The status bar and the toggle no longer act on a stale state after quick, successive changes. VS
+  Code can briefly report the previous stored state right after the extension has saved a new one,
+  which could show the wrong status or make a toggle go the wrong way. The extension now trusts its
+  own writes for five seconds.
 - A failed enable no longer leaves the proxy half applied. When VS Code refuses one of the
   `http.*` settings, for example because a policy manages it, Proxy Toggler restores the settings
   it had already changed. If it cannot restore one, the error message names it.

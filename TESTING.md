@@ -51,6 +51,8 @@ integration tests run it.
     pass.
   - `tests/support/fakes.ts`: `createMemento`, `createSecretStorage`, `createHttpSettings`,
     `createNotificationRecorder`, `createExtensionContext`, and `flushBackgroundTasks`.
+- To simulate VS Code echoing an older stored state, set that state in the `store` of the fake
+  memento (`createMemento`) after the action under test.
 - To test what happens while a notification is open, return a promise from the `answer` option
   and settle it after the action under test. To make setting writes fail, pass `failKey` (every
   write to one setting) or `failWhen` (the writes it matches) to `createHttpSettings`.
