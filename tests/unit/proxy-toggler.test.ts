@@ -66,6 +66,28 @@ describe('createProxyToggler', () => {
     assert.equal(api.getState().isEnabled, true);
   });
 
+  it('does not undo a change made while the drift prompt was open', async () => {
+    let acceptSync = (): void => undefined;
+    const syncAccepted = new Promise<string>((resolve) => {
+      acceptSync = () => resolve('Sync');
+    });
+    const { vscode, api } = activateWith(
+      // Only the drift warning waits for the user; the enable command's notification does not.
+      { answer: (message) => (message.kind === 'warning' ? syncAccepted : undefined) },
+      {
+        'proxyToggler.savedProxy': SAVED_PROXY,
+        'proxyToggler.state': { isEnabled: true, hasConfiguration: true }
+      }
+    );
+
+    await vscode.commandHandlers.get(COMMANDS.enable)?.();
+    acceptSync();
+    await flushBackgroundTasks();
+
+    assert.equal(vscode.settings.get('http.proxy'), SAVED_PROXY.proxyUrl);
+    assert.equal(api.getState().isEnabled, true);
+  });
+
   it('does not check drift without a saved configuration', async () => {
     const { vscode } = activateWith({ settings: APPLIED_SETTINGS });
 

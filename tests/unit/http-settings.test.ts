@@ -16,6 +16,25 @@ describe('createHttpSettings', () => {
     });
   });
 
+  it('reads user settings without the defaults that the effective values include', () => {
+    const vscode = createFakeVscode({
+      settings: { 'http.proxy': 'http://proxy:8080' },
+      defaults: { 'http.proxyStrictSSL': true, 'http.noProxy': [] }
+    });
+    const httpSettings = createHttpSettings(vscode);
+
+    assert.deepEqual(httpSettings.read(), {
+      proxy: 'http://proxy:8080',
+      proxyStrictSSL: true,
+      noProxy: []
+    });
+    assert.deepEqual(httpSettings.readUserSettings(), {
+      proxy: 'http://proxy:8080',
+      proxyStrictSSL: undefined,
+      noProxy: undefined
+    });
+  });
+
   it('writes user (global) settings', async () => {
     const vscode = createFakeVscode();
 

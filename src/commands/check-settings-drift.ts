@@ -16,8 +16,7 @@ export async function checkSettingsDrift(
     return;
   }
 
-  const isApplied = proxyManager.isConfigurationApplied();
-  if (proxyManager.getState().isEnabled === isApplied) {
+  if (proxyManager.getState().isEnabled === proxyManager.isConfigurationApplied()) {
     return;
   }
 
@@ -30,6 +29,6 @@ export async function checkSettingsDrift(
     return;
   }
 
-  await proxyManager.syncToggleState(isApplied);
+  await proxyManager.syncToggleState();
   await refreshUi();
 }

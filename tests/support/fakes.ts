@@ -52,11 +52,21 @@ export function createSecretStorage(
 
 export type FakeHttpSettings = HttpSettings & {
   current: Record<HttpSettingKey, unknown>;
-  updates: Array<{ key: HttpSettingKey; value: string | boolean | undefined }>;
+  updates: Array<{ key: HttpSettingKey; value: unknown }>;
 };
 
 export function createHttpSettings(
-  options: { failKey?: HttpSettingKey; current?: Partial<Record<HttpSettingKey, unknown>> } = {}
+  options: {
+    // Every write to this setting fails.
+    failKey?: HttpSettingKey;
+    // Writes it matches fail, for failures that depend on the value written.
+    failWhen?: (update: { key: HttpSettingKey; value: unknown }) => boolean;
+    // User settings; a key left out is unset.
+    current?: Partial<Record<HttpSettingKey, unknown>>;
+    // What VS Code reports for a setting nobody has set: read() falls back to these, while
+    // readUserSettings() does not.
+    defaults?: Partial<Record<HttpSettingKey, unknown>>;
+  } = {}
 ): FakeHttpSettings {
   const current = {
     proxy: undefined,
@@ -64,14 +74,20 @@ export function createHttpSettings(
     noProxy: undefined,
     ...options.current
   };
+  const defaults = options.defaults ?? {};
   const updates: FakeHttpSettings['updates'] = [];
   return {
     current,
     updates,
-    read: () => ({ ...current }),
+    read: () => ({
+      proxy: current.proxy ?? defaults.proxy,
+      proxyStrictSSL: current.proxyStrictSSL ?? defaults.proxyStrictSSL,
+      noProxy: current.noProxy ?? defaults.noProxy
+    }),
+    readUserSettings: () => ({ ...current }),
     update: async (key, value) => {
       updates.push({ key, value });
-      if (options.failKey === key) {
+      if (options.failKey === key || options.failWhen?.({ key, value })) {
         throw new Error(`Failed to update ${key}`);
       }
       current[key] = value;

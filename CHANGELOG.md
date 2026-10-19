@@ -20,6 +20,16 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 - Configure now shows the keychain message when the system keychain is locked or unavailable,
   instead of VS Code's generic "command failed" error.
+- **Sync** on the "VS Code proxy settings differ from Proxy Toggler state" warning records the
+  state the settings have when you click it. It used to record the state from when the warning
+  appeared, so enabling or disabling the proxy while the warning was open left the status bar
+  wrong.
+- Proxy changes no longer overlap. A command that starts while another is still writing settings
+  now waits and starts from its result, so clicking the status bar item twice quickly enables and
+  then disables the proxy instead of enabling it twice.
+- A failed enable no longer leaves the proxy half applied. When VS Code refuses one of the
+  `http.*` settings, for example because a policy manages it, Proxy Toggler restores the settings
+  it had already changed. If it cannot restore one, the error message names it.
 
 ## [0.1.0] - 2025-12-19
 

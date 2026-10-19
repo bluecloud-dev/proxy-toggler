@@ -11,6 +11,13 @@ const CONFIGURATION = {
   noProxy: 'localhost'
 };
 
+// User settings that differ from CONFIGURATION, so a test can tell a restore from a clear.
+const PREVIOUS_SETTINGS = {
+  proxy: 'http://old.example.com:3128',
+  proxyStrictSSL: false,
+  noProxy: ['old.internal']
+};
+
 function createKeychainStub(hasCredentials = false) {
   const calls = { store: [] as ProxyCredentials[], clear: 0 };
   return {
@@ -141,6 +148,106 @@ describe('ProxyManager', () => {
     );
   });
 
+  it('restores the settings it already wrote when a later write fails', async () => {
+    const { httpSettings, proxyManager } = setup({
+      http: { failKey: 'noProxy', current: PREVIOUS_SETTINGS }
+    });
+    await proxyManager.saveConfiguration(CONFIGURATION, { mode: 'keep' });
+
+    await assert.rejects(() => proxyManager.enableProxy(), ConfigurationError);
+
+    assert.deepEqual(httpSettings.current, PREVIOUS_SETTINGS);
+    assert.deepEqual(proxyManager.getState(), { isEnabled: false, hasConfiguration: true });
+  });
+
+  it('keeps restoring after a restore fails and names the settings it could not restore', async () => {
+    const { httpSettings, proxyManager } = setup({
+      http: {
+        current: PREVIOUS_SETTINGS,
+        // http.noProxy cannot be written, and writing the earlier http.proxy back fails too.
+        failWhen: ({ key, value }) =>
+          key === 'noProxy' || (key === 'proxy' && value === PREVIOUS_SETTINGS.proxy)
+      }
+    });
+    await proxyManager.saveConfiguration(CONFIGURATION, { mode: 'keep' });
+
+    await assert.rejects(
+      () => proxyManager.enableProxy(),
+      (error: unknown) => {
+        assert.ok(error instanceof ConfigurationError);
+        assert.equal(error.key, 'noProxy');
+        assert.match(String(error.cause), /Failed to update noProxy/);
+        assert.match(error.toUserMessage(), /"http\.proxy"/);
+        assert.doesNotMatch(error.toUserMessage(), /"http\.proxyStrictSSL"/);
+        assert.deepEqual([...error.restoreErrors.keys()], ['proxy']);
+        assert.match(String(error.restoreErrors.get('proxy')), /Failed to update proxy/);
+        return true;
+      }
+    );
+    assert.equal(httpSettings.current.proxy, CONFIGURATION.proxyUrl);
+    assert.equal(httpSettings.current.proxyStrictSSL, PREVIOUS_SETTINGS.proxyStrictSSL);
+  });
+
+  it('restores unset settings as unset, not as the defaults VS Code reports for them', async () => {
+    const { httpSettings, proxyManager } = setup({
+      http: { failKey: 'noProxy', defaults: { proxyStrictSSL: true } }
+    });
+    await proxyManager.saveConfiguration(CONFIGURATION, { mode: 'keep' });
+
+    await assert.rejects(() => proxyManager.enableProxy(), ConfigurationError);
+
+    assert.deepEqual(httpSettings.current, {
+      proxy: undefined,
+      proxyStrictSSL: undefined,
+      noProxy: undefined
+    });
+  });
+
+  it('finishes rolling back a failed enable before a disable queued behind it starts', async () => {
+    const { httpSettings, proxyManager } = setup({
+      http: {
+        current: PREVIOUS_SETTINGS,
+        // Only enable's write of http.noProxy fails; disable's clearing write succeeds.
+        failWhen: ({ key, value }) => key === 'noProxy' && value !== undefined
+      }
+    });
+    await proxyManager.saveConfiguration(CONFIGURATION, { mode: 'keep' });
+
+    const [enable, disable] = await Promise.allSettled([
+      proxyManager.enableProxy(),
+      proxyManager.disableProxy()
+    ]);
+
+    assert.equal(enable.status, 'rejected');
+    assert.equal(disable.status, 'fulfilled');
+    assert.deepEqual(httpSettings.current, {
+      proxy: undefined,
+      proxyStrictSSL: undefined,
+      noProxy: undefined
+    });
+  });
+
+  it('leaves the proxy cleared when a later write fails during disable', async () => {
+    const { httpSettings, proxyManager } = setup({
+      http: { failKey: 'proxyStrictSSL', current: PREVIOUS_SETTINGS }
+    });
+
+    await assert.rejects(
+      () => proxyManager.disableProxy(),
+      (error: unknown) => {
+        assert.ok(error instanceof ConfigurationError);
+        assert.equal(error.operation, 'disable');
+        assert.equal(error.key, 'proxyStrictSSL');
+        return true;
+      }
+    );
+    assert.deepEqual(httpSettings.current, {
+      proxy: undefined,
+      proxyStrictSSL: false,
+      noProxy: ['old.internal']
+    });
+  });
+
   it('disables by clearing the http settings, then the state', async () => {
     const { httpSettings, proxyManager } = setup();
 
@@ -170,15 +277,86 @@ describe('ProxyManager', () => {
     await assert.rejects(() => proxyManager.toggleProxy(), /No proxy configuration found/);
   });
 
-  it('records a synced state without touching the settings or the configuration', async () => {
-    const { globalState, httpSettings, proxyManager } = setup();
+  it('runs overlapping state changes one at a time, in call order', async () => {
+    const { httpSettings, proxyManager } = setup();
     await proxyManager.saveConfiguration(CONFIGURATION, { mode: 'keep' });
 
-    await proxyManager.syncToggleState(true);
+    const results = await Promise.all([proxyManager.toggleProxy(), proxyManager.toggleProxy()]);
+
+    assert.deepEqual(results, [true, false]);
+    assert.deepEqual(
+      httpSettings.updates.map((update) => update.key),
+      ['proxy', 'proxyStrictSSL', 'noProxy', 'proxy', 'proxyStrictSSL', 'noProxy']
+    );
+    assert.deepEqual(proxyManager.getState(), { isEnabled: false, hasConfiguration: true });
+  });
+
+  it('finishes each kind of change before the next starts, even when the first is slow', async () => {
+    const slowKeychain = {
+      ...createKeychainStub(),
+      storeCredentials: async (): Promise<void> => {
+        await new Promise((resolve) => setImmediate(resolve));
+      }
+    };
+    const proxyManager = new ProxyManager(createMemento(), slowKeychain, createHttpSettings());
+    const finished: string[] = [];
+    const record = (name: string) => (): void => {
+      finished.push(name);
+    };
+
+    await Promise.all([
+      proxyManager
+        .saveConfiguration(CONFIGURATION, {
+          mode: 'set',
+          credentials: { username: 'alice', password: 'secret' }
+        })
+        .then(record('save')),
+      proxyManager.syncToggleState().then(record('sync')),
+      proxyManager.enableProxy().then(record('enable')),
+      proxyManager.disableProxy().then(record('disable'))
+    ]);
+
+    assert.deepEqual(finished, ['save', 'sync', 'enable', 'disable']);
+  });
+
+  it('runs a queued state change after the one before it fails', async () => {
+    const { globalState, proxyManager } = setup({ http: { failKey: 'noProxy' } });
+    await proxyManager.saveConfiguration(CONFIGURATION, { mode: 'keep' });
+    const otherConfiguration = { ...CONFIGURATION, proxyUrl: 'http://other.example.com:3128' };
+
+    const [enable, save] = await Promise.allSettled([
+      proxyManager.enableProxy(),
+      proxyManager.saveConfiguration(otherConfiguration, { mode: 'keep' })
+    ]);
+
+    assert.equal(enable.status, 'rejected');
+    assert.equal(save.status, 'fulfilled');
+    assert.deepEqual(globalState.store.get('proxyToggler.savedProxy'), otherConfiguration);
+  });
+
+  it('records that the settings are applied, without touching them or the configuration', async () => {
+    const { globalState, httpSettings, proxyManager } = setup({
+      http: {
+        current: { proxy: CONFIGURATION.proxyUrl, proxyStrictSSL: true, noProxy: ['localhost'] }
+      }
+    });
+    await proxyManager.saveConfiguration(CONFIGURATION, { mode: 'keep' });
+
+    await proxyManager.syncToggleState();
 
     assert.deepEqual(proxyManager.getState(), { isEnabled: true, hasConfiguration: true });
     assert.deepEqual(httpSettings.updates, []);
     assert.deepEqual(globalState.store.get('proxyToggler.savedProxy'), CONFIGURATION);
+  });
+
+  it('does not rewrite the state when it already matches the settings', async () => {
+    const { globalState, proxyManager } = setup();
+    await proxyManager.saveConfiguration(CONFIGURATION, { mode: 'keep' });
+    const writesBeforeSync = globalState.updates.length;
+
+    await proxyManager.syncToggleState();
+
+    assert.equal(globalState.updates.length, writesBeforeSync);
   });
 
   it('keeps state fields it does not manage, such as ones written by another version', async () => {
@@ -190,7 +368,7 @@ describe('ProxyManager', () => {
       lastProfile: 'work'
     });
 
-    await proxyManager.syncToggleState(false);
+    await proxyManager.syncToggleState();
 
     assert.deepEqual(globalState.store.get('proxyToggler.state'), {
       isEnabled: false,
