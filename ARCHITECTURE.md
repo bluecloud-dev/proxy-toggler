@@ -132,8 +132,10 @@ Errors carry the original failure as the standard ES2022 `cause`.
   the status bar item starts two toggles. `ProxyManager` queues `saveConfiguration`,
   `enableProxy`, `disableProxy`, `toggleProxy`, and `syncToggleState`: each starts after the
   previous one settles, whether it succeeded or failed, and reads the state it left. Commands wait
-  for the user before or after calling `ProxyManager`, never inside a queued change, so a prompt
-  never holds up the queue.
+  for the user before or after calling `ProxyManager`, never inside a queued change, so the
+  extension's own prompts never hold up the queue. The one wait it does not control is SecretStorage
+  inside `saveConfiguration`: while the operating system's keychain prompt for storing credentials
+  is open, toggles wait behind it.
 - **Lazy activation.** Only commands activate the extension, so the status bar item appears after
   the first command in a session.
 - **Credentials are stored but not applied.** The extension keeps credentials in the OS keychain
