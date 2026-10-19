@@ -170,6 +170,35 @@ describe('ProxyManager', () => {
     await assert.rejects(() => proxyManager.toggleProxy(), /No proxy configuration found/);
   });
 
+  it('runs overlapping state changes one at a time, in call order', async () => {
+    const { httpSettings, proxyManager } = setup();
+    await proxyManager.saveConfiguration(CONFIGURATION, { mode: 'keep' });
+
+    const results = await Promise.all([proxyManager.toggleProxy(), proxyManager.toggleProxy()]);
+
+    assert.deepEqual(results, [true, false]);
+    assert.deepEqual(
+      httpSettings.updates.map((update) => update.key),
+      ['proxy', 'proxyStrictSSL', 'noProxy', 'proxy', 'proxyStrictSSL', 'noProxy']
+    );
+    assert.deepEqual(proxyManager.getState(), { isEnabled: false, hasConfiguration: true });
+  });
+
+  it('runs a queued state change after the one before it fails', async () => {
+    const { globalState, proxyManager } = setup({ http: { failKey: 'noProxy' } });
+    await proxyManager.saveConfiguration(CONFIGURATION, { mode: 'keep' });
+    const otherConfiguration = { ...CONFIGURATION, proxyUrl: 'http://other.example.com:3128' };
+
+    const [enable, save] = await Promise.allSettled([
+      proxyManager.enableProxy(),
+      proxyManager.saveConfiguration(otherConfiguration, { mode: 'keep' })
+    ]);
+
+    assert.equal(enable.status, 'rejected');
+    assert.equal(save.status, 'fulfilled');
+    assert.deepEqual(globalState.store.get('proxyToggler.savedProxy'), otherConfiguration);
+  });
+
   it('records that the settings are applied, without touching them or the configuration', async () => {
     const { globalState, httpSettings, proxyManager } = setup({
       http: {

@@ -24,6 +24,9 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
   state the settings have when you click it. It used to record the state from when the warning
   appeared, so enabling or disabling the proxy while the warning was open left the status bar
   wrong.
+- Proxy changes no longer overlap. A command that starts while another is still writing settings
+  now waits and starts from its result, so clicking the status bar item twice quickly enables and
+  then disables the proxy instead of enabling it twice.
 
 ## [0.1.0] - 2025-12-19
 

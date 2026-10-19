@@ -112,6 +112,12 @@ Errors carry the original failure as the standard ES2022 `cause`.
   proxy cannot complete.
 - **Bypass list stored as a string.** The stored shape predates VS Code's array setting and is kept
   for compatibility; it is converted to an array when written.
+- **State changes run one at a time.** VS Code runs commands concurrently, and a double click on
+  the status bar item starts two toggles. `ProxyManager` queues `saveConfiguration`,
+  `enableProxy`, `disableProxy`, `toggleProxy`, and `syncToggleState`: each starts after the
+  previous one settles, whether it succeeded or failed, and reads the state it left. Commands wait
+  for the user before or after calling `ProxyManager`, never inside a queued change, so a prompt
+  never holds up the queue.
 - **Lazy activation.** Only commands activate the extension, so the status bar item appears after
   the first command in a session.
 - **Credentials are stored but not applied.** The extension keeps credentials in the OS keychain
