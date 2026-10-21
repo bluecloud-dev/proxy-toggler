@@ -2,13 +2,13 @@
 
 ## Layers
 
-| Layer       | Location             | Runs in                                                        | Command                                    |
-| ----------- | -------------------- | -------------------------------------------------------------- | ------------------------------------------ |
-| Unit        | `tests/unit/`        | Node, with Mocha and ts-node, against fakes                    | `npm test`                                 |
-| Security    | `tests/security/`    | Same as unit                                                   | `npm test`                                 |
-| Integration | `tests/integration/` | A real VS Code Extension Development Host, on two versions     | `npm run test:integration`                 |
-| Packaged    | `tests/packaged/`    | A real VS Code with the VSIX installed, in an untrusted folder | `npm run package && npm run test:packaged` |
-| Proxy lab   | `tests/proxy-lab/`   | A real VS Code, on two versions, against the Docker proxy lab  | `npm run proxy-lab:probe`                  |
+| Layer       | Location             | Runs in                                                          | Command                                    |
+| ----------- | -------------------- | ---------------------------------------------------------------- | ------------------------------------------ |
+| Unit        | `tests/unit/`        | Node, with Mocha and ts-node, against fakes                      | `npm test`                                 |
+| Security    | `tests/security/`    | Same as unit                                                     | `npm test`                                 |
+| Integration | `tests/integration/` | A real VS Code Extension Development Host, on two versions       | `npm run test:integration`                 |
+| Packaged    | `tests/packaged/`    | A real VS Code with the VSIX installed, in an untrusted folder   | `npm run package && npm run test:packaged` |
+| Proxy lab   | `tests/proxy-lab/`   | A real VS Code, local and over SSH, against the Docker proxy lab | `npm run proxy-lab:probe`                  |
 
 `npm run check` runs the format check, lint, the unused-code check, the type check, and the unit
 and security tests with coverage. CI runs the same steps, then the integration tests, the
@@ -188,7 +188,7 @@ should be verified"; the lab has no HTTPS proxy, so that case is not measured.
 ### What Off does
 
 Turning the proxy off removes `http.proxy`, `http.proxyStrictSSL` and `http.noProxy` while VS Code
-runs. Measured with `PROXY_LAB_CHECKS=off npm run proxy-lab:probe` on VS Code 1.97.0 and 1.143.0
+runs. Measured with `npm run proxy-lab:probe -- "App, Off:"` on VS Code 1.97.0 and 1.143.0
 (macOS, October 2026): each check starts the desktop app with `http.proxy` set to `squid-open`,
 removes the three settings, then sends requests from the extension host and searches the
 Marketplace again.
@@ -216,25 +216,34 @@ start-up or while VS Code runs, even with `--proxy-pac-url`.
 `npm run proxy-lab:probe` needs the lab running and internet access. For the `engines.vscode`
 minimum and stable, it runs each check below in a fresh profile whose `settings.json` holds the settings
 Proxy Toggler writes, and compares the outcome and the proxy logs with what this file records.
-The CLI checks run `code --install-extension` on a small Marketplace extension. The app checks
-start the desktop app with `tests/proxy-lab/index.ts`, which sends requests from the extension
-host and then searches the Marketplace.
+The last five checks run on VS Code 1.97.0 instead of 1.91.0: it is the first release with
+`http.useLocalProxyConfiguration`, and the oldest that remote-window support will need. The CLI
+checks run `code --install-extension` on a small Marketplace extension. The app checks start the
+desktop app with `tests/proxy-lab/index.ts`, which sends requests from the extension host and then
+searches the Marketplace. The SSH checks open Remote-SSH windows; see
+[Remote windows](#remote-windows). `npm run proxy-lab:probe -- <text>` runs only the checks whose
+name contains the text.
 
-| Check                                          | Expected                                                                                                                                                       |
-| ---------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| CLI through `squid-open`                       | Installs; `squid-open` logs the Marketplace tunnel.                                                                                                            |
-| CLI through `squid-auth`                       | Fails, with the misleading message "Extension '…' not found"; `squid-auth` logs `TCP_DENIED/407`.                                                              |
-| CLI through `mitmproxy`, Strict SSL on         | Fails; `mitmproxy` logs the failed TLS handshake.                                                                                                              |
-| CLI through `mitmproxy`, Strict SSL off        | Installs; `mitmproxy` logs the intercepted Marketplace query.                                                                                                  |
-| CLI with only `--proxy-pac-url`                | Installs without a proxy: the CLI never downloads the PAC file.                                                                                                |
-| App through `squid-open`, with a bypass entry  | The extension host reaches `origin.lab.test` through `squid-open`, a host in `http.noProxy` goes direct, and the Marketplace search goes through `squid-open`. |
-| App through `mitmproxy`, Strict SSL on         | The extension host request and the Marketplace search fail on the certificate.                                                                                 |
-| App through `mitmproxy`, Strict SSL off        | The same failures.                                                                                                                                             |
-| App with only `--proxy-pac-url`                | VS Code downloads the PAC file, the extension host reaches `origin.lab.test` through `squid-open`, and the Marketplace search gets `407` from `squid-auth`.    |
-| App, Off while running, with `--proxy-pac-url` | Before Off, both go through `squid-open`. After, the extension host cannot resolve `origin.lab.test` (direct), and `squid-auth` sees no Marketplace request.   |
-| App, Off while running, with `HTTP(S)_PROXY`   | After Off, the extension host gets `407` from `squid-auth`, the proxy the variables name, and so does the Marketplace search.                                  |
-| App, Direct candidate at start-up              | With `--proxy-pac-url`, the extension host goes direct and `squid-auth` sees no Marketplace request.                                                           |
-| App, Direct candidate while running            | The same, after the candidate replaces `squid-open` while VS Code runs.                                                                                        |
+| Check                                                                     | Expected                                                                                                                                                       |
+| ------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| CLI through `squid-open`                                                  | Installs; `squid-open` logs the Marketplace tunnel.                                                                                                            |
+| CLI through `squid-auth`                                                  | Fails, with the misleading message "Extension '…' not found"; `squid-auth` logs `TCP_DENIED/407`.                                                              |
+| CLI through `mitmproxy`, Strict SSL on                                    | Fails; `mitmproxy` logs the failed TLS handshake.                                                                                                              |
+| CLI through `mitmproxy`, Strict SSL off                                   | Installs; `mitmproxy` logs the intercepted Marketplace query.                                                                                                  |
+| CLI with only `--proxy-pac-url`                                           | Installs without a proxy: the CLI never downloads the PAC file.                                                                                                |
+| App through `squid-open`, with a bypass entry                             | The extension host reaches `origin.lab.test` through `squid-open`, a host in `http.noProxy` goes direct, and the Marketplace search goes through `squid-open`. |
+| App through `mitmproxy`, Strict SSL on                                    | The extension host request and the Marketplace search fail on the certificate.                                                                                 |
+| App through `mitmproxy`, Strict SSL off                                   | The same failures.                                                                                                                                             |
+| App with only `--proxy-pac-url`                                           | VS Code downloads the PAC file, the extension host reaches `origin.lab.test` through `squid-open`, and the Marketplace search gets `407` from `squid-auth`.    |
+| App with a `socks5h://` proxy                                             | The extension host reaches `origin.lab.test` through `socks5`, while every Marketplace request from the window fails with `ERR_NO_SUPPORTED_PROXIES`.          |
+| SSH window with `http.proxy` set only locally                             | Check 1 in [Remote windows](#remote-windows).                                                                                                                  |
+| SSH window, Global write while the remote file holds a stale `http.proxy` | Check 2 in [Remote windows](#remote-windows).                                                                                                                  |
+| SSH window, `http.useLocalProxyConfiguration` changed while open          | Check 3 in [Remote windows](#remote-windows).                                                                                                                  |
+| Two SSH windows, the second writes the remote `http.proxy`                | Check 4 in [Remote windows](#remote-windows).                                                                                                                  |
+| App, Off: settings removed while running, with `--proxy-pac-url`          | Before Off, both go through `squid-open`. After, the extension host cannot resolve `origin.lab.test` (direct), and `squid-auth` sees no Marketplace request.   |
+| App, Off: settings removed while running, with `HTTP(S)_PROXY`            | After Off, the extension host gets `407` from `squid-auth`, the proxy the variables name, and so does the Marketplace search.                                  |
+| App, Off: Direct candidate at start-up                                    | With `--proxy-pac-url`, the extension host goes direct and `squid-auth` sees no Marketplace request.                                                           |
+| App, Off: Direct candidate while running                                  | The same, after the candidate replaces `squid-open` while VS Code runs.                                                                                        |
 
 A failing check means that VS Code no longer behaves as recorded here, or that the lab is broken;
 find out which, then update the tables. The **Proxy lab** workflow
@@ -242,3 +251,99 @@ find out which, then update the tables. The **Proxy lab** workflow
 the probe on Ubuntu when started by hand from the Actions tab. It never runs on pull requests, so it
 cannot become a required check: GitHub's macOS runners have no Docker, and its Windows runners
 cannot run Linux containers.
+
+### Remote windows
+
+These checks show how VS Code applies the proxy settings in a remote window, before Proxy Toggler
+supports remote windows. Each SSH check starts a new VS Code server on the lab's `ssh-host`, opens
+a Remote-SSH window on the folder `/home/lab/window-1`, and runs `tests/proxy-lab/remote.ts` in the
+window's remote extension host. The runner copies that probe to the SSH host with a manifest of
+Proxy Toggler's extension kind, `workspace`. The probe follows the folder's `plan.json`: it reads
+`http.proxy` with `get()` and `inspect()`, writes settings with `ConfigurationTarget.Global`, waits
+for `onDidChangeConfiguration`, and requests `origin.lab.test`. Afterwards the runner reads the
+local `settings.json` and the SSH host's `/home/lab/.vscode-server/data/Machine/settings.json`.
+
+The local proxy is `http://127.0.0.1:3128`: `squid-open` for the local window, but nothing on the
+SSH host. A remote request that takes it fails with "Failed to establish a socket connection to
+proxies: PROXY 127.0.0.1:3128". The remote proxy is `http://squid-open:3128`, which only the SSH
+host reaches. A remote request without a proxy fails with `ENOTFOUND`.
+
+Measured with `npm run proxy-lab:probe` on macOS (arm64), Docker Desktop, and the Debian 13.7 SSH
+host, in October 2026:
+
+| #   | Check                                      | Setup                                                                                                                                          | VS Code 1.97.0 with Remote-SSH 0.120.0                                                                                                                                                                                                                                                                                                                                                                            | VS Code 1.142.0 with Remote-SSH 0.128.0                                                                                                                                                                                             |
+| --- | ------------------------------------------ | ---------------------------------------------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| 1   | Does an SSH window see the local proxy?    | `http.proxy` only in the local user settings. `http.useLocalProxyConfiguration` keeps its SSH default, `false`.                                | **At start-up, yes; after a local change, no.** In all 17 windows, `get('proxy')` returned the local value at start-up, `inspect('proxy')` showed it as `globalLocalValue` and `globalValue`, and the remote extension host sent its requests to `127.0.0.1:3128` on the SSH host. When the local `http.proxy` changed, `onDidChangeConfiguration` fired, `get('proxy')` returned `""`, and requests went direct. | **Usually at start-up; after a local change, no.** The same as on 1.97.0 in 12 of 17 windows. In the 5 windows whose connection installed the VS Code server, `get('proxy')` returned `""` from the start and requests went direct. |
+| 2   | Stale key in the remote file               | The SSH host's `Machine/settings.json` holds `http.useLocalProxyConfiguration: true` and an `http.proxy`. The local settings hold another one. | **The write lands in the remote file.** `update('proxy', value, ConfigurationTarget.Global)` resolves and fires an `http.proxy` change event, but it replaces the stale value in `Machine/settings.json`. The local `settings.json` is unchanged, and the value in effect stays the local one.                                                                                                                    | The same                                                                                                                                                                                                                            |
+| 3   | Changing `http.useLocalProxyConfiguration` | The local and the remote `http.proxy` differ. The window is open.                                                                              | **Applies without a reload.** Writing `true` with `Global` lands in `Machine/settings.json`, fires an `http.proxy` change event, and switches the remote extension host to the local value, for `get()` and for requests. Writing `false` switches it back the same way.                                                                                                                                          | The same                                                                                                                                                                                                                            |
+| 4   | Change events across windows               | Two windows on the SSH host, each in its own VS Code profile. One writes `http.proxy` with `Global`.                                           | **The event fires.** The write lands in `Machine/settings.json`, and the other window's remote extension host gets `onDidChangeConfiguration` for `http.proxy`, then reads and uses the new value.                                                                                                                                                                                                                | The same                                                                                                                                                                                                                            |
+| 5   | `http.proxy` with `socks5h://`             | A local window.                                                                                                                                | **`ERR_NO_SUPPORTED_PROXIES`, not direct.** Chromium's net log shows every Marketplace request from the window failing with that error, from an empty proxy list. The extension host reads the scheme as SOCKS5 and reaches `origin.lab.test` through `socks5`.                                                                                                                                                   | The same                                                                                                                                                                                                                            |
+
+- Result 1 contradicts a reading of VS Code's source, which has `http.*` machine-scoped in SSH
+  windows and so predicted that the local value stays hidden. It looks like a race at start-up:
+  probably the window reads the local settings before it learns that it is remote and narrows
+  `http.*`, and filters them only when the local file changes again. Whatever the cause, it matches
+  reports of extensions on an SSH host that try a local `127.0.0.1` proxy
+  ([microsoft/vscode#236242](https://github.com/microsoft/vscode/issues/236242)). The probe accepts
+  either start-up outcome, but not a local value that survives a local change.
+- Check 4 runs the two windows in two VS Code processes, because the probe starts one window per
+  process. Each window watches the remote file over its own connection, as two windows of one VS
+  Code do.
+- Result 1 does not decide checks 2 to 4. Where they expect the remote value, the SSH host's file
+  holds one, and it takes precedence over the local value, which `inspect()` still shows as
+  `globalLocalValue` in check 3.
+
+#### WSL (by hand, on Windows)
+
+WSL windows cannot run in the lab, so checks 1 to 4 need a Windows machine with WSL 2 in its
+default networking mode, NAT. Run them on VS Code 1.97.0, from its portable zip, and on stable,
+both with the WSL extension. WSL starts its VS Code server with the local proxy configuration, so
+`http.useLocalProxyConfiguration` defaults to `true` there.
+
+Prepare once: run `npm ci` and `npx tsc -p .` in the repository on Windows. In the WSL
+distribution, create `~/probe` with `out/tests/proxy-lab/remote.js` and `requests.js` from the
+repository and this `package.json`:
+
+```json
+{
+  "name": "proxy-lab-remote-probe",
+  "publisher": "proxy-toggler-tests",
+  "version": "0.0.0",
+  "engines": { "vscode": "^1.97.0" },
+  "main": "./remote.js"
+}
+```
+
+The checks need no proxy: local `http.proxy` is `http://127.0.0.1:3128` and the WSL one is
+`http://127.0.0.2:3128`, and a request that takes either fails with an error naming it. For each
+check:
+
+1. Run `pkill -f .vscode-server` in WSL, so that a new VS Code server starts.
+2. Write the check's `plan` from `tests/run-proxy-lab-probe.ts` to `~/window-1/plan.json`, and the
+   WSL machine settings below to `~/.vscode-server/data/Machine/settings.json`.
+3. Create a profile folder whose `User\settings.json` holds the local `http.proxy`, then start VS
+   Code from a Command Prompt, with your distribution and user name:
+
+   ```text
+   code --user-data-dir <profile> --remote wsl+<distro> --folder-uri vscode-remote://wsl+<distro>/home/<user>/window-1 --extensionDevelopmentPath=vscode-remote://wsl+<distro>/home/<user>/probe --extensionTestsPath=vscode-remote://wsl+<distro>/home/<user>/probe/remote.js
+   ```
+
+4. When the window closes, read `~/window-1/results.json` and both settings files, and record
+   the result here.
+
+- [ ] Check 1. No WSL machine settings. Once `~/window-1/ready` appears, change `http.proxy` in the
+      profile's `settings.json`. Source reading predicts that the local value stays visible after
+      the change, because `http.*` are application-scoped, and that requests fail on WSL's own
+      `127.0.0.1`.
+- [ ] Check 2. WSL machine settings: `{ "http.proxy": "http://127.0.0.2:3128" }`, which WSL's
+      default scope ignores. Source reading predicts the same result as in SSH: the write replaces
+      the WSL value, and the local value stays in effect.
+- [ ] Check 3. WSL machine settings: `{ "http.proxy": "http://127.0.0.2:3128" }`. Use the SSH plan
+      with `false` and `true` swapped. Source reading predicts that `false` switches the remote
+      extension host to `127.0.0.2` without a reload, and `true` back.
+- [ ] Check 4. WSL machine settings: `{ "http.useLocalProxyConfiguration": false }`, so that the
+      write goes to the WSL file. Write the `secondWindow` plan to `~/window-2/plan.json`. Once
+      `~/window-1/ready` appears, start a second window the same way, with its own profile and
+      `window-2`. Source reading predicts that the event fires.
+
+Not run yet, and the procedure itself is untried: the lab has no Windows machine.
