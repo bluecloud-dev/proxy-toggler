@@ -1,6 +1,6 @@
 import { strict as assert } from 'node:assert';
 
-import { findCurrentProfile, readProfiles } from '../../src/core/profiles';
+import { defaultProfileName, findCurrentProfile, readProfiles } from '../../src/core/profiles';
 
 const WORK = {
   name: 'Work',
@@ -64,5 +64,27 @@ describe('findCurrentProfile', () => {
 
   it('does not exist without profiles', () => {
     assert.equal(findCurrentProfile([], WORK), undefined);
+  });
+});
+
+describe('defaultProfileName', () => {
+  it('is the proxy host', () => {
+    assert.equal(defaultProfileName('proxy.example.com', ['Work']), 'proxy.example.com');
+  });
+
+  it('counts up from " (2)" while the name is taken, ignoring letter case', () => {
+    const taken = ['PROXY.example.com', 'proxy.example.com (2)'];
+
+    assert.equal(defaultProfileName('proxy.example.com', taken), 'proxy.example.com (3)');
+  });
+
+  it('shortens a long host with "…" so that the name and any suffix fit in 30 characters', () => {
+    const host = 'proxy-gateway-eu-west-1.corp.example.com';
+
+    assert.equal(defaultProfileName(host, []), 'proxy-gateway-eu-west-1.corp.…');
+    assert.equal(
+      defaultProfileName(host, ['proxy-gateway-eu-west-1.corp.…']),
+      'proxy-gateway-eu-west-1.c… (2)'
+    );
   });
 });

@@ -4,11 +4,14 @@ import type { KeychainService } from './keychain-service';
 import { settingsMatch } from './match';
 import { parseNoProxyList, withDefaultNoProxy } from './no-proxy';
 import {
+  defaultProfileName,
+  entryNames,
   findCurrentProfile,
   type Profile,
   profileSettingValues,
   type ProfilesSetting,
   readProfiles,
+  sameValues,
   withProfile
 } from './profiles';
 import type { ProxyConfiguration, ProxyCredentials, ToggleState } from './proxy-configuration';
@@ -16,6 +19,10 @@ import { type HttpSettings, ProxySettingsWriter } from './proxy-settings-writer'
 import { validateCredentials, validateNoProxyList, validateProxyUrl } from './validation';
 
 const STORAGE_KEYS = {
+  // 0.1.x's configuration, which v0.2.0 reads and never writes or deletes (ADR 0001).
+  savedProxy: 'proxyToggler.savedProxy',
+  // The savedProxy values whose copy a later read showed; per VS Code Profile, like savedProxy.
+  migratedProxy: 'proxyToggler.migratedProxy',
   toggleState: 'proxyToggler.state'
 } as const;
 
@@ -77,13 +84,14 @@ export class ProxyManager {
 
       // Configure edits the current profile, or adds the first one, named after its host.
       const current = this.getState().currentProfile;
+      const entries = this.profileEntries();
       const profile: Profile = {
-        name: current?.name ?? new URL(normalized.proxyUrl).hostname,
+        name: current?.name ?? defaultProfileName(hostOf(normalized.proxyUrl), entryNames(entries)),
         proxyUrl: normalized.proxyUrl,
         strictSSL: normalized.strictSSL,
         bypassList: parseNoProxyList(normalized.noProxy)
       };
-      await this.profilesSetting.write(withProfile(this.profileEntries(), profile, current?.name));
+      await this.profilesSetting.write(withProfile(entries, profile, current?.name));
 
       if (credentialsUpdate.mode === 'set') {
         const { username, password } = credentialsUpdate.credentials;
@@ -93,6 +101,35 @@ export class ProxyManager {
       }
 
       await this.writeState({ currentProfile: profile });
+    });
+  }
+
+  // Copies the 0.1.x configuration of this VS Code Profile into a profile (ADR 0001).
+  migrateSavedProxy(): Promise<void> {
+    return this.serialize(async () => {
+      const values = savedProxyValues(this.globalState.get(STORAGE_KEYS.savedProxy));
+      if (!values || this.alreadyMigrated(values)) {
+        return;
+      }
+
+      const entries = this.profileEntries();
+      const migrated: Profile = {
+        name: defaultProfileName(hostOf(values.proxyUrl), entryNames(entries)),
+        ...values
+      };
+      const existing = readProfiles(entries).find((profile) => sameValues(profile, migrated));
+      const profile = existing ?? migrated;
+      if (existing) {
+        // A read shows the copy, so a concurrent write from another VS Code Profile did not lose
+        // it. Only now is the marker written; until then every activation retries.
+        await this.globalState.update(STORAGE_KEYS.migratedProxy, values);
+      } else {
+        await this.profilesSetting.write([...entries, profile]);
+      }
+      // A VS Code Profile without a current profile starts with the one it used in 0.1.x.
+      if (!this.storedRecord()?.currentProfile) {
+        await this.writeState({ currentProfile: profile });
+      }
     });
   }
 
@@ -190,6 +227,11 @@ export class ProxyManager {
     await this.writeState({ isEnabled: false });
   }
 
+  private alreadyMigrated(values: Omit<Profile, 'name'>): boolean {
+    const marker = this.globalState.get<Omit<Profile, 'name'>>(STORAGE_KEYS.migratedProxy);
+    return marker !== undefined && sameValues({ name: '', ...marker }, { name: '', ...values });
+  }
+
   private profileEntries(): readonly unknown[] {
     const value = this.profilesSetting.read();
     return Array.isArray(value) ? value : [];
@@ -210,4 +252,28 @@ export class ProxyManager {
       ...change
     });
   }
+}
+
+// The values of a 0.1.x configuration, or undefined when there is none or it cannot be used.
+function savedProxyValues(saved: unknown): Omit<Profile, 'name'> | undefined {
+  if (typeof saved !== 'object' || saved === null) {
+    return undefined;
+  }
+
+  const { proxyUrl, strictSSL, noProxy } = saved as Record<string, unknown>;
+  if (typeof proxyUrl !== 'string' || typeof strictSSL !== 'boolean') {
+    return undefined;
+  }
+
+  try {
+    validateProxyUrl(proxyUrl);
+  } catch {
+    return undefined;
+  }
+
+  return { proxyUrl, strictSSL, bypassList: parseNoProxyList(noProxy) };
+}
+
+function hostOf(proxyUrl: string): string {
+  return new URL(proxyUrl).hostname;
 }

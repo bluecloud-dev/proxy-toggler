@@ -14,6 +14,7 @@ import { createHttpSettings } from './vscode/http-settings';
 import { NotificationService } from './vscode/notification-service';
 import { createProfilesSetting } from './vscode/profiles-setting';
 import { readYourWrites } from './vscode/read-your-writes-memento';
+import { whenSettled } from './vscode/settle';
 import { StatusBarController } from './vscode/status-bar-controller';
 
 // Returned from activate(); integration tests read it through the extension's exports.
@@ -23,6 +24,10 @@ export type ProxyTogglerApi = {
   getStatusBarText(): string | undefined;
   getStatusBarAccessibilityLabel(): string | undefined;
 };
+
+// How long the settings must stay unchanged before a window trusts what it reads after writes
+// that other windows may make at the same time, such as at start-up.
+const SETTLE_MS = 2000;
 
 export function createProxyToggler(
   vscodeApi: VscodeApi,
@@ -77,9 +82,18 @@ export function createProxyToggler(
     await removeStoredCredentials(keychainService, globalState);
     await announceIfFocused();
   });
-  runInBackground(logger, 'Settings drift check', () =>
-    checkSettingsDrift(proxyManager, notificationService, refreshUi)
-  );
+  runInBackground(logger, 'Migration and drift check', async () => {
+    // Migration first, so that the drift check sees the profile this VS Code Profile used in 0.1.x.
+    await proxyManager.migrateSavedProxy();
+    await refreshUi();
+    await checkSettingsDrift(proxyManager, notificationService, refreshUi);
+  });
+  // A later read, once writes from other windows have landed, records the copy or makes it again.
+  runInBackground(logger, 'Migration check', async () => {
+    await whenSettled(vscodeApi, 'proxyToggler.profiles', SETTLE_MS);
+    await proxyManager.migrateSavedProxy();
+    await refreshUi();
+  });
 
   const register = createCommandRegistrar(vscodeApi, logger, notificationService);
   context.subscriptions.push(

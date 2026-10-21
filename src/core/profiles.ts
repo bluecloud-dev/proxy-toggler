@@ -66,6 +66,25 @@ export function withProfile(
   );
 }
 
+const MAX_NAME_LENGTH = 30;
+
+// The name a new profile gets: its proxy host, with " (2)", " (3)"... while an entry holds that
+// name, shortened with "…" so that the name and its suffix fit in MAX_NAME_LENGTH.
+export function defaultProfileName(host: string, takenNames: readonly string[]): string {
+  const taken = new Set(takenNames.map((name) => name.toLowerCase()));
+  for (let count = 1; ; count += 1) {
+    const suffix = count === 1 ? '' : ` (${count})`;
+    const name = shorten(host, MAX_NAME_LENGTH - suffix.length) + suffix;
+    if (!taken.has(name.toLowerCase())) {
+      return name;
+    }
+  }
+}
+
+function shorten(text: string, maxLength: number): string {
+  return text.length <= maxLength ? text : `${text.slice(0, maxLength - 1)}…`;
+}
+
 // The values a profile writes to VS Code's proxy settings.
 export function profileSettingValues(profile: Profile): ProxySettingValues {
   return {
@@ -75,12 +94,21 @@ export function profileSettingValues(profile: Profile): ProxySettingValues {
   };
 }
 
-function sameValues(profile: Profile, other: Profile): boolean {
+// The same proxy URL after parsing, strict SSL and set of bypass patterns, whatever the names.
+export function sameValues(profile: Profile, other: Profile): boolean {
   return settingsMatch(profileSettingValues(other), profileSettingValues(profile));
 }
 
 function sameName(name: string, other: string): boolean {
   return name.toLowerCase() === other.toLowerCase();
+}
+
+// Every name an entry holds, valid or not: new names skip them all.
+export function entryNames(entries: readonly unknown[]): string[] {
+  return entries.flatMap((entry) => {
+    const name = entryName(entry);
+    return name === undefined ? [] : [name];
+  });
 }
 
 function entryName(entry: unknown): string | undefined {

@@ -33,6 +33,10 @@ function createKeychainStub(hasCredentials = false) {
   };
 }
 
+function readNames(entries: unknown): string[] {
+  return (entries as Array<{ name: string }>).map((entry) => entry.name);
+}
+
 // The profile that saving CONFIGURATION adds when no profile exists.
 const SAVED_PROFILE = {
   name: 'proxy.example.com',
@@ -172,6 +176,18 @@ describe('ProxyManager', () => {
       assert.equal(globalState.store.has('proxyToggler.savedProxy'), false);
     });
 
+    it('names the first saved profile so that it clashes with no entry', async () => {
+      const unusable = { name: 'proxy.example.com' };
+      const { profilesSetting, proxyManager } = setup({ profiles: [unusable] });
+
+      await proxyManager.saveConfiguration(CONFIGURATION, { mode: 'keep' });
+
+      assert.deepEqual(readNames(profilesSetting.value), [
+        'proxy.example.com',
+        'proxy.example.com (2)'
+      ]);
+    });
+
     it('saves into the current profile, keeping other entries and unknown fields', async () => {
       const { profilesSetting, proxyManager } = setup({
         profiles: ['not a profile', { ...WORK, color: 'blue' }, HOME],
@@ -205,6 +221,134 @@ describe('ProxyManager', () => {
         noProxy: 'localhost',
         hasStoredCredentials: true
       });
+    });
+  });
+
+  describe('migrating the 0.1.x configuration', () => {
+    const SAVED_PROXY = {
+      proxyUrl: 'http://proxy.example.com:8080',
+      strictSSL: false,
+      noProxy: 'localhost,.corp'
+    };
+    const MIGRATED = {
+      name: 'proxy.example.com',
+      proxyUrl: 'http://proxy.example.com:8080',
+      strictSSL: false,
+      bypassList: ['localhost', '.corp']
+    };
+
+    function setupMigration(options: Parameters<typeof setup>[0] = {}) {
+      const context = setup(options);
+      context.globalState.store.set('proxyToggler.savedProxy', SAVED_PROXY);
+      return context;
+    }
+
+    it('copies it into a profile named after its host and makes that current, without turning it on', async () => {
+      const { globalState, httpSettings, profilesSetting, proxyManager } = setupMigration({
+        record: { isEnabled: true, hasConfiguration: true }
+      });
+
+      await proxyManager.migrateSavedProxy();
+
+      assert.deepEqual(profilesSetting.value, [MIGRATED]);
+      assert.deepEqual(globalState.store.get('proxyToggler.state'), {
+        isEnabled: true,
+        hasConfiguration: true,
+        currentProfile: MIGRATED
+      });
+      assert.deepEqual(globalState.store.get('proxyToggler.savedProxy'), SAVED_PROXY);
+      assert.deepEqual(httpSettings.updates, []);
+    });
+
+    it('makes a profile with the same values current instead of adding one', async () => {
+      const lab = { ...MIGRATED, name: 'Lab', bypassList: ['.CORP', 'localhost'] };
+      const { profilesSetting, proxyManager } = setupMigration({ profiles: [WORK, lab] });
+
+      await proxyManager.migrateSavedProxy();
+
+      assert.deepEqual(profilesSetting.writes, []);
+      assert.deepEqual(proxyManager.getState().currentProfile, lab);
+    });
+
+    it('records the copy once a later read shows it, and then never brings back a deleted profile', async () => {
+      const { globalState, profilesSetting, proxyManager } = setupMigration({ profiles: [] });
+
+      await proxyManager.migrateSavedProxy();
+      const markerAfterCopy = globalState.store.get('proxyToggler.migratedProxy');
+      await proxyManager.migrateSavedProxy();
+      const marker = globalState.store.get('proxyToggler.migratedProxy');
+      profilesSetting.value = [];
+      await proxyManager.migrateSavedProxy();
+
+      assert.equal(markerAfterCopy, undefined);
+      assert.deepEqual(marker, {
+        proxyUrl: MIGRATED.proxyUrl,
+        strictSSL: MIGRATED.strictSSL,
+        bypassList: MIGRATED.bypassList
+      });
+      assert.deepEqual(profilesSetting.value, []);
+    });
+
+    it('copies the new values when the 0.1.x configuration changes later', async () => {
+      const { globalState, profilesSetting, proxyManager } = setupMigration({ profiles: [] });
+      await proxyManager.migrateSavedProxy();
+      await proxyManager.migrateSavedProxy();
+
+      // A downgrade, or a 0.1.x window still open, saved other values.
+      globalState.store.set('proxyToggler.savedProxy', {
+        ...SAVED_PROXY,
+        proxyUrl: 'http://other.example.com:3128'
+      });
+      await proxyManager.migrateSavedProxy();
+
+      assert.deepEqual(readNames(profilesSetting.value), [
+        'proxy.example.com',
+        'other.example.com'
+      ]);
+    });
+
+    it('keeps the current profile a VS Code Profile already has', async () => {
+      const { proxyManager } = setupMigration({
+        profiles: [WORK],
+        record: { isEnabled: false, currentProfile: WORK }
+      });
+
+      await proxyManager.migrateSavedProxy();
+
+      assert.deepEqual(proxyManager.getState().currentProfile, WORK);
+    });
+
+    it('adds the copy again when a write from another VS Code Profile lost it', async () => {
+      const { globalState, profilesSetting, proxyManager } = setupMigration({ profiles: [] });
+
+      await proxyManager.migrateSavedProxy();
+      // Another VS Code Profile migrated at the same time, from the list as it was before.
+      profilesSetting.value = [HOME];
+      await proxyManager.migrateSavedProxy();
+
+      assert.deepEqual(profilesSetting.value, [HOME, MIGRATED]);
+      assert.equal(globalState.store.get('proxyToggler.migratedProxy'), undefined);
+    });
+
+    it('names the copy so that it clashes with no entry', async () => {
+      const elsewhere = { name: 'PROXY.example.com', proxyUrl: 'http://elsewhere.example:1' };
+      const { profilesSetting, proxyManager } = setupMigration({ profiles: [elsewhere] });
+
+      await proxyManager.migrateSavedProxy();
+
+      assert.deepEqual(readNames(profilesSetting.value), [
+        'PROXY.example.com',
+        'proxy.example.com (2)'
+      ]);
+    });
+
+    it('skips a 0.1.x configuration it cannot use', async () => {
+      const { globalState, profilesSetting, proxyManager } = setup({ profiles: [] });
+      globalState.store.set('proxyToggler.savedProxy', { ...SAVED_PROXY, proxyUrl: 'nonsense' });
+
+      await proxyManager.migrateSavedProxy();
+
+      assert.deepEqual(profilesSetting.writes, []);
     });
   });
 
