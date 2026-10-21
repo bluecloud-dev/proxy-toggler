@@ -52,6 +52,8 @@ const MARKETPLACE_TLS_FAILED = /Client TLS handshake failed\..* marketplace\.vis
 // mitmproxy logs a request only after the client accepted its certificate.
 const MARKETPLACE_INTERCEPTED = /: (GET|POST) https:\/\/marketplace\.visualstudio\.com\//;
 const PAC_FETCHED = /"GET \/proxy\.pac /;
+// tests/proxy-lab/remote.ts requests this URL each time it observes.
+const REMOTE_PROBE_REQUEST = /GET http:\/\/origin\.lab\.test:8088\/remote-probe /;
 const ORIGIN_REPLY = /^status 200: Proxy Toggler lab origin: /;
 // Lab names resolve only inside Docker, so a request that skips the proxy cannot resolve.
 const DIRECT = /^error (ENOTFOUND|EAI_AGAIN)$/;
@@ -213,7 +215,6 @@ const CHECKS: readonly Check[] = [
     settings: { 'http.proxy': SQUID_OPEN },
     machineSettings: {},
     plan: {
-      url: `${ORIGIN}/ssh-local`,
       steps: [
         { observe: 'initial' },
         { label: 'local change', awaitOutsideChange: true },
@@ -242,7 +243,6 @@ const CHECKS: readonly Check[] = [
     settings: { 'http.proxy': SQUID_OPEN },
     machineSettings: { 'http.useLocalProxyConfiguration': true, 'http.proxy': REMOTE_SQUID_AUTH },
     plan: {
-      url: `${ORIGIN}/ssh-stale`,
       steps: [
         { observe: 'before' },
         { label: 'write', update: 'proxy', value: REMOTE_SQUID_OPEN },
@@ -268,7 +268,6 @@ const CHECKS: readonly Check[] = [
     settings: { 'http.proxy': SQUID_OPEN },
     machineSettings: { 'http.proxy': REMOTE_SQUID_OPEN },
     plan: {
-      url: `${ORIGIN}/ssh-toggle`,
       steps: [
         { observe: 'before' },
         { label: 'on', update: 'useLocalProxyConfiguration', value: true },
@@ -291,13 +290,7 @@ const CHECKS: readonly Check[] = [
       'off: request': ORIGIN_REPLY,
       'remote Machine/settings.json http.useLocalProxyConfiguration': recorded(false)
     },
-    logs: [
-      {
-        service: 'squid-open',
-        pattern: /GET http:\/\/origin\.lab\.test:8088\/ssh-toggle\/before /
-      },
-      { service: 'squid-open', pattern: /GET http:\/\/origin\.lab\.test:8088\/ssh-toggle\/off / }
-    ]
+    logs: [{ service: 'squid-open', pattern: REMOTE_PROBE_REQUEST }]
   },
   {
     name: 'Two SSH windows, the second writes the remote http.proxy',
@@ -306,7 +299,6 @@ const CHECKS: readonly Check[] = [
     settings: {},
     machineSettings: {},
     plan: {
-      url: `${ORIGIN}/ssh-listener`,
       steps: [
         { observe: 'before' },
         { label: 'other window', awaitOutsideChange: true },
@@ -314,7 +306,6 @@ const CHECKS: readonly Check[] = [
       ]
     },
     secondWindow: {
-      url: `${ORIGIN}/ssh-writer`,
       steps: [{ label: 'write', update: 'proxy', value: REMOTE_SQUID_OPEN }]
     },
     observations: {
@@ -325,12 +316,7 @@ const CHECKS: readonly Check[] = [
       'after: http.proxy': recorded(REMOTE_SQUID_OPEN),
       'after: request': ORIGIN_REPLY
     },
-    logs: [
-      {
-        service: 'squid-open',
-        pattern: /GET http:\/\/origin\.lab\.test:8088\/ssh-listener\/after /
-      }
-    ]
+    logs: [{ service: 'squid-open', pattern: REMOTE_PROBE_REQUEST }]
   }
 ];
 

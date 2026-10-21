@@ -13,7 +13,7 @@ import { describeRequest } from './requests';
 
 export type RemoteStep =
   // Records http.proxy and http.useLocalProxyConfiguration as an extension reads them, and how a
-  // request from this extension host to `<plan url>/<label, with dashes for spaces>` ends.
+  // request from this extension host to REQUEST_URL ends.
   | { observe: string }
   // Writes an http.* setting with ConfigurationTarget.Global, as Proxy Toggler does, then waits
   // for an http.proxy change event.
@@ -22,7 +22,11 @@ export type RemoteStep =
   // outside this window, then waits for an http.proxy change event.
   | { label: string; awaitOutsideChange: true };
 
-export type RemotePlan = { url: string; steps: RemoteStep[] };
+export type RemotePlan = { steps: RemoteStep[] };
+
+// The lab origin, which only a proxy reaches. The URL is fixed, so that a plan read from a file
+// cannot send the probe's requests anywhere else.
+const REQUEST_URL = 'http://origin.lab.test:8088/remote-probe';
 
 // A settings write reaches the extension hosts within a second, so no event by then means none.
 const EVENT_WAIT_MS = 10000;
@@ -42,8 +46,7 @@ export async function run(): Promise<void> {
   try {
     for (const step of plan.steps) {
       if ('observe' in step) {
-        const url = `${plan.url}/${step.observe.replaceAll(' ', '-')}`;
-        Object.assign(results, await observe(step.observe, url));
+        Object.assign(results, await observe(step.observe));
       } else if ('update' in step) {
         const change = nextProxyChange(EVENT_WAIT_MS);
         results[`${step.label}: update`] = await update(step.update, step.value);
@@ -60,7 +63,7 @@ export async function run(): Promise<void> {
   await fs.writeFile(path.join(folder, 'results.json'), JSON.stringify(results));
 }
 
-async function observe(label: string, url: string): Promise<Record<string, string>> {
+async function observe(label: string): Promise<Record<string, string>> {
   const http = vscode.workspace.getConfiguration('http');
   return {
     [`${label}: http.proxy`]: describeValue(http.get('proxy')),
@@ -69,7 +72,7 @@ async function observe(label: string, url: string): Promise<Record<string, strin
       key === 'key' ? undefined : value
     ),
     [`${label}: useLocalProxyConfiguration`]: describeValue(http.get('useLocalProxyConfiguration')),
-    [`${label}: request`]: await describeRequest(url)
+    [`${label}: request`]: await describeRequest(REQUEST_URL)
   };
 }
 
