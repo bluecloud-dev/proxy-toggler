@@ -29,3 +29,18 @@ export async function useProfile(profile: {
     .getConfiguration('proxyToggler')
     .update('profiles', [{ name: 'Test', ...profile }], vscode.ConfigurationTarget.Global);
 }
+
+// Resolves once the condition holds, and fails after `timeoutMs`.
+export async function waitFor(
+  condition: () => boolean,
+  timeoutMs: number,
+  what: string
+): Promise<void> {
+  const deadline = Date.now() + timeoutMs;
+  while (!condition()) {
+    if (Date.now() > deadline) {
+      throw new Error(`Gave up after ${timeoutMs / 1000} s waiting for ${what}.`);
+    }
+    await new Promise((resolve) => setTimeout(resolve, 50));
+  }
+}

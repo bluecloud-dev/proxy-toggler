@@ -78,6 +78,8 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ### Changed
 
+- Proxy Toggler starts once VS Code has finished starting, instead of at its first command, so every
+  window shows the toggle and keeps in step with the others from the start.
 - The words are now on and off: the commands are **Turn Proxy On** and **Turn Proxy Off**, with
   the same command IDs. Turning the proxy on or off no longer shows a notification by default.
 - `proxyToggler.confirmBeforeToggle` asks only before the status bar toggle and the Toggle Proxy

@@ -55,8 +55,8 @@ flowchart LR
 
 ## How a command runs
 
-1. VS Code activates the extension the first time one of its commands runs (no explicit
-   activation events are needed since VS Code 1.74).
+1. VS Code activates the extension once it has finished starting (`onStartupFinished`), or
+   earlier when one of its commands runs (no `onCommand` events are needed since VS Code 1.74).
 2. The registrar in `vscode/error-reporting.ts` calls the command. Commands show the errors they
    can explain; any other error is logged to the **Proxy Toggler** output channel and shown with
    the command's failure message.
@@ -211,8 +211,11 @@ failure to show it.
   of them still did 500 ms later. `readYourWrites` wraps the `Memento` port and serves a written
   value from memory for five seconds. After that the host's value wins, so a change made by another
   window is still seen.
-- **Lazy activation.** Only commands activate the extension, so the status bar item appears after
-  the first command in a session.
+- **Activation after start-up.** Every window needs the extension running without a command: the
+  toggle shows the record, reconciliation keeps the window in step with the others, drift shows,
+  and the 0.1.x migration and secret removal run. `onStartupFinished` activates it once VS Code has
+  started, so it does not delay start-up. An integration test and the packaged test check that it
+  activates with no command run.
 - **No stored credentials.** Profiles hold no credentials, and the extension never sets
   `http.proxyAuthorization`; VS Code's login dialog answers a proxy's sign-in request (ADR 0003).
 - **Bundled output.** esbuild produces `dist/extension.js`, the only code that ships. `out/` holds
