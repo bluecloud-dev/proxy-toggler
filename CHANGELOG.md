@@ -75,6 +75,11 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ### Fixed
 
+- Every window and every VS Code Profile now shows the same on or off: each window compares its
+  record with VS Code's proxy settings at activation and after every change, so a switch in one
+  window shows in all of them, and a second VS Code Profile no longer shows "Not Configured" while
+  the proxy is on. Only the focused window re-applies an outside edit to the current profile.
+
 - Configure now shows the keychain message when the system keychain is locked or unavailable,
   instead of VS Code's generic "command failed" error.
 - **Sync** on the "VS Code proxy settings differ from Proxy Toggler state" warning records the

@@ -57,6 +57,8 @@ export type ProxyNotices = {
 export class ProxyManager {
   // Settles once the most recent state change has settled; see serialize().
   private lastChange: Promise<unknown> = Promise.resolve();
+  // Writes of settings this ProxyManager has under way; see isMakingOwnChange().
+  private ownWrites = 0;
   private readonly settingsWriter: ProxySettingsWriter;
 
   constructor(
@@ -85,7 +87,7 @@ export class ProxyManager {
         settingsMatch(settings, profileSettingValues(existing))
       );
       const added: Profile = { ...profile, name: profile.name.trim() };
-      await this.profilesSetting.write([...entries, added]);
+      await this.writing(() => this.profilesSetting.write([...entries, added]));
 
       if (!matchedBefore && settingsMatch(settings, profileSettingValues(added))) {
         await this.writeState({ isEnabled: true, currentProfile: added });
@@ -122,7 +124,9 @@ export class ProxyManager {
         name: profile.name.trim(),
         proxyUrl: profile.proxyUrl.trim()
       };
-      await this.profilesSetting.write(withProfile(entries, saved, originalName));
+      await this.writing(() =>
+        this.profilesSetting.write(withProfile(entries, saved, originalName))
+      );
       if (isCurrent) {
         if (isEnabled) {
           await this.applySettings(saved);
@@ -142,7 +146,9 @@ export class ProxyManager {
         await this.disable();
       }
 
-      await this.profilesSetting.write(withoutProfile(this.profileEntries(), name));
+      await this.writing(() =>
+        this.profilesSetting.write(withoutProfile(this.profileEntries(), name))
+      );
       if (isCurrent) {
         const first = sortByName(this.getProfiles())[0];
         await this.writeState({ isEnabled: false, currentProfile: first });
@@ -175,7 +181,7 @@ export class ProxyManager {
         // it. Only now is the marker written; until then every activation retries.
         await this.globalState.update(STORAGE_KEYS.migratedProxy, values);
       } else {
-        await this.profilesSetting.write([...entries, profile]);
+        await this.writing(() => this.profilesSetting.write([...entries, profile]));
       }
       // A VS Code Profile without a current profile starts with the one it used in 0.1.x.
       if (!this.storedRecord()?.currentProfile) {
@@ -227,6 +233,61 @@ export class ProxyManager {
         await this.writeState({ isEnabled: true, currentProfile: profile });
       }
       return profile;
+    });
+  }
+
+  // True while this ProxyManager writes settings, so that a change event can be told apart from
+  // an outside change.
+  isMakingOwnChange(): boolean {
+    return this.ownWrites > 0;
+  }
+
+  // Brings the record in step with VS Code's settings. Settings cleared: off. Settings that match a
+  // profile: that profile current and on, the current profile winning a tie. Anything else is
+  // drift, which leaves the record alone. Only the focused window re-applies an outside edit to
+  // the remembered current profile, and only while on and while the settings still hold its old
+  // values; a profile that is current only through the fallback is never re-applied.
+  reconcile(options: { focused: boolean }): Promise<void> {
+    return this.serialize(async () => {
+      const stored = this.storedRecord();
+      const remembered = stored?.currentProfile;
+      const profiles = this.getProfiles();
+      const settings = this.httpSettings.read();
+
+      if (options.focused && stored?.isEnabled && remembered) {
+        const edited = findProfileByName(profiles, remembered.name);
+        if (
+          edited &&
+          !sameValues(edited, remembered) &&
+          settingsMatch(settings, profileSettingValues(remembered))
+        ) {
+          // The remembered values change only once the apply succeeds.
+          await this.applySettings(edited);
+          await this.writeState({ isEnabled: true, currentProfile: edited });
+          return;
+        }
+      }
+
+      if (typeof settings.proxy !== 'string' || settings.proxy.trim().length === 0) {
+        if (stored?.isEnabled) {
+          await this.writeState({ isEnabled: false });
+        }
+        return;
+      }
+
+      const current = findCurrentProfile(profiles, remembered);
+      const matching = [...(current ? [current] : []), ...sortByName(profiles)].find((profile) =>
+        settingsMatch(settings, profileSettingValues(profile))
+      );
+      const inStep =
+        stored?.isEnabled === true &&
+        remembered !== undefined &&
+        matching !== undefined &&
+        sameName(remembered.name, matching.name) &&
+        sameValues(remembered, matching);
+      if (matching && !inStep) {
+        await this.writeState({ isEnabled: true, currentProfile: matching });
+      }
     });
   }
 
@@ -294,12 +355,23 @@ export class ProxyManager {
 
   private async applySettings(profile: Profile): Promise<void> {
     await this.noticeRemovedCredentials();
-    await this.settingsWriter.apply(profileSettingValues(profile));
+    await this.writing(() => this.settingsWriter.apply(profileSettingValues(profile)));
   }
 
   private async clearSettings(): Promise<void> {
     await this.noticeRemovedCredentials();
-    await this.settingsWriter.clear();
+    await this.writing(() => this.settingsWriter.clear());
+  }
+
+  // Marks a write as this window's own for as long as it is under way. VS Code fires the change
+  // event before the write resolves, so the event arrives while it is marked (ADR 0004).
+  private async writing(write: () => Promise<void>): Promise<void> {
+    this.ownWrites += 1;
+    try {
+      await write();
+    } finally {
+      this.ownWrites -= 1;
+    }
   }
 
   // Profiles hold no credentials, so a write always removes any that http.proxy holds.

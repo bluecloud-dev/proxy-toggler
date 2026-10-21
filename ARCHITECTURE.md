@@ -71,11 +71,26 @@ At activation these background tasks run, and their failures are logged:
 - a UI refresh;
 - the removal of the credentials 0.1.x stored. When it found a secret, a one-time notice appears
   in the next focused window of that VS Code Profile;
-- the migration of the 0.1.x configuration into a profile (ADR 0001), then a drift check that
-  offers to sync the stored toggle state when VS Code's `http.*` settings no longer match it;
+- the migration of the 0.1.x configuration into a profile (ADR 0001), then reconciliation (below),
+  then a drift check that offers to sync the stored toggle state when VS Code's `http.*` settings
+  no longer match it;
 - once `proxyToggler.profiles` has stayed unchanged for two seconds, a second migration pass. It
   records the copy when the list still shows it, or makes the copy again when a VS Code Profile
   migrating at the same time overwrote the list.
+
+## Keeping windows in step
+
+Every window keeps the record of the settings it manages in step with them: at activation, when
+`http.*` or `proxyToggler.profiles` changes and the settings have then stayed unchanged for two
+seconds, and when the window gains focus. `ProxyManager.reconcile` turns the record off when the
+settings are cleared, and makes the profile they match current and on, the current profile
+winning a tie. A proxy that matches no profile is drift and leaves the record alone.
+
+Only the focused window acts on an outside change: it re-applies an outside edit to the
+remembered current profile, while on and while the settings still hold its old values; a window
+without focus leaves that to the next window to gain it (ADR 0004). VS Code fires the change event
+before `update()` resolves, so `ProxyManager` marks its own writes while they are under way, and a
+window treats the events they cause as done.
 
 ## Ports
 

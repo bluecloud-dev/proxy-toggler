@@ -41,7 +41,7 @@ describe('createProxyToggler', () => {
         COMMANDS.switchProfile
       ]
     );
-    assert.equal(context.subscriptions.length, 9);
+    assert.equal(context.subscriptions.length, 10);
   });
 
   it('runs every command without a saved configuration', async () => {
@@ -58,18 +58,15 @@ describe('createProxyToggler', () => {
     );
   });
 
-  it('syncs the stored state when the user accepts the drift prompt', async () => {
+  it('turns the record on without asking when the settings match a profile at activation', async () => {
     const { vscode, api } = activateWith(
-      { settings: { ...APPLIED_SETTINGS, ...PROFILES }, answer: () => 'Sync' },
+      { settings: { ...APPLIED_SETTINGS, ...PROFILES } },
       { 'proxyToggler.state': { isEnabled: false, hasConfiguration: true } }
     );
 
     await flushBackgroundTasks();
 
-    assert.deepEqual(
-      vscode.messages.map((message) => message.message),
-      ['VS Code proxy settings differ from Proxy Toggler state.']
-    );
+    assert.deepEqual(vscode.messages, []);
     assert.equal(api.getState().isEnabled, true);
   });
 
@@ -127,7 +124,7 @@ describe('createProxyToggler', () => {
 
     it('says ON or OFF with one profile, and names it in the tooltip and label', async () => {
       const { vscode } = activateWith(
-        { settings: PROFILES },
+        { settings: { ...PROFILES, ...APPLIED_SETTINGS } },
         { 'proxyToggler.state': { isEnabled: true, currentProfile: PROFILE } }
       );
       await flushBackgroundTasks();
@@ -142,7 +139,7 @@ describe('createProxyToggler', () => {
     it('shows the current profile while on once two or more profiles exist', async () => {
       const settings = { 'proxyToggler.profiles': [HOME, PROFILE] };
       const on = activateWith(
-        { settings },
+        { settings: { ...settings, ...APPLIED_SETTINGS } },
         { 'proxyToggler.state': { isEnabled: true, currentProfile: PROFILE } }
       );
       const off = activateWith(

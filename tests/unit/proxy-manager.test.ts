@@ -232,6 +232,159 @@ describe('ProxyManager', () => {
     });
   });
 
+  describe('reconciling with VS Code settings', () => {
+    const applied = (profile: typeof WORK) => ({
+      proxy: profile.proxyUrl,
+      proxyStrictSSL: profile.strictSSL,
+      noProxy: profile.bypassList
+    });
+
+    it('turns the record off when the settings are cleared', async () => {
+      const { proxyManager } = setup({
+        profiles: [WORK],
+        record: { isEnabled: true, currentProfile: WORK }
+      });
+
+      await proxyManager.reconcile({ focused: true });
+
+      assert.equal(proxyManager.getState().isEnabled, false);
+    });
+
+    it('makes a profile that matches the settings current and on', async () => {
+      const { httpSettings, proxyManager } = setup({
+        profiles: [WORK, HOME],
+        record: { isEnabled: false, currentProfile: WORK },
+        http: { current: applied(HOME) }
+      });
+
+      await proxyManager.reconcile({ focused: false });
+
+      assert.deepEqual(proxyManager.getState(), {
+        isEnabled: true,
+        hasConfiguration: true,
+        currentProfile: HOME
+      });
+      assert.deepEqual(httpSettings.updates, []);
+    });
+
+    it('lets the current profile win a tie', async () => {
+      const twin = { ...HOME, name: 'Twin' };
+      const { proxyManager } = setup({
+        profiles: [twin, HOME],
+        record: { isEnabled: false, currentProfile: HOME },
+        http: { current: applied(HOME) }
+      });
+
+      await proxyManager.reconcile({ focused: true });
+
+      assert.equal(proxyManager.getState().currentProfile?.name, 'Home');
+    });
+
+    it('leaves the record alone while the settings match no profile', async () => {
+      const { globalState, proxyManager } = setup({
+        profiles: [WORK],
+        record: { isEnabled: true, currentProfile: WORK },
+        http: { current: { proxy: 'http://elsewhere.example:1' } }
+      });
+
+      await proxyManager.reconcile({ focused: true });
+
+      assert.deepEqual(globalState.updates, []);
+    });
+
+    it('writes nothing when the record is already in step', async () => {
+      const { globalState, httpSettings, proxyManager } = setup({
+        profiles: [WORK],
+        record: { isEnabled: true, currentProfile: WORK },
+        http: { current: applied(WORK) }
+      });
+
+      await proxyManager.reconcile({ focused: true });
+
+      assert.deepEqual(globalState.updates, []);
+      assert.deepEqual(httpSettings.updates, []);
+    });
+
+    describe('after an outside edit to the remembered current profile while on', () => {
+      const edited = { ...WORK, proxyUrl: 'http://new.example.com:3128' };
+      const outsideEdit = (http?: Parameters<typeof createHttpSettings>[0]) =>
+        setup({
+          profiles: [edited, HOME],
+          record: { isEnabled: true, currentProfile: WORK },
+          http: { current: applied(WORK), ...http }
+        });
+
+      it('re-applies it in the focused window and remembers the new values', async () => {
+        const { httpSettings, proxyManager } = outsideEdit();
+
+        await proxyManager.reconcile({ focused: true });
+
+        assert.equal(httpSettings.current.proxy, edited.proxyUrl);
+        assert.deepEqual(proxyManager.getState().currentProfile, edited);
+        assert.equal(proxyManager.getState().isEnabled, true);
+      });
+
+      it('leaves it to the focused window when this one has no focus', async () => {
+        const { globalState, httpSettings, proxyManager } = outsideEdit();
+
+        await proxyManager.reconcile({ focused: false });
+
+        assert.deepEqual(httpSettings.updates, []);
+        assert.deepEqual(globalState.updates, []);
+      });
+
+      it('keeps the remembered values when re-applying fails', async () => {
+        const { globalState, proxyManager } = outsideEdit({ failKey: 'noProxy' });
+
+        await assert.rejects(() => proxyManager.reconcile({ focused: true }), ConfigurationError);
+
+        assert.deepEqual(
+          (globalState.store.get('proxyToggler.state') as { currentProfile: unknown })
+            .currentProfile,
+          WORK
+        );
+      });
+    });
+
+    it('never re-applies a profile that is current only through the fallback', async () => {
+      const gone = { ...WORK, name: 'Gone' };
+      const { httpSettings, globalState, proxyManager } = setup({
+        profiles: [HOME],
+        record: { isEnabled: true, currentProfile: gone },
+        http: { current: applied(gone) }
+      });
+
+      await proxyManager.reconcile({ focused: true });
+
+      assert.deepEqual(httpSettings.updates, []);
+      assert.deepEqual(globalState.updates, []);
+    });
+  });
+
+  describe('own changes', () => {
+    it('are known while their writes are under way, and only then', async () => {
+      const seen: boolean[] = [];
+      const httpSettings = createHttpSettings();
+      const proxyManager = new ProxyManager(
+        createMemento(),
+        {
+          ...httpSettings,
+          update: async (key, value) => {
+            // VS Code fires the change event before the update resolves.
+            seen.push(proxyManager.isMakingOwnChange());
+            await httpSettings.update(key, value);
+          }
+        },
+        createProfilesSetting([WORK])
+      );
+
+      await proxyManager.enableProxy();
+
+      assert.deepEqual(seen, [true, true, true]);
+      assert.equal(proxyManager.isMakingOwnChange(), false);
+    });
+  });
+
   describe('credentials in http.proxy', () => {
     const WITH_CREDENTIALS = 'http://alice:secret@proxy.example.com:8080';
 

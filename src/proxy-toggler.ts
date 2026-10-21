@@ -33,6 +33,8 @@ export type ProxyTogglerApi = {
 // that other windows may make at the same time, such as at start-up.
 const SETTLE_MS = 2000;
 
+const PROXY_SETTINGS = ['http.proxy', 'http.proxyStrictSSL', 'http.noProxy'];
+
 export function createProxyToggler(
   vscodeApi: VscodeApi,
   context: ExtensionContext
@@ -80,19 +82,49 @@ export function createProxyToggler(
       await warnAboutHiddenProfiles(vscodeApi, globalState, notificationService, hidden);
     }
   };
-  // Hand edits and Settings Sync can change the profiles at any time.
+  // Every window keeps its own record in step with the settings it manages. Only the focused
+  // window re-applies an outside edit; reconcile() knows which window it runs in.
+  const reconcile = async (): Promise<void> => {
+    await proxyManager.reconcile({ focused: vscodeApi.window.state.focused });
+    await refreshUi();
+  };
+  // Waits until the settings settle, so that a change made of several writes is read whole.
+  let settleTimer: NodeJS.Timeout | undefined;
+  const reconcileOnceSettled = (): void => {
+    clearTimeout(settleTimer);
+    settleTimer = setTimeout(() => {
+      runInBackground(logger, 'Reconciliation', reconcile);
+    }, SETTLE_MS).unref();
+  };
+  context.subscriptions.push({ dispose: () => clearTimeout(settleTimer) });
+
+  // Hand edits, Settings Sync, other windows and other tools can change both at any time.
   context.subscriptions.push(
     vscodeApi.workspace.onDidChangeConfiguration((event) => {
-      if (event.affectsConfiguration('proxyToggler.profiles')) {
-        runInBackground(logger, 'Status bar refresh', refreshUi);
+      const profilesChanged = event.affectsConfiguration('proxyToggler.profiles');
+      const proxyChanged = PROXY_SETTINGS.some((id) => event.affectsConfiguration(id));
+      if (!profilesChanged && !proxyChanged) {
+        return;
+      }
+
+      runInBackground(logger, 'Status bar refresh', refreshUi);
+      if (profilesChanged) {
         runInBackground(logger, 'Hidden profiles warning', warnIfFocused);
+      }
+      // A window treats its own change as done (ADR 0004).
+      if (!proxyManager.isMakingOwnChange()) {
+        reconcileOnceSettled();
       }
     })
   );
   context.subscriptions.push(
-    vscodeApi.window.onDidChangeWindowState(() => {
+    vscodeApi.window.onDidChangeWindowState((windowState) => {
       runInBackground(logger, 'Removed credentials notice', announceIfFocused);
       runInBackground(logger, 'Hidden profiles warning', warnIfFocused);
+      // An outside change seen while no window had focus falls to the next window to gain it.
+      if (windowState.focused) {
+        runInBackground(logger, 'Reconciliation', reconcile);
+      }
     })
   );
   runInBackground(logger, 'Hidden profiles warning', warnIfFocused);
@@ -101,9 +133,10 @@ export function createProxyToggler(
     await announceIfFocused();
   });
   runInBackground(logger, 'Migration and drift check', async () => {
-    // Migration first, so that the drift check sees the profile this VS Code Profile used in 0.1.x.
+    // Migration first, so that reconciliation and the drift check see the profile this VS Code
+    // Profile used in 0.1.x.
     await proxyManager.migrateSavedProxy();
-    await refreshUi();
+    await reconcile();
     await checkSettingsDrift(proxyManager, notificationService, refreshUi);
   });
   // A later read, once writes from other windows have landed, records the copy or makes it again.

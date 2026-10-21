@@ -32,7 +32,19 @@ type FakeStatusBarItem = StatusBarItem & {
   disposeCalls: number;
 };
 
+// What the windows of one VS Code share: settings, and the change events every window hears.
+export type FakeHost = {
+  settings: Map<string, unknown>;
+  windows: Array<(ids: readonly string[]) => void>;
+};
+
+export function createFakeHost(settings: Record<string, unknown> = {}): FakeHost {
+  return { settings: new Map(Object.entries(settings)), windows: [] };
+}
+
 export type FakeVscodeOptions = {
+  // Another window of the same VS Code; by default each fake is a VS Code of its own.
+  host?: FakeHost;
   // Answers for successive showInputBox calls. Each answer runs through validateInput, and one it
   // rejects throws: VS Code keeps the input box open, so that answer could never be submitted.
   inputs?: Array<string | undefined>;
@@ -78,7 +90,11 @@ export function createFakeVscode(options: FakeVscodeOptions = {}): FakeVscode {
   const backButton = { iconPath: { id: 'arrow-left' } };
   const executedCommands: FakeVscode['executedCommands'] = [];
   const messages: RecordedMessage[] = [];
-  const settings = new Map(Object.entries(options.settings ?? {}));
+  const host = options.host ?? createFakeHost();
+  for (const [id, value] of Object.entries(options.settings ?? {})) {
+    host.settings.set(id, value);
+  }
+  const settings = host.settings;
   const defaults = new Map(Object.entries(options.defaults ?? {}));
   const settingUpdates: FakeVscode['settingUpdates'] = [];
   const statusBarItems: FakeStatusBarItem[] = [];
@@ -86,14 +102,19 @@ export function createFakeVscode(options: FakeVscodeOptions = {}): FakeVscode {
   const inputs = [...(options.inputs ?? [])];
   let quickPickCalls = 0;
   const configurationListeners: Array<(event: ConfigurationChangeEvent) => unknown> = [];
-  // VS Code fires the change event before the update that caused it resolves.
-  const fireConfigurationChange = (ids: readonly string[]): void => {
+  host.windows.push((ids) => {
     const event: ConfigurationChangeEvent = {
       affectsConfiguration: (section) =>
         ids.some((id) => id === section || id.startsWith(`${section}.`))
     };
     for (const listener of [...configurationListeners]) {
       listener(event);
+    }
+  });
+  // VS Code fires the change event, in every window, before the update that caused it resolves.
+  const fireConfigurationChange = (ids: readonly string[]): void => {
+    for (const window of [...host.windows]) {
+      window(ids);
     }
   };
   const windowState = { focused: options.focused ?? true };
