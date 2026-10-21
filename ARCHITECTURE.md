@@ -106,6 +106,7 @@ tests pin them.
 | `globalState`   | `proxyToggler.savedProxy`                                                | 0.1.x's `{ proxyUrl, strictSSL, noProxy }`; v0.2.0 never writes it (ADR 0001)                    |
 | `globalState`   | `proxyToggler.migratedProxy`                                             | the `savedProxy` values whose copy a later read showed, as `{ proxyUrl, strictSSL, bypassList }` |
 | `globalState`   | `proxyToggler.state`                                                     | the record: `{ isEnabled, hasConfiguration, currentProfile }`; other fields are kept             |
+| `globalState`   | `proxyToggler.hiddenProfilesWarned`                                      | a SHA-256 hash of the hidden entries last warned about; never the entries themselves             |
 | `SecretStorage` | `proxyToggler.credentials.username`, `proxyToggler.credentials.password` | trimmed strings; no version applied them, and every activation deletes them (ADR 0003)           |
 | `globalState`   | `proxyToggler.credentialsNoticePending`                                  | `true` from a removal that found a secret until the notice shows                                 |
 | User settings   | `http.proxy`, `http.proxyStrictSSL`, `http.noProxy` (array)              | written on enable, removed on disable                                                            |

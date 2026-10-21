@@ -14,6 +14,9 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 - Each VS Code Profile copies its 0.1.x configuration into a profile named after the proxy host,
   and makes it current without turning it on. The 0.1.x configuration stays as it was, so a
   downgrade still finds it.
+- Profiles edited by hand or synced from another machine are checked like the UI's input. Invalid
+  entries, and later entries that repeat a name, stay hidden, and one warning names them, once per
+  distinct set. Its **Open Settings** button opens the application settings file.
 - A **Proxy Toggler** output channel that logs unexpected errors. Credentials are never logged.
 - Proxy Toggler works in Restricted Mode, when a folder is not trusted, and in virtual
   workspaces; VS Code used to disable it there. It reads no workspace files, and a workspace can

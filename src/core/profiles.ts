@@ -1,5 +1,8 @@
 import { settingsMatch } from './match';
 import type { ProxySettingValues } from './proxy-settings-writer';
+import { validateBypassPattern, validateProxyUrl, ValidationError } from './validation';
+
+const MAX_NAME_LENGTH = 30;
 
 // A profile as Proxy Toggler uses it. Entries in proxyToggler.profiles may hold more fields,
 // which saves keep, but profiles never hold credentials (ADR 0003).
@@ -16,16 +19,44 @@ export type ProfilesSetting = {
   write(entries: readonly unknown[]): Promise<void>;
 };
 
-// The entries of the proxyToggler.profiles setting that have the shape of a profile.
-export function readProfiles(value: unknown): Profile[] {
+// An entry of proxyToggler.profiles that the switcher hides, and why. `label` names it for the
+// user; `entry` is the entry as written, which may hold anything, so it is never shown or stored.
+export type FlaggedEntry = { entry: unknown; label: string; reason: string };
+
+// The profiles the switcher shows: the entries that pass the checks the UI applies to its own
+// input, each owning its name. The first entry with a name owns it, valid or not, so later
+// entries with that name are hidden too (ADR 0002).
+export function checkProfiles(value: unknown): { profiles: Profile[]; flagged: FlaggedEntry[] } {
+  const profiles: Profile[] = [];
+  const flagged: FlaggedEntry[] = [];
   if (!Array.isArray(value)) {
-    return [];
+    return { profiles, flagged };
   }
 
-  return value.flatMap((entry: unknown) => {
-    const profile = asProfile(entry);
-    return profile ? [profile] : [];
+  const owned = new Set<string>();
+  value.forEach((entry: unknown, index) => {
+    const name = entryName(entry);
+    const label = name ? `"${name}"` : `entry ${index + 1}`;
+    if (name && owned.has(name.toLowerCase())) {
+      flagged.push({ entry, label, reason: 'repeats the name of an earlier entry' });
+      return;
+    }
+    if (name) {
+      owned.add(name.toLowerCase());
+    }
+
+    const checked = toProfile(entry);
+    if (typeof checked === 'string') {
+      flagged.push({ entry, label, reason: checked });
+    } else {
+      profiles.push(checked);
+    }
   });
+  return { profiles, flagged };
+}
+
+export function readProfiles(value: unknown): Profile[] {
+  return checkProfiles(value).profiles;
 }
 
 // The current profile is the one with the remembered name, else the one with the remembered values,
@@ -65,8 +96,6 @@ export function withProfile(
     entryIndex === index ? { ...(entry as object), ...profile } : entry
   );
 }
-
-const MAX_NAME_LENGTH = 30;
 
 // The name a new profile gets: its proxy host, with " (2)", " (3)"... while an entry holds that
 // name, shortened with "…" so that the name and its suffix fit in MAX_NAME_LENGTH.
@@ -111,32 +140,69 @@ export function entryNames(entries: readonly unknown[]): string[] {
   });
 }
 
+// The trimmed name of an entry, or undefined when it has none.
 function entryName(entry: unknown): string | undefined {
   if (typeof entry !== 'object' || entry === null) {
     return undefined;
   }
 
   const { name } = entry as { name?: unknown };
-  return typeof name === 'string' ? name : undefined;
+  const trimmed = typeof name === 'string' ? name.trim() : '';
+  return trimmed.length > 0 ? trimmed : undefined;
 }
 
-function asProfile(entry: unknown): Profile | undefined {
-  if (typeof entry !== 'object' || entry === null) {
-    return undefined;
+// The profile an entry holds, or the reason the UI would have refused it.
+function toProfile(entry: unknown): Profile | string {
+  if (typeof entry !== 'object' || entry === null || Array.isArray(entry)) {
+    return 'is not a profile';
   }
 
-  const { name, proxyUrl, strictSSL, bypassList } = entry as Record<string, unknown>;
-  if (typeof name !== 'string' || typeof proxyUrl !== 'string') {
-    return undefined;
+  const { proxyUrl, strictSSL, bypassList } = entry as Record<string, unknown>;
+  const name = entryName(entry);
+  if (name === undefined) {
+    return 'has no name';
+  }
+  if (name.length > MAX_NAME_LENGTH) {
+    return `has a name longer than ${MAX_NAME_LENGTH} characters`;
+  }
+  if (typeof proxyUrl !== 'string') {
+    return 'has no proxy URL';
+  }
+  const urlProblem = problemWith(() => validateProxyUrl(proxyUrl));
+  if (urlProblem) {
+    return `has an invalid proxy URL: ${urlProblem}`;
+  }
+  // Hand-written entries may leave these two out; they then start as a new profile does.
+  if (strictSSL !== undefined && typeof strictSSL !== 'boolean') {
+    return 'has a strictSSL value that is neither true nor false';
+  }
+  const patterns = bypassList ?? [];
+  if (!Array.isArray(patterns) || !patterns.every((pattern) => typeof pattern === 'string')) {
+    return 'has a bypass list that is not a list of host names';
+  }
+  for (const pattern of patterns) {
+    const patternProblem = problemWith(() => validateBypassPattern(pattern.trim()));
+    if (patternProblem) {
+      return `has an invalid bypass pattern: ${patternProblem}`;
+    }
   }
 
-  // Hand-written entries may leave these out; they then start as a new profile does.
   return {
     name,
-    proxyUrl,
-    strictSSL: typeof strictSSL === 'boolean' ? strictSSL : true,
-    bypassList: Array.isArray(bypassList)
-      ? bypassList.filter((pattern): pattern is string => typeof pattern === 'string')
-      : []
+    proxyUrl: proxyUrl.trim(),
+    strictSSL: strictSSL ?? true,
+    bypassList: patterns.map((pattern) => pattern.trim())
   };
+}
+
+function problemWith(validate: () => void): string | undefined {
+  try {
+    validate();
+    return undefined;
+  } catch (error: unknown) {
+    if (error instanceof ValidationError) {
+      return error.reason;
+    }
+    throw error;
+  }
 }

@@ -1,6 +1,11 @@
 import { strict as assert } from 'node:assert';
 
-import { defaultProfileName, findCurrentProfile, readProfiles } from '../../src/core/profiles';
+import {
+  checkProfiles,
+  defaultProfileName,
+  findCurrentProfile,
+  readProfiles
+} from '../../src/core/profiles';
 
 const WORK = {
   name: 'Work',
@@ -86,5 +91,60 @@ describe('defaultProfileName', () => {
       defaultProfileName(host, ['proxy-gateway-eu-west-1.corp.…']),
       'proxy-gateway-eu-west-1.c… (2)'
     );
+  });
+});
+
+describe('checkProfiles', () => {
+  const reasonFor = (entry: unknown): string | undefined =>
+    checkProfiles([entry]).flagged[0]?.reason;
+
+  it('flags entries that the UI would refuse, saying why', () => {
+    const cases: Array<[unknown, RegExp]> = [
+      ['Work', /not a profile/],
+      [{ proxyUrl: WORK.proxyUrl }, /no name/],
+      [{ ...WORK, name: '   ' }, /no name/],
+      [{ ...WORK, name: 'x'.repeat(31) }, /longer than 30 characters/],
+      [{ name: 'Work' }, /no proxy URL/],
+      [{ ...WORK, proxyUrl: 'proxy.example.com:8080' }, /invalid proxy URL/],
+      [{ ...WORK, proxyUrl: 'http://alice:secret@proxy.example.com:8080' }, /credentials/i],
+      [{ ...WORK, strictSSL: 'no' }, /strictSSL/],
+      [{ ...WORK, bypassList: '.corp' }, /not a list/],
+      [{ ...WORK, bypassList: ['*'] }, /invalid bypass pattern/]
+    ];
+
+    for (const [entry, reason] of cases) {
+      assert.match(reasonFor(entry) ?? 'not flagged', reason, JSON.stringify(entry));
+    }
+  });
+
+  it('names a flagged entry by its name, or else by its position', () => {
+    const { flagged } = checkProfiles([WORK, { name: 'Bad' }, { proxyUrl: WORK.proxyUrl }]);
+
+    assert.deepEqual(
+      flagged.map((entry) => entry.label),
+      ['"Bad"', 'entry 3']
+    );
+  });
+
+  it('hides later entries that repeat a name, ignoring letter case and spaces', () => {
+    const { profiles, flagged } = checkProfiles([WORK, { ...WORK, name: ' WORK ' }]);
+
+    assert.deepEqual(profiles, [WORK]);
+    assert.match(flagged[0]?.reason ?? '', /repeats the name/);
+  });
+
+  it('lets the first entry with a name own it, even when that entry is invalid', () => {
+    const { profiles, flagged } = checkProfiles([{ name: 'Work', proxyUrl: 'bad' }, WORK]);
+
+    assert.deepEqual(profiles, []);
+    assert.equal(flagged.length, 2);
+  });
+
+  it('trims names and proxy URLs', () => {
+    const { profiles } = checkProfiles([
+      { ...WORK, name: ' Work ', proxyUrl: ` ${WORK.proxyUrl} ` }
+    ]);
+
+    assert.deepEqual(profiles, [WORK]);
   });
 });

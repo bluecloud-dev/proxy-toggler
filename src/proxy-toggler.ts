@@ -3,6 +3,7 @@ import { COMMANDS, CONTEXT_KEYS } from './commands/command-ids';
 import { configureProxyCommand } from './commands/configure-proxy';
 import { disableProxyCommand } from './commands/disable-proxy';
 import { enableProxyCommand } from './commands/enable-proxy';
+import { warnAboutHiddenProfiles } from './commands/profile-warning';
 import { announceRemovedCredentials, removeStoredCredentials } from './commands/stored-credentials';
 import { toggleProxyCommand } from './commands/toggle-proxy';
 import { KeychainService } from './core/keychain-service';
@@ -59,25 +60,35 @@ export function createProxyToggler(
   };
 
   runInBackground(logger, 'Status bar refresh', refreshUi);
-  // Hand edits and Settings Sync can add or remove profiles at any time.
-  context.subscriptions.push(
-    vscodeApi.workspace.onDidChangeConfiguration((event) => {
-      if (event.affectsConfiguration('proxyToggler.profiles')) {
-        runInBackground(logger, 'Status bar refresh', refreshUi);
-      }
-    })
-  );
-  // One-time notices appear in a focused window, so the user sees them (ADR 0004).
+  // Warnings and one-time notices appear in the focused window, or else in the next window to
+  // gain focus (ADR 0004).
   const announceIfFocused = async (): Promise<void> => {
     if (vscodeApi.window.state.focused) {
       await announceRemovedCredentials(globalState, notificationService);
     }
   };
+  const warnIfFocused = async (): Promise<void> => {
+    if (vscodeApi.window.state.focused) {
+      const hidden = proxyManager.getHiddenProfiles();
+      await warnAboutHiddenProfiles(vscodeApi, globalState, notificationService, hidden);
+    }
+  };
+  // Hand edits and Settings Sync can change the profiles at any time.
+  context.subscriptions.push(
+    vscodeApi.workspace.onDidChangeConfiguration((event) => {
+      if (event.affectsConfiguration('proxyToggler.profiles')) {
+        runInBackground(logger, 'Status bar refresh', refreshUi);
+        runInBackground(logger, 'Hidden profiles warning', warnIfFocused);
+      }
+    })
+  );
   context.subscriptions.push(
     vscodeApi.window.onDidChangeWindowState(() => {
       runInBackground(logger, 'Removed credentials notice', announceIfFocused);
+      runInBackground(logger, 'Hidden profiles warning', warnIfFocused);
     })
   );
+  runInBackground(logger, 'Hidden profiles warning', warnIfFocused);
   runInBackground(logger, 'Stored credentials removal', async () => {
     await removeStoredCredentials(keychainService, globalState);
     await announceIfFocused();

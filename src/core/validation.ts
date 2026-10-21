@@ -90,11 +90,11 @@ export function validateCredentials(username?: string, password?: string): void 
 
 export function validateNoProxyList(noProxy?: string): void {
   for (const entry of parseNoProxyList(noProxy)) {
-    validateNoProxyEntry(entry);
+    validateBypassPattern(entry);
   }
 }
 
-function validateNoProxyEntry(entry: string): void {
+export function validateBypassPattern(entry: string): void {
   const invalidEntry = (reason: string): ValidationError =>
     new ValidationError('noProxy', reason, NO_PROXY_EXAMPLES);
 

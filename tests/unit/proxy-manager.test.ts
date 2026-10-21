@@ -96,6 +96,17 @@ describe('ProxyManager', () => {
       await assert.rejects(() => proxyManager.toggleProxy(), /No proxy configuration found/);
     });
 
+    it('never makes a hidden entry current', () => {
+      const hidden = { name: 'Aardvark', proxyUrl: 'not a url' };
+      const { proxyManager } = setup({ profiles: [hidden, WORK] });
+
+      assert.deepEqual(proxyManager.getState().currentProfile, WORK);
+      assert.deepEqual(
+        proxyManager.getHiddenProfiles().map(({ label }) => label),
+        ['"Aardvark"']
+      );
+    });
+
     it('keeps the current profile across a reload', () => {
       const record = { isEnabled: false, currentProfile: WORK };
       const { proxyManager } = setup({ profiles: [HOME, WORK], record });

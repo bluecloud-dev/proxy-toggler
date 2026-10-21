@@ -4,9 +4,11 @@ import type { KeychainService } from './keychain-service';
 import { settingsMatch } from './match';
 import { parseNoProxyList, withDefaultNoProxy } from './no-proxy';
 import {
+  checkProfiles,
   defaultProfileName,
   entryNames,
   findCurrentProfile,
+  type FlaggedEntry,
   type Profile,
   profileSettingValues,
   type ProfilesSetting,
@@ -197,6 +199,11 @@ export class ProxyManager {
     const currentProfile = findCurrentProfile(profiles, stored?.currentProfile);
     const state = { isEnabled: stored?.isEnabled ?? false, hasConfiguration: profiles.length > 0 };
     return currentProfile ? { ...state, currentProfile } : state;
+  }
+
+  // The entries of proxyToggler.profiles that the switcher hides, and why.
+  getHiddenProfiles(): FlaggedEntry[] {
+    return checkProfiles(this.profilesSetting.read()).flagged;
   }
 
   hasConfiguration(): boolean {
