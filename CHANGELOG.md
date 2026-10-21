@@ -27,6 +27,9 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
   Profile…** command, lists the profiles alphabetically with the current one checked, then the
   proxy actions. It opens on the current profile, and picking a profile turns it on. Keybindings
   can pass a profile name to `proxyToggler.switchProfile`.
+- The README explains how VS Code uses proxy settings: signing in to a proxy, Settings Sync,
+  VS Code Profiles, bypass patterns that work for all of VS Code, what "off" means, and
+  `http.proxySupport`.
 - The README shows keybinding snippets that pass a profile name to `proxyToggler.switchProfile`;
   Proxy Toggler ships no default keybindings.
 - While VS Code's proxy settings carry a proxy that matches no profile, the toggle keeps its text

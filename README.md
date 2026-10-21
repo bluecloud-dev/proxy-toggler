@@ -32,6 +32,7 @@
 - [Commands](#keyboard-commands)
 - [Keybindings](#keyboard-keybindings)
 - [Settings](#gear-settings)
+- [How VS Code Uses Proxy Settings](#globe_with_meridians-how-vs-code-uses-proxy-settings)
 - [How It Works](#bulb-how-it-works)
 - [Security](#lock-security)
 - [Troubleshooting](#wrench-troubleshooting)
@@ -126,6 +127,73 @@ This extension manages the following VS Code settings:
 - `http.proxy` — The proxy URL
 - `http.proxyStrictSSL` — Whether to verify SSL certificates
 - `http.noProxy` — Hosts to exclude from proxy
+
+## :globe_with_meridians: How VS Code Uses Proxy Settings
+
+### Signing in to a proxy
+
+Profiles hold no user name or password. When a proxy asks for a sign-in (HTTP status 407), VS Code
+shows its own login dialog and can remember what you enter.
+
+- VS Code's own requests, such as Marketplace searches, answer Basic, Digest, NTLM and Negotiate
+  sign-ins through that dialog.
+- Extensions' `https://` requests answer Basic sign-ins through the same dialog. Their plain
+  `http://` requests through a proxy that asks for Basic sign-in fail with the 407: VS Code never
+  shows the dialog for those.
+
+### Settings Sync
+
+Settings Sync uploads both the `http.*` settings and `proxyToggler.profiles` while its Settings
+category is on:
+
+- `http.proxy`, `http.proxyStrictSSL` and `http.noProxy` carry the proxy in use, including any
+  `user:pass@` someone wrote into `http.proxy`;
+- `proxyToggler.profiles` carries every profile: names, proxy hosts and bypass patterns.
+
+To keep either on one machine, list it in `settingsSync.ignoredSettings`, for example
+`"settingsSync.ignoredSettings": ["http.proxy", "proxyToggler.profiles"]`. What Proxy Toggler
+remembers on a machine, such as the current profile and on or off, is never synced.
+
+When Settings Sync shows a conflict in `proxyToggler.profiles`, for example after two machines each
+copied their 0.1.x configuration into a profile, keep the entries of both sides. If both hold a
+profile with the same name, Proxy Toggler shows the first and warns about the other.
+
+### VS Code Profiles
+
+VS Code's proxy settings are shared by all VS Code Profiles: turning the proxy on in one turns it on
+in all of them. Proxy Toggler's profiles are shared the same way, and live in the Default profile's
+settings file (**Preferences: Open Application Settings (JSON)**). Each VS Code Profile remembers
+its own current profile.
+
+### Bypass patterns
+
+The VS Code window and extensions read the bypass list differently. They agree on:
+
+- exact host names, such as `intranet.example.com`;
+- domains written with a leading dot, such as `.example.com`, for their subdomains.
+
+Loopback addresses (`localhost`, `127.0.0.1` and `::1`) always go direct, so a profile needs no
+bypass entry for them. Prefer `.example.com` to `*.example.com`: extensions never match a pattern such
+as `*.example.com`, which only the window reads. A bypass list affects the `NO_PROXY` environment variable too: while
+`http.noProxy` is empty, VS Code reads `NO_PROXY`; any entry makes it ignore `NO_PROXY`.
+
+### What "off" means
+
+Turning the proxy off removes `http.proxy`, `http.proxyStrictSSL` and `http.noProxy` from your
+settings, so Proxy Toggler sets no proxy. What VS Code uses next depends on how it started:
+
+- Until VS Code restarts, its own requests and extensions' requests go direct, unless VS Code's
+  environment sets `HTTP_PROXY` or `HTTPS_PROXY`; both then use that proxy.
+- After a restart, VS Code uses your system's proxy settings or a PAC file again, if you have one.
+
+The proxy lab measured this on VS Code 1.97 and the latest release; see
+[TESTING.md](TESTING.md#what-off-does).
+
+### `http.proxySupport`
+
+This setting decides how extensions use proxies: `override` (the default) applies VS Code's proxy
+settings to them, and `off` leaves extensions without any proxy support, so they ignore VS Code's
+proxy settings and the system's. Test Connection notes when it is `off`.
 
 ## :bulb: How It Works
 
