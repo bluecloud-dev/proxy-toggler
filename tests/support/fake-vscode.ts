@@ -281,6 +281,7 @@ export function createFakeVscode(options: FakeVscodeOptions = {}): FakeVscode {
       }
     },
     ConfigurationTarget: { Global: 1 },
+    ProgressLocation: { Notification: 15 },
     QuickInputButtons: { Back: backButton },
     ThemeColor: class {
       constructor(public readonly id: string) {}
@@ -347,6 +348,7 @@ export function createFakeVscode(options: FakeVscodeOptions = {}): FakeVscode {
       },
       showQuickPick: async <T extends QuickPickItem>(items: readonly T[]) =>
         options.pick?.(items, quickPickCalls++) as T | undefined,
+      withProgress: async (_options, task) => task(),
       state: windowState,
       onDidChangeWindowState: (listener) => {
         windowStateListeners.push(listener);

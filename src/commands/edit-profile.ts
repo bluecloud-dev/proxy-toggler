@@ -10,15 +10,19 @@ import { askText } from '../vscode/quick-input';
 import { pickOne } from '../vscode/quick-pick';
 import { pickProfile } from './pick-profile';
 import { showKnownProxyError } from './proxy-feedback';
+import { testConnectionCommand } from './test-connection';
 
-type EditApi = Pick<VscodeApi, 'QuickInputButtons' | 'commands' | 'l10n' | 'window'>;
+type EditApi = Pick<
+  VscodeApi,
+  'ProgressLocation' | 'QuickInputButtons' | 'commands' | 'l10n' | 'window' | 'workspace'
+>;
 
 type EditManager = Pick<
   ProxyManager,
   'getEntryNames' | 'getProfiles' | 'getState' | 'updateProfile'
 >;
 
-type Field = 'name' | 'proxyUrl' | 'strictSSL' | 'bypassList';
+type Field = 'name' | 'proxyUrl' | 'strictSSL' | 'bypassList' | 'test';
 
 // Lists the fields of a profile; each pick edits one field and saves it, until Escape. Without a
 // name, it first asks which profile.
@@ -42,6 +46,10 @@ export async function editProfileCommand(
     const field = await pickField(vscodeApi, profile);
     if (!field) {
       return;
+    }
+    if (field === 'test') {
+      await testConnectionCommand(vscodeApi, notificationService, profile);
+      continue;
     }
 
     const edited = await editField(vscodeApi, profile, field, otherNames(proxyManager, profile));
@@ -78,7 +86,8 @@ async function pickField(vscodeApi: EditApi, profile: Profile): Promise<Field | 
       label: l10n.t('Bypass list'),
       description: profile.bypassList.join(', ') || l10n.t('(empty)'),
       field: 'bypassList'
-    }
+    },
+    { label: l10n.t('Test Connection…'), field: 'test' }
   ];
   const choice = await pickOne(vscodeApi, {
     title: l10n.t('Edit {0}', profile.name),
@@ -92,7 +101,7 @@ async function pickField(vscodeApi: EditApi, profile: Profile): Promise<Field | 
 async function editField(
   vscodeApi: EditApi,
   profile: Profile,
-  field: Field,
+  field: Exclude<Field, 'test'>,
   takenNames: readonly string[]
 ): Promise<Profile | undefined> {
   const { l10n } = vscodeApi;

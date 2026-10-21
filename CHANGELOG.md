@@ -38,6 +38,11 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
   labels always name the current profile.
 - `proxyToggler.showSwitchNotifications` turns on a short notification that names the profile
   when the proxy turns on or off or switches profiles.
+- **Test Connection…**, from Edit Profile and after saving a profile, sends one request through
+  the profile's proxy to a URL you pick, prefilled with the Marketplace: a CONNECT tunnel and
+  `HEAD /` for an `https://` URL, a plain request for an `http://` one. It reports a pass, a
+  warning (a sign-in request, or an `http://` status the proxy may have sent) or a failure with
+  the reason, says which side of VS Code reaches the URL directly, and stores and logs nothing.
 - SOCKS profiles: a proxy URL may use `socks://` or `socks5://`. `socks4`, `socks4a` and `socks5h`
   are refused with the reason: the VS Code window rejects the last two, and with `socks4` the
   window and extensions resolve host names in different places.

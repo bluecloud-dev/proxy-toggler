@@ -51,7 +51,7 @@ describe('Add Profile', () => {
     ]);
     assert.deepEqual(
       vscode.messages.map(({ message, items }) => [message, items]),
-      [['Saved proxy.example.com. Turn it on now?', ['Turn On', 'Not Now']]]
+      [['Saved proxy.example.com. Turn it on now?', ['Turn On', 'Test Connection', 'Not Now']]]
     );
   });
 
@@ -151,7 +151,12 @@ describe('Add Profile', () => {
       assert.equal(api.getState().isEnabled, true);
       assert.deepEqual(
         vscode.messages.map(({ message, items }) => [message, items]),
-        [["Saved proxy.example.com. It matches VS Code's proxy settings, so it is on.", []]]
+        [
+          [
+            "Saved proxy.example.com. It matches VS Code's proxy settings, so it is on.",
+            ['Test Connection']
+          ]
+        ]
       );
     });
 

@@ -6,8 +6,12 @@ import type { VscodeApi } from '../vscode/api';
 import type { NotificationAction, Notifier } from '../vscode/notification-service';
 import { askText, BACK } from '../vscode/quick-input';
 import { announceSwitch, showKnownProxyError } from './proxy-feedback';
+import { testConnectionCommand } from './test-connection';
 
-type AddApi = Pick<VscodeApi, 'QuickInputButtons' | 'commands' | 'l10n' | 'window' | 'workspace'>;
+type AddApi = Pick<
+  VscodeApi,
+  'ProgressLocation' | 'QuickInputButtons' | 'commands' | 'l10n' | 'window' | 'workspace'
+>;
 
 type AddManager = Pick<
   ProxyManager,
@@ -18,6 +22,7 @@ const ACTION_CONTINUE: NotificationAction = { id: 'continue', title: 'Continue W
 const ACTION_OPEN_SETTINGS: NotificationAction = { id: 'openSettings', title: 'Open Settings' };
 const ACTION_TURN_ON: NotificationAction = { id: 'turnOn', title: 'Turn On' };
 const ACTION_NOT_NOW: NotificationAction = { id: 'notNow', title: 'Not Now' };
+const ACTION_TEST: NotificationAction = { id: 'test', title: 'Test Connection' };
 
 type Start = Omit<Profile, 'name' | 'proxyUrl'> & { proxyUrl?: string; unheld: string[] };
 
@@ -69,9 +74,13 @@ export async function addProfileCommand(
   const result = await proxyManager.addProfile(profile);
   await refreshUi();
   if (result === 'on') {
-    await notificationService.showSuccess(
-      `Saved ${profile.name}. It matches VS Code's proxy settings, so it is on.`
+    const tested = await notificationService.showSuccess(
+      `Saved ${profile.name}. It matches VS Code's proxy settings, so it is on.`,
+      ACTION_TEST
     );
+    if (tested === ACTION_TEST.id) {
+      await testConnectionCommand(vscodeApi, notificationService, profile);
+    }
     return;
   }
 
@@ -82,8 +91,13 @@ export async function addProfileCommand(
   const choice = await notificationService.showSuccess(
     `Saved ${profile.name}.${replaces} Turn it on now?`,
     ACTION_TURN_ON,
+    ACTION_TEST,
     ACTION_NOT_NOW
   );
+  if (choice === ACTION_TEST.id) {
+    await testConnectionCommand(vscodeApi, notificationService, profile);
+    return;
+  }
   if (choice === ACTION_TURN_ON.id) {
     try {
       await proxyManager.switchTo(profile.name);

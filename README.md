@@ -42,6 +42,8 @@
 
 - **Proxy profiles**: keep several proxies and switch between them from the status bar gear
 - **One-click toggle** from the Command Palette or status bar
+- **Test Connection** checks a profile's proxy against a URL you pick, and says which side of VS
+  Code reaches it directly
 - **No stored credentials**: when a proxy asks for a sign-in, VS Code shows its own login dialog
 - **Visual status indicator** showing on or off and the current profile
 - **Optional confirmation prompt** before toggling

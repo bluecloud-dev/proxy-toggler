@@ -80,7 +80,8 @@ describe('Edit Profile', () => {
         ['Name', 'Work'],
         ['Proxy URL', WORK.proxyUrl],
         ['Strict SSL', 'On'],
-        ['Bypass list', 'localhost']
+        ['Bypass list', 'localhost'],
+        ['Test Connection…', undefined]
       ]
     );
   });

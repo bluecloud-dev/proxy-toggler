@@ -1,5 +1,6 @@
 import { once } from 'node:events';
 import * as http from 'node:http';
+import * as https from 'node:https';
 import type { AddressInfo } from 'node:net';
 import * as net from 'node:net';
 import type { Duplex } from 'node:stream';
@@ -27,6 +28,10 @@ type TestProxyOptions = {
   // A port on 127.0.0.1 that CONNECT requests are tunneled to. Without it, CONNECT is refused
   // with 502.
   tunnelTo?: number;
+  // The status of the proxy's own answer to plain requests; 200 by default.
+  answerStatus?: number;
+  // Serves the proxy itself over TLS, as an https:// proxy.
+  tls?: { cert: string; key: string };
 };
 
 export type TestProxy = {
@@ -57,22 +62,23 @@ export async function startTestProxy(options: TestProxyOptions = {}): Promise<Te
     return authorized;
   };
 
-  const server = http.createServer((request, response) => {
+  const handle = (request: http.IncomingMessage, response: http.ServerResponse): void => {
     if (!admit(request, hostOf(request.url ?? ''))) {
       response.writeHead(407, { 'Proxy-Authenticate': AUTHENTICATE, Connection: 'close' });
       response.end();
       return;
     }
 
-    response.writeHead(200, {
+    response.writeHead(options.answerStatus ?? 200, {
       'Content-Type': 'text/plain',
       'Content-Length': Buffer.byteLength(PROXY_ANSWER),
       Connection: 'close'
     });
     response.end(PROXY_ANSWER);
-  });
+  };
+  const server = options.tls ? https.createServer(options.tls, handle) : http.createServer(handle);
 
-  server.on('connection', track);
+  server.on(options.tls ? 'secureConnection' : 'connection', track);
   server.on('connect', (request: http.IncomingMessage, client: Duplex, head: Buffer) => {
     // The server stops handling errors on the socket it hands over. A client that resets the
     // connection only needs it closed, and an unhandled 'error' event would crash the process

@@ -13,7 +13,8 @@ src/
   core/             Domain logic: configuration types, validation, bypass-list rules, the Match
                     rule (when VS Code's settings carry a profile's values), profiles (reading
                     the setting, the current profile), ProxyManager (the record, the toggle),
-                    ProxySettingsWriter (writing and clearing the http.* settings),
+                    ProxySettingsWriter (writing and clearing the http.* settings), the test
+                    connection and the bypass rules of the window and of extensions,
                     KeychainService (removing the credentials 0.1.x stored).
   commands/         One file per command or flow (enable, disable, toggle, the switcher, add,
                     edit and delete), the activation-time checks, and the shared feedback.

@@ -7,6 +7,7 @@ import type { Memento } from '../core/proxy-manager';
 // which must satisfy these signatures without a cast; unit tests pass small fakes.
 export type VscodeApi = {
   ConfigurationTarget: { Global: vscode.ConfigurationTarget };
+  ProgressLocation: { Notification: vscode.ProgressLocation };
   QuickInputButtons: { Back: vscode.QuickInputButton };
   ThemeColor: new (id: string) => vscode.ThemeColor;
   QuickPickItemKind: { Separator: vscode.QuickPickItemKind };
@@ -31,6 +32,7 @@ export type VscodeApi = {
       options: vscode.QuickPickOptions
     ): PromiseLike<T | undefined>;
     showWarningMessage(message: string, ...items: string[]): PromiseLike<string | undefined>;
+    withProgress<R>(options: vscode.ProgressOptions, task: () => PromiseLike<R>): PromiseLike<R>;
     readonly state: Pick<vscode.WindowState, 'focused'>;
     onDidChangeWindowState(listener: (state: vscode.WindowState) => unknown): vscode.Disposable;
   };

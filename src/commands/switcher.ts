@@ -13,7 +13,13 @@ import { announceSwitch, showKnownProxyError } from './proxy-feedback';
 
 type SwitcherApi = Pick<
   VscodeApi,
-  'QuickInputButtons' | 'QuickPickItemKind' | 'commands' | 'l10n' | 'window' | 'workspace'
+  | 'ProgressLocation'
+  | 'QuickInputButtons'
+  | 'QuickPickItemKind'
+  | 'commands'
+  | 'l10n'
+  | 'window'
+  | 'workspace'
 >;
 
 type SwitcherManager = Pick<
