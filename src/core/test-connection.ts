@@ -171,6 +171,8 @@ function connectToProxy(
           // No servername for an IP address, which TLS SNI does not allow.
           servername: net.isIP(host) ? undefined : host,
           ca: settings.ca,
+          // Diagnostic only: checkCertificate runs the chain, name and date checks itself, so that
+          // it can name an untrusted issuer and still fail a wrong name or date (#70).
           rejectUnauthorized: false
         })
       : net.connect({ host, port });
@@ -210,6 +212,7 @@ async function throughTunnel(
       socket,
       servername: net.isIP(host) ? undefined : host,
       ca: settings.ca,
+      // Diagnostic only, as for the proxy: checkCertificate below decides the verdict.
       rejectUnauthorized: false
     });
     // The proxy's socket has no timeout once connected, so the handshake needs its own.

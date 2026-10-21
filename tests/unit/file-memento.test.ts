@@ -23,6 +23,18 @@ describe('fileMemento', () => {
     assert.equal(memento.get('second'), 2);
   });
 
+  it('keeps the file readable by its owner only', async function () {
+    // Windows has no POSIX permission bits.
+    if (process.platform === 'win32') {
+      this.skip();
+    }
+    const file = path.join(folder, 'state.json');
+
+    await fileMemento(file).update('key', 'value');
+
+    assert.equal((await fs.stat(file)).mode & 0o777, 0o600);
+  });
+
   it('records nothing without a file, or with one that is not JSON', async () => {
     const file = path.join(folder, 'state.json');
     const missing = fileMemento(file).get('key', 'default');

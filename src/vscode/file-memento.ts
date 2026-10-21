@@ -39,13 +39,15 @@ export function fileMemento(file: string): Memento {
     },
 
     // A whole file replaces the old one, so a reader never sees half a write. The file is small,
-    // and writing it at once keeps two changes in this window from interleaving.
+    // and writing it at once keeps two changes in this window from interleaving. The new file is
+    // created exclusively, so a file or link already at its name is never written through, and
+    // only its owner can read it.
     update(key: string, value: unknown): Promise<void> {
       try {
         const values = { ...read(), [key]: value };
-        fs.mkdirSync(path.dirname(file), { recursive: true });
+        fs.mkdirSync(path.dirname(file), { recursive: true, mode: 0o700 });
         const temporary = `${file}.${randomUUID()}.tmp`;
-        fs.writeFileSync(temporary, JSON.stringify(values));
+        fs.writeFileSync(temporary, JSON.stringify(values), { flag: 'wx', mode: 0o600 });
         fs.renameSync(temporary, file);
         return Promise.resolve();
       } catch (error: unknown) {
