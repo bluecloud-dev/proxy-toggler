@@ -10,7 +10,8 @@ a few design choices.
 src/
   extension.ts      VS Code entry point. The only module that loads `vscode` at runtime.
   proxy-toggler.ts  Composition root: creates every object, registers commands, starts activation checks.
-  core/             Domain logic: configuration types, validation, bypass-list rules, ProxyManager
+  core/             Domain logic: configuration types, validation, bypass-list rules, the Match
+                    rule (when VS Code's settings carry a configuration's values), ProxyManager
                     (saved configuration, toggle state), ProxySettingsWriter (writing and
                     clearing the http.* settings), KeychainService (credentials).
   commands/         One file per command (configure, enable, disable, toggle), the activation-time

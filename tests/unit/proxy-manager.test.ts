@@ -398,6 +398,24 @@ describe('ProxyManager', () => {
       assert.equal(proxyManager.isConfigurationApplied(), true);
     });
 
+    it('matches a reordered bypass list and a proxy URL with credentials', async () => {
+      const { proxyManager } = setup({
+        http: {
+          current: {
+            proxy: 'http://alice:secret@proxy.example.com:8080',
+            proxyStrictSSL: true,
+            noProxy: ['b.internal', 'localhost']
+          }
+        }
+      });
+      await proxyManager.saveConfiguration(
+        { ...CONFIGURATION, noProxy: 'localhost,b.internal' },
+        { mode: 'keep' }
+      );
+
+      assert.equal(proxyManager.isConfigurationApplied(), true);
+    });
+
     it('is false when any applied value differs', async () => {
       const { proxyManager } = setup({
         http: { current: { proxy: CONFIGURATION.proxyUrl, proxyStrictSSL: false, noProxy: [] } }

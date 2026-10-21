@@ -1,9 +1,14 @@
 import type * as vscode from 'vscode';
 
 import type { KeychainService } from './keychain-service';
-import { parseNoProxyList, withDefaultNoProxy } from './no-proxy';
+import { settingsMatch } from './match';
+import { withDefaultNoProxy } from './no-proxy';
 import type { ProxyConfiguration, ProxyCredentials, ToggleState } from './proxy-configuration';
-import { type HttpSettings, ProxySettingsWriter } from './proxy-settings-writer';
+import {
+  type HttpSettings,
+  ProxySettingsWriter,
+  type ProxySettingValues
+} from './proxy-settings-writer';
 import { validateCredentials, validateNoProxyList, validateProxyUrl } from './validation';
 
 const STORAGE_KEYS = {
@@ -89,12 +94,7 @@ export class ProxyManager {
       return false;
     }
 
-    const current = this.httpSettings.read();
-    return (
-      current.proxy === saved.proxyUrl &&
-      current.proxyStrictSSL === saved.strictSSL &&
-      parseNoProxyList(current.noProxy).join(',') === parseNoProxyList(saved.noProxy).join(',')
-    );
+    return settingsMatch(this.httpSettings.read(), settingValues(saved));
   }
 
   enableProxy(): Promise<void> {
@@ -161,11 +161,7 @@ export class ProxyManager {
       throw new Error('No proxy configuration found');
     }
 
-    await this.settingsWriter.apply({
-      proxy: configuration.proxyUrl,
-      proxyStrictSSL: configuration.strictSSL,
-      noProxy: configuration.noProxy
-    });
+    await this.settingsWriter.apply(settingValues(configuration));
     await this.writeState({ isEnabled: true });
   }
 
@@ -181,4 +177,12 @@ export class ProxyManager {
   private async writeState(change: Partial<ToggleState>): Promise<void> {
     await this.globalState.update(STORAGE_KEYS.toggleState, { ...this.getState(), ...change });
   }
+}
+
+function settingValues(configuration: ProxyConfiguration): ProxySettingValues {
+  return {
+    proxy: configuration.proxyUrl,
+    proxyStrictSSL: configuration.strictSSL,
+    noProxy: configuration.noProxy
+  };
 }
