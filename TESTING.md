@@ -278,7 +278,9 @@ find out which, then update the tables. The **Proxy lab** workflow
 ([`.github/workflows/proxy-lab.yml`](.github/workflows/proxy-lab.yml)) brings the lab up and runs
 the probe on Ubuntu when started by hand from the Actions tab. It never runs on pull requests, so it
 cannot become a required check: GitHub's macOS runners have no Docker, and its Windows runners
-cannot run Linux containers.
+cannot run Linux containers. On 21 October 2026 it passed all 54 checks, the SSH ones
+included, on VS Code 1.97.0 and 1.143.0
+([run 39630452394](https://github.com/bluecloud-dev/proxy-toggler/actions/runs/39630452394)).
 
 ### Remote windows
 
