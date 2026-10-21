@@ -3,6 +3,7 @@
 /*
 !/.github/
 !/dev/
+!/docs/
 !/scripts/
 !/src/
 !/tests/
@@ -12,6 +13,7 @@
 !/ARCHITECTURE.md
 !/CHANGELOG.md
 !/CONTRIBUTING.md
+!/GLOSSARY.md
 !/QUALITY_BASELINE.md
 !/README.md
 !/REFACTOR_REPORT.md
@@ -23,3 +25,5 @@
 !/package.json
 !/package.nls.json
 !/tsconfig.json
+# Prettier pads the wide, link-heavy tables in this research note to several times their size.
+/docs/design/v0.2.0-research.md
