@@ -69,6 +69,8 @@ const ABSENCE_WAIT_MS = 3000;
 // A remote window that has not closed by then waits on something, such as a Remote-SSH prompt.
 const WINDOW_TIMEOUT_MS = 180000;
 const READY_TIMEOUT_MS = 120000;
+// VS Code exits within seconds once pkill stops it.
+const KILL_WAIT_MS = 30000;
 
 type LabService = 'squid-open' | 'squid-auth' | 'mitmproxy' | 'socks5' | 'pac';
 type LogLine = { service: LabService; pattern: RegExp };
@@ -378,8 +380,10 @@ async function main(): Promise<boolean> {
       }
     }
   } finally {
-    if (ssh) {
-      await removeTempDir((await ssh).dir);
+    // A preparation that failed has removed its directory already.
+    const lab = await ssh?.catch(() => undefined);
+    if (lab) {
+      await removeTempDir(lab.dir);
     }
   }
   return passed;
@@ -609,43 +613,51 @@ async function windowRequests(netLogFile: string, prefix: string): Promise<strin
 // Copies the lab's SSH key out of the container for Remote-SSH, and the remote probe into it.
 async function prepareSshLab(): Promise<SshLab> {
   const dir = await makeTempDir('ssh');
-  const keyFile = path.join(dir, 'id_ed25519');
-  await compose(['cp', 'ssh-host:/run/ssh-lab/id_ed25519', keyFile]);
-  const configFile = path.join(dir, 'config');
-  await fs.writeFile(
-    configFile,
-    [
-      `Host ${SSH_HOST}`,
-      '  HostName 127.0.0.1',
-      '  Port 2222',
-      '  User lab',
-      `  IdentityFile "${keyFile}"`,
-      '  IdentitiesOnly yes',
-      // The host key is new each time the lab starts.
-      '  StrictHostKeyChecking no',
-      '  UserKnownHostsFile /dev/null',
-      '  LogLevel ERROR',
-      ''
-    ].join('\n')
-  );
+  try {
+    const keyFile = path.join(dir, 'id_ed25519');
+    await compose(['cp', 'ssh-host:/run/ssh-lab/id_ed25519', keyFile]);
+    const configFile = path.join(dir, 'config');
+    await fs.writeFile(
+      configFile,
+      [
+        `Host ${SSH_HOST}`,
+        '  HostName 127.0.0.1',
+        '  Port 2222',
+        '  User lab',
+        `  IdentityFile "${keyFile}"`,
+        '  IdentitiesOnly yes',
+        // The host key is new each time the lab starts.
+        '  StrictHostKeyChecking no',
+        '  UserKnownHostsFile /dev/null',
+        '  LogLevel ERROR',
+        ''
+      ].join('\n')
+    );
 
-  // A manifest with `main` and no `extensionKind` has the kind `workspace`, as Proxy Toggler's has.
-  const manifest = {
-    name: 'proxy-lab-remote-probe',
-    displayName: 'Proxy Toggler remote probe',
-    version: '0.0.0',
-    publisher: 'proxy-toggler-tests',
-    private: true,
-    engines: { vscode: `^${REMOTE_SINCE}` },
-    main: './remote.js'
-  };
-  await sshHost(['rm', '-rf', REMOTE_PROBE]);
-  await writeRemoteFile(`${REMOTE_PROBE}/package.json`, JSON.stringify(manifest, null, 2));
-  for (const file of ['remote.js', 'requests.js']) {
-    const compiled = await fs.readFile(path.join(root, 'out', 'tests', 'proxy-lab', file), 'utf8');
-    await writeRemoteFile(`${REMOTE_PROBE}/${file}`, compiled);
+    // A manifest with `main` and no `extensionKind` has the kind `workspace`, as Proxy Toggler's has.
+    const manifest = {
+      name: 'proxy-lab-remote-probe',
+      displayName: 'Proxy Toggler remote probe',
+      version: '0.0.0',
+      publisher: 'proxy-toggler-tests',
+      private: true,
+      engines: { vscode: `^${REMOTE_SINCE}` },
+      main: './remote.js'
+    };
+    await sshHost(['rm', '-rf', REMOTE_PROBE]);
+    await writeRemoteFile(`${REMOTE_PROBE}/package.json`, JSON.stringify(manifest, null, 2));
+    for (const file of ['remote.js', 'requests.js']) {
+      const compiled = await fs.readFile(
+        path.join(root, 'out', 'tests', 'proxy-lab', file),
+        'utf8'
+      );
+      await writeRemoteFile(`${REMOTE_PROBE}/${file}`, compiled);
+    }
+    return { configFile, extensionsDirs: new Map(), dir };
+  } catch (error: unknown) {
+    await removeTempDir(dir);
+    throw error;
   }
-  return { configFile, extensionsDirs: new Map(), dir };
 }
 
 function remoteSshExtensions(ssh: SshLab, version: string): Promise<string> {
@@ -764,19 +776,28 @@ async function openSshWindow(
     () => [],
     (error: unknown) => [`the window at ${window.folder} failed: ${String(error)}`]
   );
-  let timer: NodeJS.Timeout | undefined;
-  const timedOut = new Promise<undefined>((resolve) => {
-    timer = setTimeout(() => resolve(undefined), WINDOW_TIMEOUT_MS);
-  });
-  const problems = await Promise.race([closed, timedOut]);
-  clearTimeout(timer);
+  const problems = await settledWithin(closed, WINDOW_TIMEOUT_MS);
   if (problems) {
     return problems;
   }
-  // VS Code's processes all name the profile's user data directory in their arguments.
+  // VS Code's processes all name the profile's user data directory in their arguments. Where
+  // pkill stops nothing, the probe moves on and leaves the window open.
   await promisify(execFile)('pkill', ['-f', window.userDataDir]).catch(() => undefined);
-  await closed;
+  await settledWithin(closed, KILL_WAIT_MS);
   return [`the window at ${window.folder} did not close within ${WINDOW_TIMEOUT_MS / 1000} s`];
+}
+
+// Resolves with undefined when the promise has not settled within `ms`.
+async function settledWithin<T>(promise: Promise<T>, ms: number): Promise<T | undefined> {
+  let timer: NodeJS.Timeout | undefined;
+  const deadline = new Promise<undefined>((resolve) => {
+    timer = setTimeout(() => resolve(undefined), ms);
+  });
+  try {
+    return await Promise.race([promise, deadline]);
+  } finally {
+    clearTimeout(timer);
+  }
 }
 
 async function waitForRemoteFile(file: string, windowClosed: Promise<unknown>): Promise<boolean> {

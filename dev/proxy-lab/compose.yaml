@@ -89,9 +89,11 @@ services:
     networks: [remote]
     ports:
       - '127.0.0.1:2222:22'
-    # proxy-lab:up waits for this, so a client can connect as soon as it returns.
+    # proxy-lab:up waits for this, so a client can connect as soon as it returns. It looks for a
+    # socket listening on port 22 (0016 in hex), because a probe that connected to sshd would
+    # add log lines every 2 seconds.
     healthcheck:
-      test: ['CMD', 'pgrep', '-x', 'sshd']
+      test: ['CMD-SHELL', 'grep -qs ":0016 [0-9A-F]*:0000 0A " /proc/net/tcp /proc/net/tcp6']
       interval: 2s
 
 networks:
