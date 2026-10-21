@@ -15,8 +15,11 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ### Changed
 
-- Require VS Code 1.91 or later. Earlier releases have no `http.noProxy` setting, so enabling the
-  proxy failed after `http.proxy` had already been written.
+- Require VS Code 1.97 or later; older releases keep Proxy Toggler 0.1.x. Releases before 1.91
+  have no `http.noProxy` setting, so enabling the proxy failed after `http.proxy` had already been
+  written. On 1.91 the VS Code window ignores an `http.proxy` that holds `user:pass@`, extensions
+  get VS Code's proxy sign-in dialog only from 1.92, and remote windows need the
+  `http.useLocalProxyConfiguration` setting, which arrived in 1.97.
 - The extension package contains only the bundled `dist/extension.js` (12 files instead of 45).
 - The source repository moved to
   [github.com/bluecloud-dev/proxy-toggler](https://github.com/bluecloud-dev/proxy-toggler); old

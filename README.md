@@ -48,7 +48,7 @@
 
 ## :clipboard: Requirements
 
-- VS Code **1.91** or later
+- VS Code **1.97** or later
 
 ## :zap: Quick Start
 
@@ -133,7 +133,7 @@ Open **View → Output** and pick **Proxy Toggler** in the dropdown. Errors are 
 
 ### Getting started
 
-You need Node.js 24 (the version in `.nvmrc`; run `nvm use` if you use nvm) and VS Code 1.91 or later.
+You need Node.js 24 (the version in `.nvmrc`; run `nvm use` if you use nvm) and VS Code 1.97 or later.
 
 ```sh
 git clone https://github.com/bluecloud-dev/proxy-toggler.git

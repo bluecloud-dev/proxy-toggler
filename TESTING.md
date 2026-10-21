@@ -187,8 +187,8 @@ should be verified"; the lab has no HTTPS proxy, so that case is not measured.
 
 ### The probe
 
-`npm run proxy-lab:probe` needs the lab running and internet access. For VS Code 1.91.0 and
-stable, it runs each check below in a fresh profile whose `settings.json` holds the settings
+`npm run proxy-lab:probe` needs the lab running and internet access. For the `engines.vscode`
+minimum and stable, it runs each check below in a fresh profile whose `settings.json` holds the settings
 Proxy Toggler writes, and compares the outcome and the proxy logs with what this file records.
 The CLI checks run `code --install-extension` on a small Marketplace extension. The app checks
 start the desktop app with `tests/proxy-lab/index.ts`, which sends requests from the extension

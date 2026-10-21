@@ -6,6 +6,6 @@
   "publisher": "proxy-toggler-tests",
   "private": true,
   "engines": {
-    "vscode": "^1.91.0"
+    "vscode": "^1.97.0"
   }
 }

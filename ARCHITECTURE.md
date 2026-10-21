@@ -129,8 +129,13 @@ Errors carry the original failure as the standard ES2022 `cause`.
 - **VS Code-shaped ports instead of custom wrappers.** The configure wizard calls `showInputBox`
   and `showQuickPick` through the injected `VscodeApi` slice. Wrapping each prompt behind an
   application-specific interface would add a parallel API without adding any guarantee.
-- **Minimum VS Code 1.91.** `http.noProxy` first shipped in 1.91; on older releases enabling the
-  proxy cannot complete.
+- **Minimum VS Code 1.97.** `http.noProxy` first shipped in 1.91; on older releases enabling the
+  proxy cannot complete. On 1.91 the VS Code window ignores an `http.proxy` that holds
+  `user:pass@`, and extensions get no sign-in dialog for a Basic-auth proxy before 1.92. Remote
+  windows need `http.useLocalProxyConfiguration`, new in 1.97, which says whether a WSL or container
+  window's remote side uses the local proxy settings or its own. The sources are in
+  [the v0.2.0 research](docs/design/v0.2.0-research.md), findings A3 and B3 and the remote-window
+  section.
 - **Supported in Restricted Mode and virtual workspaces.** The extension reads no workspace files
   and writes only user settings, `globalState`, and SecretStorage, so the manifest declares
   `untrustedWorkspaces.supported: true` and `virtualWorkspaces: true`. In Restricted Mode VS Code

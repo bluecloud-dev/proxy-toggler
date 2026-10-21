@@ -60,7 +60,7 @@ reviewer checks it because no tool does yet.
   `consistent-type-imports`, and `explicit-module-boundary-types`.
 - `@types/vscode` is pinned to the `engines.vscode` minimum, so APIs newer than the supported
   range fail to compile. `@types/node` tracks the Node major of that VS Code release (Node 20 for
-  VS Code 1.91).
+  VS Code 1.97).
 
 ## VS Code extension standards
 
