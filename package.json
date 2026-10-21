@@ -54,6 +54,10 @@
       {
         "command": "proxyToggler.configure",
         "title": "%command.configure.title%"
+      },
+      {
+        "command": "proxyToggler.switchProfile",
+        "title": "%command.switchProfile.title%"
       }
     ],
     "menus": {
@@ -112,6 +116,11 @@
               }
             }
           }
+        },
+        "proxyToggler.showSwitchNotifications": {
+          "type": "boolean",
+          "default": false,
+          "description": "%configuration.showSwitchNotifications.description%"
         }
       }
     }

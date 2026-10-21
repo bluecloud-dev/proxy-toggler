@@ -71,7 +71,12 @@ export function findCurrentProfile(
   return byName ?? byValues ?? sortByName(profiles)[0];
 }
 
-function sortByName(profiles: readonly Profile[]): Profile[] {
+export function findProfileByName(profiles: readonly Profile[], name: string): Profile | undefined {
+  return profiles.find((profile) => sameName(profile.name, name.trim()));
+}
+
+// Alphabetical, as the switcher lists them and the fallback picks the first.
+export function sortByName(profiles: readonly Profile[]): Profile[] {
   return [...profiles].sort((left, right) => left.name.localeCompare(right.name));
 }
 

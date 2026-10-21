@@ -41,6 +41,7 @@ describe('command palette contributions', () => {
     assert.ok(commands.includes('proxyToggler.enable'));
     assert.ok(commands.includes('proxyToggler.disable'));
     assert.ok(commands.includes('proxyToggler.toggle'));
+    assert.ok(commands.includes('proxyToggler.switchProfile'));
   });
 
   it('warns when enabling without saved configuration', async () => {

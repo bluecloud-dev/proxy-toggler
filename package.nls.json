@@ -1,15 +1,17 @@
 {
   "extension.displayName": "Proxy Toggler",
   "extension.description": "Toggle VS Code proxy settings on/off with secure credential storage.",
-  "command.enable.title": "Proxy Toggler: Enable Proxy",
-  "command.disable.title": "Proxy Toggler: Disable Proxy",
+  "command.enable.title": "Proxy Toggler: Turn Proxy On",
+  "command.disable.title": "Proxy Toggler: Turn Proxy Off",
   "command.toggle.title": "Proxy Toggler: Toggle Proxy",
   "command.configure.title": "Proxy Toggler: Configure Proxy Settings",
   "configuration.title": "Proxy Toggler",
-  "configuration.confirmBeforeToggle.description": "Show a confirmation prompt before toggling the proxy on/off.",
+  "configuration.confirmBeforeToggle.description": "Ask before the status bar toggle or the Toggle Proxy command turns the proxy on or off.",
   "configuration.profiles.description": "Proxy profiles the status bar toggle switches between. Shared by every VS Code Profile and read only from user settings: edit them with **Preferences: Open Application Settings (JSON)**. Profiles hold no credentials; VS Code asks for a proxy sign-in itself.",
   "configuration.profiles.name.description": "The profile name, unique ignoring letter case and at most 30 characters.",
   "configuration.profiles.proxyUrl.description": "The proxy URL, such as http://proxy.example.com:8080, without a user name or password.",
   "configuration.profiles.strictSSL.description": "The value for http.proxyStrictSSL. Only VS Code's command line and some built-in extensions honor it.",
-  "configuration.profiles.bypassList.description": "Hosts that VS Code reaches directly, written to http.noProxy: host names, IP addresses, or domains that start with a dot, such as .example.com."
+  "configuration.profiles.bypassList.description": "Hosts that VS Code reaches directly, written to http.noProxy: host names, IP addresses, or domains that start with a dot, such as .example.com.",
+  "command.switchProfile.title": "Proxy Toggler: Switch Profile…",
+  "configuration.showSwitchNotifications.description": "Show a short notification, naming the profile, when the proxy turns on or off or switches profiles. The status bar always shows the result."
 }

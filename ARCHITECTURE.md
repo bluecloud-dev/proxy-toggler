@@ -15,8 +15,8 @@ src/
                     the setting, the current profile), ProxyManager (the record, the toggle),
                     ProxySettingsWriter (writing and clearing the http.* settings),
                     KeychainService (credentials).
-  commands/         One file per command (configure, enable, disable, toggle), the activation-time
-                    drift check, and the feedback shared by the state commands.
+  commands/         One file per command (configure, enable, disable, toggle, the switcher), the
+                    activation-time checks, and the feedback shared by the state commands.
   vscode/           Adapters over the VS Code API: the API surface type, the http.* and profiles
                     setting adapters, notifications, the status bar item, and error reporting.
 ```

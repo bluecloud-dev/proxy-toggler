@@ -39,9 +39,10 @@
 
 ## :star: Features
 
+- **Proxy profiles**: keep several proxies and switch between them from the status bar gear
 - **One-click toggle** from the Command Palette or status bar
 - **Secure credential storage** using VS Code SecretStorage (OS keychain) — never in settings, logs, or source control
-- **Visual status indicator** showing enabled/disabled state
+- **Visual status indicator** showing on or off and the current profile
 - **Optional confirmation prompt** before toggling
 - **Strict SSL and no-proxy list** support
 - **Non-invasive** — leaves system proxy configuration untouched
@@ -69,22 +70,29 @@
 4. Toggle the proxy using any of these methods:
    - Click the status bar indicator
    - Run `Proxy Toggler: Toggle Proxy` from Command Palette
-   - Use the enable/disable commands directly
+   - Use the Turn Proxy On and Turn Proxy Off commands directly
+
+5. Switch profiles by clicking the gear next to the indicator, or run
+   `Proxy Toggler: Switch Profile…`. The list opens on the current profile, so Enter keeps it, or
+   turns it on while the proxy is off.
 
 ## :keyboard: Commands
 
-| Command                                   | Description                                |
-| ----------------------------------------- | ------------------------------------------ |
-| `Proxy Toggler: Configure Proxy Settings` | Set up proxy URL, credentials, and options |
-| `Proxy Toggler: Enable Proxy`             | Enable the configured proxy                |
-| `Proxy Toggler: Disable Proxy`            | Disable the proxy                          |
-| `Proxy Toggler: Toggle Proxy`             | Toggle between enabled and disabled        |
+| Command                                   | Description                                                               |
+| ----------------------------------------- | ------------------------------------------------------------------------- |
+| `Proxy Toggler: Configure Proxy Settings` | Add the first profile, or edit the current one                            |
+| `Proxy Toggler: Switch Profile…`          | Pick a profile to turn on, turn the proxy on or off, or open the settings |
+| `Proxy Toggler: Turn Proxy On`            | Turn the current profile on                                               |
+| `Proxy Toggler: Turn Proxy Off`           | Turn the proxy off                                                        |
+| `Proxy Toggler: Toggle Proxy`             | Turn the current profile on, or the proxy off                             |
 
 ## :gear: Settings
 
-| Setting                            | Type    | Default | Description                                           |
-| ---------------------------------- | ------- | ------- | ----------------------------------------------------- |
-| `proxyToggler.confirmBeforeToggle` | boolean | `false` | Show confirmation prompt before switching proxy state |
+| Setting                                | Type    | Default | Description                                                                                                                                     |
+| -------------------------------------- | ------- | ------- | ----------------------------------------------------------------------------------------------------------------------------------------------- |
+| `proxyToggler.profiles`                | array   | `[]`    | The proxy profiles, shared by every VS Code Profile. Edit them in the application settings (**Preferences: Open Application Settings (JSON)**). |
+| `proxyToggler.confirmBeforeToggle`     | boolean | `false` | Ask before the status bar toggle or the Toggle Proxy command turns the proxy on or off                                                          |
+| `proxyToggler.showSwitchNotifications` | boolean | `false` | Show a short notification naming the profile when the proxy turns on or off or switches profiles                                                |
 
 ### Managed VS Code Settings
 

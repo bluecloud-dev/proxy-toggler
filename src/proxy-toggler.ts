@@ -5,6 +5,7 @@ import { disableProxyCommand } from './commands/disable-proxy';
 import { enableProxyCommand } from './commands/enable-proxy';
 import { warnAboutHiddenProfiles } from './commands/profile-warning';
 import { announceRemovedCredentials, removeStoredCredentials } from './commands/stored-credentials';
+import { switchProfileCommand } from './commands/switcher';
 import { toggleProxyCommand } from './commands/toggle-proxy';
 import { KeychainService } from './core/keychain-service';
 import type { ToggleState } from './core/proxy-configuration';
@@ -44,13 +45,17 @@ export function createProxyToggler(
     createProfilesSetting(vscodeApi)
   );
   const notificationService = new NotificationService(vscodeApi);
-  const statusBarController = new StatusBarController(vscodeApi, COMMANDS.toggle);
+  const statusBarController = new StatusBarController(
+    vscodeApi,
+    COMMANDS.toggle,
+    COMMANDS.switchProfile
+  );
 
   context.subscriptions.push(logger, statusBarController);
 
   const refreshUi = async (): Promise<void> => {
     const state = proxyManager.getState();
-    statusBarController.updateState(state);
+    statusBarController.updateState(state, proxyManager.getProfiles().length);
     await vscodeApi.commands.executeCommand(
       'setContext',
       CONTEXT_KEYS.hasConfiguration,
@@ -119,6 +124,10 @@ export function createProxyToggler(
     ),
     register(COMMANDS.toggle, 'Failed to toggle proxy.', () =>
       toggleProxyCommand(vscodeApi, proxyManager, notificationService, refreshUi)
+    ),
+    // Keybindings may pass a profile name.
+    register(COMMANDS.switchProfile, 'Failed to switch the proxy profile.', (name?: unknown) =>
+      switchProfileCommand(vscodeApi, proxyManager, notificationService, refreshUi, name)
     )
   );
 

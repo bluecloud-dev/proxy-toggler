@@ -14,6 +14,14 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 - Each VS Code Profile copies its 0.1.x configuration into a profile named after the proxy host,
   and makes it current without turning it on. The 0.1.x configuration stays as it was, so a
   downgrade still finds it.
+- The switcher, behind a gear next to the status bar toggle and the **Proxy Toggler: Switch
+  Profile…** command, lists the profiles alphabetically with the current one checked, then the
+  proxy actions. It opens on the current profile, and picking a profile turns it on. Keybindings
+  can pass a profile name to `proxyToggler.switchProfile`.
+- With two or more profiles, the status bar shows the profile in use; tooltips and screen-reader
+  labels always name the current profile.
+- `proxyToggler.showSwitchNotifications` turns on a short notification that names the profile
+  when the proxy turns on or off or switches profiles.
 - Profiles edited by hand or synced from another machine are checked like the UI's input. Invalid
   entries, and later entries that repeat a name, stay hidden, and one warning names them, once per
   distinct set. Its **Open Settings** button opens the application settings file.
@@ -24,6 +32,10 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ### Changed
 
+- The words are now on and off: the commands are **Turn Proxy On** and **Turn Proxy Off**, with
+  the same command IDs. Turning the proxy on or off no longer shows a notification by default.
+- `proxyToggler.confirmBeforeToggle` asks only before the status bar toggle and the Toggle Proxy
+  command.
 - Require VS Code 1.97 or later; older releases keep Proxy Toggler 0.1.x. Releases before 1.91
   have no `http.noProxy` setting, so enabling the proxy failed after `http.proxy` had already been
   written. On 1.91 the VS Code window ignores an `http.proxy` that holds `user:pass@`, extensions

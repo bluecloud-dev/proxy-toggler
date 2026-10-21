@@ -6,8 +6,22 @@ import { COMMANDS } from './command-ids';
 
 type CommandsApi = Pick<VscodeApi, 'commands'>;
 
+// Success toasts are off unless the user asks for them: the status bar already shows the result.
+export async function announceSwitch(
+  vscodeApi: Pick<VscodeApi, 'workspace'>,
+  notificationService: Notifier,
+  message: string
+): Promise<void> {
+  const enabled = vscodeApi.workspace
+    .getConfiguration('proxyToggler')
+    .get<boolean>('showSwitchNotifications', false);
+  if (enabled) {
+    await notificationService.showSuccess(message);
+  }
+}
+
 const ACTION_CONFIGURE_NOW: NotificationAction = { id: 'configure', title: 'Configure Now' };
-const ACTION_DISABLE_PROXY: NotificationAction = { id: 'disableProxy', title: 'Disable Proxy' };
+const ACTION_DISABLE_PROXY: NotificationAction = { id: 'disableProxy', title: 'Turn Proxy Off' };
 const ACTION_OPEN_SETTINGS: NotificationAction = { id: 'openSettings', title: 'Open Settings' };
 
 export async function offerToConfigure(
@@ -21,17 +35,6 @@ export async function offerToConfigure(
 
   if (choice === ACTION_CONFIGURE_NOW.id) {
     await vscodeApi.commands.executeCommand(COMMANDS.configure);
-  }
-}
-
-export async function announceEnabled(
-  vscodeApi: CommandsApi,
-  notificationService: Notifier
-): Promise<void> {
-  const choice = await notificationService.showSuccess('Proxy enabled', ACTION_DISABLE_PROXY);
-
-  if (choice === ACTION_DISABLE_PROXY.id) {
-    await vscodeApi.commands.executeCommand(COMMANDS.disable);
   }
 }
 

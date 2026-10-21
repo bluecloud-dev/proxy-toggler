@@ -4,44 +4,63 @@ import { StatusBarController } from '../../src/vscode/status-bar-controller';
 import { createFakeVscode } from '../support/fake-vscode';
 
 describe('StatusBarController', () => {
-  it('creates one right-aligned item that runs the toggle command', () => {
+  it('creates the toggle and, to its right, the gear that opens the switcher', () => {
     const vscode = createFakeVscode();
 
-    new StatusBarController(vscode, 'proxyToggler.toggle');
+    new StatusBarController(vscode, 'proxyToggler.toggle', 'proxyToggler.switchProfile');
 
-    const [item] = vscode.statusBarItems;
-    assert.equal(vscode.statusBarItems.length, 1);
+    const [item, gear] = vscode.statusBarItems;
+    assert.equal(vscode.statusBarItems.length, 2);
     assert.equal(item?.alignment, vscode.StatusBarAlignment.Right);
     assert.equal(item?.priority, 100);
     assert.equal(item?.command, 'proxyToggler.toggle');
+    assert.equal(gear?.priority, 99);
+    assert.equal(gear?.command, 'proxyToggler.switchProfile');
   });
 
   it('renders each state with an accessible label', () => {
     const vscode = createFakeVscode();
-    const controller = new StatusBarController(vscode, 'proxyToggler.toggle');
+    const controller = new StatusBarController(
+      vscode,
+      'proxyToggler.toggle',
+      'proxyToggler.switchProfile'
+    );
 
+    const work = {
+      name: 'Work',
+      proxyUrl: 'http://proxy.example.com:8080',
+      strictSSL: true,
+      bypassList: []
+    };
     const rendered = [
       { isEnabled: false, hasConfiguration: false },
-      { isEnabled: false, hasConfiguration: true },
-      { isEnabled: true, hasConfiguration: true }
+      { isEnabled: false, hasConfiguration: true, currentProfile: work },
+      { isEnabled: true, hasConfiguration: true, currentProfile: work }
     ].map((state) => {
-      controller.updateState(state);
+      controller.updateState(state, 1);
       return [controller.getText(), controller.getAccessibilityLabel()];
     });
 
     assert.deepEqual(rendered, [
-      ['$(warning) Proxy: Not Configured', 'Proxy status: not configured'],
-      ['$(debug-disconnect) Proxy: OFF', 'Proxy status: disabled'],
-      ['$(plug) Proxy: ON', 'Proxy status: enabled']
+      ['$(warning) Proxy: Not Configured', 'Proxy not configured'],
+      ['$(debug-disconnect) Proxy: OFF', 'Proxy off, profile Work'],
+      ['$(plug) Proxy: ON', 'Proxy on, profile Work']
     ]);
   });
 
-  it('disposes its item', () => {
+  it('disposes its items', () => {
     const vscode = createFakeVscode();
-    const controller = new StatusBarController(vscode, 'proxyToggler.toggle');
+    const controller = new StatusBarController(
+      vscode,
+      'proxyToggler.toggle',
+      'proxyToggler.switchProfile'
+    );
 
     controller.dispose();
 
-    assert.equal(vscode.statusBarItems[0]?.disposeCalls, 1);
+    assert.deepEqual(
+      vscode.statusBarItems.map((item) => item.disposeCalls),
+      [1, 1]
+    );
   });
 });

@@ -1,11 +1,11 @@
 import type { ProxyManager } from '../core/proxy-manager';
 import type { VscodeApi } from '../vscode/api';
 import type { Notifier } from '../vscode/notification-service';
-import { announceEnabled, offerToConfigure, showKnownProxyError } from './proxy-feedback';
+import { announceSwitch, offerToConfigure, showKnownProxyError } from './proxy-feedback';
 
 export async function enableProxyCommand(
-  vscodeApi: Pick<VscodeApi, 'commands'>,
-  proxyManager: Pick<ProxyManager, 'hasConfiguration' | 'enableProxy'>,
+  vscodeApi: Pick<VscodeApi, 'commands' | 'workspace'>,
+  proxyManager: Pick<ProxyManager, 'enableProxy' | 'getState' | 'hasConfiguration'>,
   notificationService: Notifier,
   refreshUi: () => Promise<void>
 ): Promise<void> {
@@ -17,7 +17,8 @@ export async function enableProxyCommand(
   try {
     await proxyManager.enableProxy();
     await refreshUi();
-    await announceEnabled(vscodeApi, notificationService);
+    const name = proxyManager.getState().currentProfile?.name ?? '';
+    await announceSwitch(vscodeApi, notificationService, `Proxy Toggler turned on ${name}.`);
   } catch (error: unknown) {
     await showKnownProxyError(vscodeApi, notificationService, error, { offerDisable: true });
   }

@@ -33,9 +33,15 @@ describe('createProxyToggler', () => {
 
     assert.deepEqual(
       [...vscode.commandHandlers.keys()],
-      [COMMANDS.configure, COMMANDS.enable, COMMANDS.disable, COMMANDS.toggle]
+      [
+        COMMANDS.configure,
+        COMMANDS.enable,
+        COMMANDS.disable,
+        COMMANDS.toggle,
+        COMMANDS.switchProfile
+      ]
     );
-    assert.equal(context.subscriptions.length, 8);
+    assert.equal(context.subscriptions.length, 9);
   });
 
   it('runs every command without a saved configuration', async () => {
@@ -45,9 +51,10 @@ describe('createProxyToggler', () => {
       await vscode.commandHandlers.get(command)?.();
     }
 
+    // Enable and toggle offer to configure; success toasts are off by default.
     assert.deepEqual(
       vscode.messages.map((message) => message.kind),
-      ['warning', 'info', 'warning']
+      ['warning', 'warning']
     );
   });
 
@@ -105,6 +112,52 @@ describe('createProxyToggler', () => {
     assert.equal(proxyWhenOn, PROFILE.proxyUrl);
     assert.equal(vscode.settings.has('http.proxy'), false);
     assert.match(api.getStatusBarText() ?? '', /proxy: off/i);
+  });
+
+  describe('status bar', () => {
+    const HOME = { ...PROFILE, name: 'Home', proxyUrl: 'http://home.example:3128' };
+    const statusOf = (vscode: ReturnType<typeof createFakeVscode>) => {
+      const [item] = vscode.statusBarItems;
+      return {
+        text: item?.text,
+        tooltip: item?.tooltip,
+        label: item?.accessibilityInformation?.label
+      };
+    };
+
+    it('says ON or OFF with one profile, and names it in the tooltip and label', async () => {
+      const { vscode } = activateWith(
+        { settings: PROFILES },
+        { 'proxyToggler.state': { isEnabled: true, currentProfile: PROFILE } }
+      );
+      await flushBackgroundTasks();
+
+      assert.deepEqual(statusOf(vscode), {
+        text: '$(plug) Proxy: ON',
+        tooltip: 'Proxy on: Work. Click to turn it off.',
+        label: 'Proxy on, profile Work'
+      });
+    });
+
+    it('shows the current profile while on once two or more profiles exist', async () => {
+      const settings = { 'proxyToggler.profiles': [HOME, PROFILE] };
+      const on = activateWith(
+        { settings },
+        { 'proxyToggler.state': { isEnabled: true, currentProfile: PROFILE } }
+      );
+      const off = activateWith(
+        { settings },
+        { 'proxyToggler.state': { isEnabled: false, currentProfile: PROFILE } }
+      );
+      await flushBackgroundTasks();
+
+      assert.equal(statusOf(on.vscode).text, '$(plug) Proxy: Work');
+      assert.deepEqual(statusOf(off.vscode), {
+        text: '$(debug-disconnect) Proxy: OFF',
+        tooltip: 'Proxy off. Click to turn on Work.',
+        label: 'Proxy off, profile Work'
+      });
+    });
   });
 
   it('does not check drift without profiles', async () => {

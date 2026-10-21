@@ -8,6 +8,7 @@ import {
   defaultProfileName,
   entryNames,
   findCurrentProfile,
+  findProfileByName,
   type FlaggedEntry,
   type Profile,
   profileSettingValues,
@@ -182,6 +183,19 @@ export class ProxyManager {
     });
   }
 
+  // Makes the named profile current and turns it on. Undefined when no profile the switcher
+  // shows has that name.
+  switchTo(name: string): Promise<Profile | undefined> {
+    return this.serialize(async () => {
+      const profile = findProfileByName(this.getProfiles(), name);
+      if (profile) {
+        await this.settingsWriter.apply(profileSettingValues(profile));
+        await this.writeState({ isEnabled: true, currentProfile: profile });
+      }
+      return profile;
+    });
+  }
+
   // Records the state found in VS Code settings without writing those settings. It reads them
   // itself, so a caller that waited on a prompt cannot record a stale state.
   syncToggleState(): Promise<void> {
@@ -199,6 +213,11 @@ export class ProxyManager {
     const currentProfile = findCurrentProfile(profiles, stored?.currentProfile);
     const state = { isEnabled: stored?.isEnabled ?? false, hasConfiguration: profiles.length > 0 };
     return currentProfile ? { ...state, currentProfile } : state;
+  }
+
+  // The profiles the switcher shows, in the order of the setting.
+  getProfiles(): Profile[] {
+    return readProfiles(this.profilesSetting.read());
   }
 
   // The entries of proxyToggler.profiles that the switcher hides, and why.

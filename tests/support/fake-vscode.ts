@@ -1,10 +1,21 @@
 import type { ConfigurationChangeEvent, QuickPickItem, StatusBarAlignment } from 'vscode';
 
-import type { StatusBarItem, VscodeApi, WorkspaceConfiguration } from '../../src/vscode/api';
+import type {
+  QuickPick,
+  StatusBarItem,
+  VscodeApi,
+  WorkspaceConfiguration
+} from '../../src/vscode/api';
 
 type MessageKind = 'info' | 'warning' | 'error';
 
 type RecordedMessage = { kind: MessageKind; message: string; items: string[] };
+
+// A QuickPick that a test drives: accept() is Enter, dismiss() is Escape.
+export type FakeQuickPick = QuickPick<QuickPickItem> & {
+  accept(item?: QuickPickItem): void;
+  dismiss(): void;
+};
 
 type FakeStatusBarItem = StatusBarItem & {
   alignment: StatusBarAlignment;
@@ -17,6 +28,8 @@ export type FakeVscodeOptions = {
   // rejects throws: VS Code keeps the input box open, so that answer could never be submitted.
   inputs?: Array<string | undefined>;
   pick?: (items: readonly QuickPickItem[], callIndex: number) => QuickPickItem | undefined;
+  // Drives each QuickPick once it shows; one left alone is dismissed.
+  quickPick?: (quickPick: FakeQuickPick, callIndex: number) => void;
   // The button the user clicks for a notification; undefined means it was dismissed. A promise
   // keeps the notification open until it settles.
   answer?: (message: RecordedMessage) => string | undefined | Promise<string | undefined>;
@@ -30,7 +43,9 @@ export type FakeVscodeOptions = {
 };
 
 export type FakeVscode = VscodeApi & {
-  commandHandlers: Map<string, () => unknown>;
+  commandHandlers: Map<string, (...args: unknown[]) => unknown>;
+  // Every QuickPick shown, in order.
+  quickPicks: FakeQuickPick[];
   // Everything written to the extension's log channel, one string per call.
   logs: string[];
   executedCommands: Array<{ command: string; args: unknown[] }>;
@@ -45,7 +60,8 @@ export type FakeVscode = VscodeApi & {
 };
 
 export function createFakeVscode(options: FakeVscodeOptions = {}): FakeVscode {
-  const commandHandlers = new Map<string, () => unknown>();
+  const commandHandlers = new Map<string, (...args: unknown[]) => unknown>();
+  const quickPicks: FakeQuickPick[] = [];
   const executedCommands: FakeVscode['executedCommands'] = [];
   const messages: RecordedMessage[] = [];
   const settings = new Map(Object.entries(options.settings ?? {}));
@@ -106,8 +122,52 @@ export function createFakeVscode(options: FakeVscodeOptions = {}): FakeVscode {
     return configuration as WorkspaceConfiguration;
   };
 
+  const createQuickPick = (): FakeQuickPick => {
+    const accepted = emitter<void>();
+    const hidden = emitter<void>();
+    let open = false;
+    const close = (): void => {
+      if (open) {
+        open = false;
+        hidden.fire();
+      }
+    };
+    const quickPick: FakeQuickPick = {
+      items: [],
+      activeItems: [],
+      selectedItems: [],
+      title: undefined,
+      placeholder: undefined,
+      matchOnDescription: false,
+      onDidAccept: accepted.event,
+      onDidHide: hidden.event,
+      show: () => {
+        open = true;
+        const index = quickPicks.push(quickPick) - 1;
+        // The extension attaches its listeners before VS Code takes any input.
+        setImmediate(() => {
+          if (options.quickPick) {
+            options.quickPick(quickPick, index);
+          } else {
+            quickPick.dismiss();
+          }
+        });
+      },
+      hide: close,
+      dispose: close,
+      accept: (item) => {
+        const chosen = item ?? quickPick.activeItems[0];
+        quickPick.selectedItems = chosen ? [chosen] : [];
+        accepted.fire();
+      },
+      dismiss: close
+    };
+    return quickPick;
+  };
+
   return {
     commandHandlers,
+    quickPicks,
     logs,
     executedCommands,
     messages,
@@ -131,6 +191,7 @@ export function createFakeVscode(options: FakeVscodeOptions = {}): FakeVscode {
       }
     },
     ConfigurationTarget: { Global: 1 },
+    QuickPickItemKind: { Separator: -1 },
     StatusBarAlignment: { Right: 2 },
     commands: {
       registerCommand: (command, callback) => {
@@ -142,7 +203,14 @@ export function createFakeVscode(options: FakeVscodeOptions = {}): FakeVscode {
         return undefined;
       }
     },
-    l10n: { t: options.translate ?? ((message) => message) },
+    // Fills {0}, {1}... with the arguments, as VS Code does after translating.
+    l10n: {
+      t: (message, ...args) =>
+        (options.translate ?? ((text: string) => text))(message).replace(
+          /\{(\d+)\}/g,
+          (placeholder, index: string) => String(args[Number(index)] ?? placeholder)
+        )
+    },
     window: {
       createOutputChannel: () => ({
         error: (message: string | Error, ...args: unknown[]) => {
@@ -150,6 +218,7 @@ export function createFakeVscode(options: FakeVscodeOptions = {}): FakeVscode {
         },
         dispose: () => undefined
       }),
+      createQuickPick: <T extends QuickPickItem>() => createQuickPick() as unknown as QuickPick<T>,
       createStatusBarItem: (alignment, priority) => {
         const item: FakeStatusBarItem = {
           alignment,
@@ -201,6 +270,29 @@ export function createFakeVscode(options: FakeVscodeOptions = {}): FakeVscode {
             configurationListeners.splice(configurationListeners.indexOf(listener), 1);
           }
         };
+      }
+    }
+  };
+}
+
+// A minimal vscode.Event: listeners added with `event`, called by `fire`.
+function emitter<T>(): {
+  event: (listener: (value: T) => unknown) => { dispose(): void };
+  fire(value: T): void;
+} {
+  const listeners: Array<(value: T) => unknown> = [];
+  return {
+    event: (listener) => {
+      listeners.push(listener);
+      return {
+        dispose: () => {
+          listeners.splice(listeners.indexOf(listener), 1);
+        }
+      };
+    },
+    fire: (value) => {
+      for (const listener of [...listeners]) {
+        listener(value);
       }
     }
   };

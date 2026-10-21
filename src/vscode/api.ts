@@ -7,9 +7,10 @@ import type { Memento } from '../core/proxy-manager';
 // which must satisfy these signatures without a cast; unit tests pass small fakes.
 export type VscodeApi = {
   ConfigurationTarget: { Global: vscode.ConfigurationTarget };
+  QuickPickItemKind: { Separator: vscode.QuickPickItemKind };
   StatusBarAlignment: { Right: vscode.StatusBarAlignment };
   commands: {
-    registerCommand(command: string, callback: () => unknown): vscode.Disposable;
+    registerCommand(command: string, callback: (...args: unknown[]) => unknown): vscode.Disposable;
     executeCommand(command: string, ...rest: unknown[]): PromiseLike<unknown>;
   };
   l10n: {
@@ -17,6 +18,7 @@ export type VscodeApi = {
   };
   window: {
     createOutputChannel(name: string, options: { log: true }): Logger;
+    createQuickPick<T extends vscode.QuickPickItem>(): QuickPick<T>;
     createStatusBarItem(alignment: vscode.StatusBarAlignment, priority: number): StatusBarItem;
     showErrorMessage(message: string, ...items: string[]): PromiseLike<string | undefined>;
     showInformationMessage(message: string, ...items: string[]): PromiseLike<string | undefined>;
@@ -42,6 +44,21 @@ export type Logger = Pick<vscode.LogOutputChannel, 'dispose' | 'error'>;
 export type StatusBarItem = Pick<
   vscode.StatusBarItem,
   'accessibilityInformation' | 'command' | 'dispose' | 'show' | 'text' | 'tooltip'
+>;
+
+export type QuickPick<T extends vscode.QuickPickItem> = Pick<
+  vscode.QuickPick<T>,
+  | 'activeItems'
+  | 'dispose'
+  | 'hide'
+  | 'items'
+  | 'matchOnDescription'
+  | 'onDidAccept'
+  | 'onDidHide'
+  | 'placeholder'
+  | 'selectedItems'
+  | 'show'
+  | 'title'
 >;
 
 export type WorkspaceConfiguration = Pick<

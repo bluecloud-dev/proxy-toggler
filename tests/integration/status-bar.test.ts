@@ -36,8 +36,8 @@ describe('status bar state', function () {
       assert.match(api.getStatusBarAccessibilityLabel() ?? '', label, details);
     };
 
-    await showsState('proxyToggler.disable', /proxy: off/i, /disabled/i);
-    await showsState('proxyToggler.enable', /proxy: on/i, /enabled/i);
-    await showsState('proxyToggler.disable', /proxy: off/i, /disabled/i);
+    await showsState('proxyToggler.disable', /proxy: off/i, /proxy off/i);
+    await showsState('proxyToggler.enable', /proxy: on/i, /proxy on/i);
+    await showsState('proxyToggler.disable', /proxy: off/i, /proxy off/i);
   });
 });
