@@ -130,7 +130,7 @@ describe('createProxyToggler', () => {
       assert.equal(statusOf(on.vscode).text, '$(plug) Proxy: Work');
       assert.deepEqual(statusOf(off.vscode), {
         text: '$(debug-disconnect) Proxy: OFF',
-        tooltip: 'Proxy off. Click to turn on Work.',
+        tooltip: 'Proxy off: Proxy Toggler sets no proxy. Click to turn on Work.',
         label: 'Proxy off, profile Work'
       });
     });

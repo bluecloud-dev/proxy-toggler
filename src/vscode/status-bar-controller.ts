@@ -109,7 +109,12 @@ export class StatusBarController implements vscode.Disposable {
     return {
       icon: 'debug-disconnect',
       text: l10n.t('Proxy: OFF'),
-      tooltip: l10n.t('Proxy off. Click to turn on {0}.', current.name),
+      // Off says only that Proxy Toggler sets no proxy: what VS Code then uses depends on the
+      // environment and on whether VS Code has restarted since (TESTING.md, "What Off does").
+      tooltip: l10n.t(
+        'Proxy off: Proxy Toggler sets no proxy. Click to turn on {0}.',
+        current.name
+      ),
       label: l10n.t('Proxy off, profile {0}', current.name)
     };
   }

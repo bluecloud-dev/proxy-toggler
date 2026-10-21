@@ -60,7 +60,14 @@ type CheckBase = {
 // `code --install-extension`: VS Code's own requests, sent by its Node.js request service.
 type CliCheck = CheckBase & { client: 'cli'; installs: boolean };
 // The desktop app: requests from the extension host, keyed by URL, and a Marketplace search.
-type AppCheck = CheckBase & { client: 'app'; responses: Record<string, RegExp> };
+// `update` writes settings while VS Code runs, as Proxy Toggler does, then sends its own requests
+// and searches again. `env` adds variables to VS Code's environment.
+type AppCheck = CheckBase & {
+  client: 'app';
+  responses: Record<string, RegExp>;
+  update?: { settings: Record<string, unknown>; responses: Record<string, RegExp> };
+  env?: Record<string, string>;
+};
 type Check = CliCheck | AppCheck;
 
 const CHECKS: readonly Check[] = [
@@ -151,6 +158,73 @@ const CHECKS: readonly Check[] = [
   }
 ];
 
+// What Off does: Proxy Toggler removes the three settings while VS Code runs. Lab names resolve only
+// inside Docker, so a request that goes direct cannot resolve.
+const CLEARED = { 'http.proxy': null, 'http.proxyStrictSSL': null, 'http.noProxy': null };
+const UNRESOLVED = /^error (ENOTFOUND|EAI_AGAIN)$/;
+// A candidate for a Direct entry: no proxy, and every host bypassed.
+const DIRECT = { 'http.proxy': '', 'http.noProxy': ['*'] };
+
+const OFF_CHECKS: readonly Check[] = [
+  {
+    name: 'App, Off while running, with --proxy-pac-url',
+    client: 'app',
+    settings: proxySettings(SQUID_OPEN, true),
+    args: [PAC_ARGUMENT],
+    responses: { [`${ORIGIN}/off-before`]: ORIGIN_REPLY },
+    update: { settings: CLEARED, responses: { [`${ORIGIN}/off-after`]: UNRESOLVED } },
+    logs: [{ service: 'squid-open', pattern: /GET http:\/\/origin\.lab\.test:8088\/off-before / }],
+    absentLogs: [
+      { service: 'squid-open', pattern: /\/off-after / },
+      { service: 'squid-auth', pattern: MARKETPLACE_DENIED }
+    ]
+  },
+  {
+    name: 'App, Off while running, with HTTP_PROXY and HTTPS_PROXY',
+    client: 'app',
+    settings: proxySettings(SQUID_OPEN, true),
+    env: { HTTP_PROXY: SQUID_AUTH, HTTPS_PROXY: SQUID_AUTH },
+    responses: { [`${ORIGIN}/env-before`]: ORIGIN_REPLY },
+    update: { settings: CLEARED, responses: { [`${ORIGIN}/env-after`]: /^status 407: / } },
+    logs: [
+      { service: 'squid-open', pattern: /GET http:\/\/origin\.lab\.test:8088\/env-before / },
+      {
+        service: 'squid-auth',
+        pattern: /TCP_DENIED\/407 \d+ GET http:\/\/origin\.lab\.test:8088\/env-after /
+      },
+      // The window follows the variables too once the settings are gone.
+      { service: 'squid-auth', pattern: MARKETPLACE_DENIED }
+    ]
+  },
+  {
+    name: 'App, Direct candidate at start-up, with --proxy-pac-url',
+    client: 'app',
+    settings: DIRECT,
+    args: [PAC_ARGUMENT],
+    responses: { [`${ORIGIN}/direct-start`]: UNRESOLVED },
+    logs: [],
+    absentLogs: [
+      { service: 'squid-open', pattern: /\/direct-start / },
+      { service: 'squid-auth', pattern: MARKETPLACE_DENIED }
+    ]
+  },
+  {
+    name: 'App, Direct candidate while running, with --proxy-pac-url',
+    client: 'app',
+    settings: proxySettings(SQUID_OPEN, true),
+    args: [PAC_ARGUMENT],
+    responses: { [`${ORIGIN}/direct-before`]: ORIGIN_REPLY },
+    update: { settings: DIRECT, responses: { [`${ORIGIN}/direct-after`]: UNRESOLVED } },
+    logs: [
+      { service: 'squid-open', pattern: /GET http:\/\/origin\.lab\.test:8088\/direct-before / }
+    ],
+    absentLogs: [
+      { service: 'squid-open', pattern: /\/direct-after / },
+      { service: 'squid-auth', pattern: MARKETPLACE_DENIED }
+    ]
+  }
+];
+
 const REQUIRED_SERVICES = ['squid-open', 'squid-auth', 'mitmproxy', 'pac', 'origin'];
 
 type Outcome = { problems: string[]; evidence: string[] };
@@ -172,7 +246,9 @@ async function main(): Promise<boolean> {
 
   let passed = true;
   for (const version of await versionsToTest()) {
-    for (const check of CHECKS) {
+    // PROXY_LAB_CHECKS=off runs only the checks of what Off does.
+    const checks = process.env.PROXY_LAB_CHECKS === 'off' ? OFF_CHECKS : [...CHECKS, ...OFF_CHECKS];
+    for (const check of checks) {
       const { problems, evidence } = await runCheck(version, check);
       passed &&= problems.length === 0;
       // VS Code's own output fills the console, so each verdict stands out by its prefix.
@@ -219,7 +295,8 @@ async function runCheck(version: string, check: Check): Promise<Outcome> {
       }
     } else {
       const responses = await runInVsCode(version, profile, check, temp);
-      for (const [url, expected] of Object.entries(check.responses)) {
+      const expectedResponses = { ...check.responses, ...check.update?.responses };
+      for (const [url, expected] of Object.entries(expectedResponses)) {
         const actual = responses[url] ?? 'no result';
         evidence.push(`extension host ${url}: ${actual}`);
         if (!expected.test(actual)) {
@@ -306,8 +383,13 @@ async function runInVsCode(
       ...(check.args ?? [])
     ],
     extensionTestsEnv: {
+      ...check.env,
       PROXY_LAB_URLS: Object.keys(check.responses).join(' '),
-      PROXY_LAB_RESULTS: resultsFile
+      PROXY_LAB_RESULTS: resultsFile,
+      ...(check.update && {
+        PROXY_LAB_UPDATE: JSON.stringify(check.update.settings),
+        PROXY_LAB_UPDATE_URLS: Object.keys(check.update.responses).join(' ')
+      })
     }
   });
   return JSON.parse(await fs.readFile(resultsFile, 'utf8')) as Record<string, string>;

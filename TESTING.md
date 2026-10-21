@@ -40,9 +40,9 @@ integration tests run it.
 extension writes; the other integration tests only check the settings. It runs with them, on both
 VS Code versions, and sends requests from the extension host through a local proxy:
 
-- With the proxy enabled, a request for `http://origin.invalid/hello` reaches the proxy, which
-  answers it. After **Disable**, the same request goes direct, fails with `ENOTFOUND`, and the
-  proxy sees nothing new.
+- With the proxy on, a request for `http://origin.invalid/hello` reaches the proxy, which
+  answers it. After **Turn Proxy Off**, the same request goes direct, fails with `ENOTFOUND`, and
+  the proxy sees nothing new.
 - A host in the bypass list goes direct, while other hosts still go through the proxy.
 - An HTTPS request asks the proxy for a tunnel: `CONNECT origin.invalid:443`.
 - Credentials inside the `http.proxy` URL authenticate that `CONNECT`. The test writes
@@ -151,23 +151,23 @@ they cover.
 in Docker, on `127.0.0.1` only. Start it with `npm run proxy-lab:up`, watch a proxy with
 `npm run proxy-lab:logs -- --follow <service>`, and stop it with `npm run proxy-lab:down`.
 
-Proxy Toggler stores proxy credentials in SecretStorage but never applies them. **Enable** writes
-only `http.proxy`, `http.proxyStrictSSL`, and `http.noProxy`, and the URL prompt rejects
-credentials inside the URL. When a proxy asks for credentials, VS Code asks the user itself.
+Proxy Toggler stores no proxy credentials. Turning a profile on writes only `http.proxy`,
+`http.proxyStrictSSL`, and `http.noProxy`, and the URL prompt rejects credentials inside the URL.
+When a proxy asks for credentials, VS Code asks the user itself.
 
-For each row, run **Proxy Toggler: Configure Proxy Settings** with the values given, leave the
-username empty unless the row names one, and choose **Enable**. Then search in the Extensions view:
-the search makes VS Code send its own requests through the proxy.
+For each row, add a profile with the values given (**Add Profile…** in the switcher, then edit its
+strict SSL choice and bypass list), and turn it on. Then search in the Extensions view: the search
+makes VS Code send its own requests through the proxy.
 
-| Lab proxy    | Proxy URL                 | Bypass list                                        | Strict SSL | Expected result                                                                                                                                                                                                                                                                                                                                                          |
-| ------------ | ------------------------- | -------------------------------------------------- | ---------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
-| `squid-open` | `http://127.0.0.1:3128`   | `localhost,127.0.0.1` (the default)                | Yes        | The search shows results, and the `squid-open` log shows `TCP_TUNNEL/200 … CONNECT marketplace.visualstudio.com:443`. After **Disable**, new searches add no lines.                                                                                                                                                                                                      |
-| `squid-open` | `http://127.0.0.1:3128`   | `localhost,127.0.0.1,marketplace.visualstudio.com` | Yes        | The search shows results, and the log gains no `CONNECT marketplace.visualstudio.com:443` line: VS Code reaches that host directly. Other hosts, such as `*.gallerycdn.vsassets.io`, still go through the proxy.                                                                                                                                                         |
-| `squid-auth` | `http://127.0.0.1:3129`   | the default                                        | Yes        | Enter the lab's test-only account: user `lab`, password `lab-secret`. Configure stores it, but VS Code shows its own proxy sign-in prompt, and the log shows `TCP_DENIED/407 … CONNECT marketplace.visualstudio.com:443`. Signing in to that prompt is VS Code's feature, not Proxy Toggler's.                                                                           |
-| `mitmproxy`  | `http://127.0.0.1:8080`   | the default                                        | Yes        | The search fails, and the `mitmproxy` log shows `The client does not trust the proxy's certificate for marketplace.visualstudio.com`.                                                                                                                                                                                                                                    |
-| `mitmproxy`  | `http://127.0.0.1:8080`   | the default                                        | No         | The same failure. The desktop app checks certificates whatever `http.proxyStrictSSL` says; see below.                                                                                                                                                                                                                                                                    |
-| `socks5`     | `socks5://127.0.0.1:1080` | none                                               | none       | The URL prompt rejects the URL: "Invalid proxyUrl: Scheme must be http or https".                                                                                                                                                                                                                                                                                        |
-| `pac`        | none: disable the proxy   | none                                               | none       | Start VS Code with `--proxy-pac-url=http://127.0.0.1:8000/proxy.pac` and a `--user-data-dir` of its own. The `pac` log shows the download, and a search brings up VS Code's proxy sign-in prompt, because the PAC file sends the Marketplace to `squid-auth`. Then enable `squid-open`: searches go through it, because `http.proxy` takes precedence over the PAC file. |
+| Lab proxy    | Proxy URL                 | Bypass list                                        | Strict SSL | Expected result                                                                                                                                                                                                                                                                                                                                                                       |
+| ------------ | ------------------------- | -------------------------------------------------- | ---------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `squid-open` | `http://127.0.0.1:3128`   | `localhost,127.0.0.1` (the default)                | Yes        | The search shows results, and the `squid-open` log shows `TCP_TUNNEL/200 … CONNECT marketplace.visualstudio.com:443`. After **Turn Proxy Off**, new searches add no lines.                                                                                                                                                                                                            |
+| `squid-open` | `http://127.0.0.1:3128`   | `localhost,127.0.0.1,marketplace.visualstudio.com` | Yes        | The search shows results, and the log gains no `CONNECT marketplace.visualstudio.com:443` line: VS Code reaches that host directly. Other hosts, such as `*.gallerycdn.vsassets.io`, still go through the proxy.                                                                                                                                                                      |
+| `squid-auth` | `http://127.0.0.1:3129`   | the default                                        | Yes        | VS Code shows its own proxy sign-in prompt, where the lab's test-only account works: user `lab`, password `lab-secret`, and the log shows `TCP_DENIED/407 … CONNECT marketplace.visualstudio.com:443`. Proxy Toggler stores no credentials.                                                                                                                                           |
+| `mitmproxy`  | `http://127.0.0.1:8080`   | the default                                        | Yes        | The search fails, and the `mitmproxy` log shows `The client does not trust the proxy's certificate for marketplace.visualstudio.com`.                                                                                                                                                                                                                                                 |
+| `mitmproxy`  | `http://127.0.0.1:8080`   | the default                                        | No         | The same failure. The desktop app checks certificates whatever `http.proxyStrictSSL` says; see below.                                                                                                                                                                                                                                                                                 |
+| `socks5`     | `socks5://127.0.0.1:1080` | none                                               | none       | Add Profile accepts the URL. What VS Code does with a SOCKS proxy is not measured here.                                                                                                                                                                                                                                                                                               |
+| `pac`        | none: turn the proxy off  | none                                               | none       | Start VS Code with `--proxy-pac-url=http://127.0.0.1:8000/proxy.pac` and a `--user-data-dir` of its own. The `pac` log shows the download, and a search brings up VS Code's proxy sign-in prompt, because the PAC file sends the Marketplace to `squid-auth`. Then turn on the `squid-open` profile: searches go through it, because `http.proxy` takes precedence over the PAC file. |
 
 ### What `http.proxyStrictSSL` does
 
@@ -185,6 +185,32 @@ The desktop app ignores it, both for its own Marketplace requests and for reques
 extensions. VS Code describes the setting as controlling "whether the proxy server certificate
 should be verified"; the lab has no HTTPS proxy, so that case is not measured.
 
+### What Off does
+
+Turning the proxy off removes `http.proxy`, `http.proxyStrictSSL` and `http.noProxy` while VS Code
+runs. Measured with `PROXY_LAB_CHECKS=off npm run proxy-lab:probe` on VS Code 1.97.0 and 1.143.0
+(macOS, October 2026): each check starts the desktop app with `http.proxy` set to `squid-open`,
+removes the three settings, then sends requests from the extension host and searches the
+Marketplace again.
+
+| How VS Code started                     | Extensions' requests after Off | VS Code's own requests after Off           |
+| --------------------------------------- | ------------------------------ | ------------------------------------------ |
+| With `--proxy-pac-url`                  | Direct                         | Direct: the PAC file's proxies get nothing |
+| With `HTTP_PROXY` and `HTTPS_PROXY` set | Through the proxy they name    | Through the proxy they name                |
+| With `--proxy-pac-url`, after a restart | Through the PAC file's proxy   | Through the PAC file's proxy               |
+
+The last row is the probe's "App with only `--proxy-pac-url`" check: a restart with the settings
+already removed. So until VS Code restarts, Off sends VS Code's traffic direct unless its
+environment names a proxy; after a restart, a PAC file or the system's proxy applies again.
+
+Decision: the Off tooltip says only that Proxy Toggler sets no proxy ("Proxy off: Proxy Toggler
+sets no proxy"), because what VS Code uses next depends on its environment and on whether it has
+restarted. The README's "What off means" explains the rest.
+
+A Direct entry, which the roadmap keeps for later, would work: an empty `http.proxy` with
+`http.noProxy: ["*"]` sends both extensions' and VS Code's own requests direct, whether written at
+start-up or while VS Code runs, even with `--proxy-pac-url`.
+
 ### The probe
 
 `npm run proxy-lab:probe` needs the lab running and internet access. For the `engines.vscode`
@@ -194,17 +220,21 @@ The CLI checks run `code --install-extension` on a small Marketplace extension. 
 start the desktop app with `tests/proxy-lab/index.ts`, which sends requests from the extension
 host and then searches the Marketplace.
 
-| Check                                         | Expected                                                                                                                                                       |
-| --------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| CLI through `squid-open`                      | Installs; `squid-open` logs the Marketplace tunnel.                                                                                                            |
-| CLI through `squid-auth`                      | Fails, with the misleading message "Extension '…' not found"; `squid-auth` logs `TCP_DENIED/407`.                                                              |
-| CLI through `mitmproxy`, Strict SSL on        | Fails; `mitmproxy` logs the failed TLS handshake.                                                                                                              |
-| CLI through `mitmproxy`, Strict SSL off       | Installs; `mitmproxy` logs the intercepted Marketplace query.                                                                                                  |
-| CLI with only `--proxy-pac-url`               | Installs without a proxy: the CLI never downloads the PAC file.                                                                                                |
-| App through `squid-open`, with a bypass entry | The extension host reaches `origin.lab.test` through `squid-open`, a host in `http.noProxy` goes direct, and the Marketplace search goes through `squid-open`. |
-| App through `mitmproxy`, Strict SSL on        | The extension host request and the Marketplace search fail on the certificate.                                                                                 |
-| App through `mitmproxy`, Strict SSL off       | The same failures.                                                                                                                                             |
-| App with only `--proxy-pac-url`               | VS Code downloads the PAC file, the extension host reaches `origin.lab.test` through `squid-open`, and the Marketplace search gets `407` from `squid-auth`.    |
+| Check                                          | Expected                                                                                                                                                       |
+| ---------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| CLI through `squid-open`                       | Installs; `squid-open` logs the Marketplace tunnel.                                                                                                            |
+| CLI through `squid-auth`                       | Fails, with the misleading message "Extension '…' not found"; `squid-auth` logs `TCP_DENIED/407`.                                                              |
+| CLI through `mitmproxy`, Strict SSL on         | Fails; `mitmproxy` logs the failed TLS handshake.                                                                                                              |
+| CLI through `mitmproxy`, Strict SSL off        | Installs; `mitmproxy` logs the intercepted Marketplace query.                                                                                                  |
+| CLI with only `--proxy-pac-url`                | Installs without a proxy: the CLI never downloads the PAC file.                                                                                                |
+| App through `squid-open`, with a bypass entry  | The extension host reaches `origin.lab.test` through `squid-open`, a host in `http.noProxy` goes direct, and the Marketplace search goes through `squid-open`. |
+| App through `mitmproxy`, Strict SSL on         | The extension host request and the Marketplace search fail on the certificate.                                                                                 |
+| App through `mitmproxy`, Strict SSL off        | The same failures.                                                                                                                                             |
+| App with only `--proxy-pac-url`                | VS Code downloads the PAC file, the extension host reaches `origin.lab.test` through `squid-open`, and the Marketplace search gets `407` from `squid-auth`.    |
+| App, Off while running, with `--proxy-pac-url` | Before Off, both go through `squid-open`. After, the extension host cannot resolve `origin.lab.test` (direct), and `squid-auth` sees no Marketplace request.   |
+| App, Off while running, with `HTTP(S)_PROXY`   | After Off, the extension host gets `407` from `squid-auth`, the proxy the variables name, and so does the Marketplace search.                                  |
+| App, Direct candidate at start-up              | With `--proxy-pac-url`, the extension host goes direct and `squid-auth` sees no Marketplace request.                                                           |
+| App, Direct candidate while running            | The same, after the candidate replaces `squid-open` while VS Code runs.                                                                                        |
 
 A failing check means that VS Code no longer behaves as recorded here, or that the lab is broken;
 find out which, then update the tables. The **Proxy lab** workflow
