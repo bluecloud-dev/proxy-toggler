@@ -3,7 +3,12 @@ import type * as vscode from 'vscode';
 import { parseNoProxyList } from '../core/no-proxy';
 import { findProfileByName, type Profile, sameName, validateProfileName } from '../core/profiles';
 import type { ProxyManager } from '../core/proxy-manager';
-import { problemWith, validateBypassPattern, validateProxyUrl } from '../core/validation';
+import {
+  problemWith,
+  validateBypassPattern,
+  validateProxyUrl,
+  ValidationError
+} from '../core/validation';
 import type { VscodeApi } from '../vscode/api';
 import type { Notifier } from '../vscode/notification-service';
 import { askText } from '../vscode/quick-input';
@@ -60,6 +65,11 @@ export async function editProfileCommand(
     try {
       await proxyManager.updateProfile(profile.name, edited);
     } catch (error: unknown) {
+      // The list changed under the edit, in another window or through Settings Sync.
+      if (error instanceof ValidationError) {
+        notificationService.inform('error', error.reason);
+        return;
+      }
       await showKnownProxyError(vscodeApi, notificationService, error, { offerDisable: true });
     }
     await refreshUi();

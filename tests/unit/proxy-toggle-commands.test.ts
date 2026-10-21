@@ -25,15 +25,18 @@ function createProxyManagerStub(options: {
   return {
     calls,
     hasConfiguration: () => options.hasConfiguration,
+    // With no profile there is no current profile either.
     getState: () => ({
       isEnabled: options.isEnabled ?? false,
       hasConfiguration: options.hasConfiguration,
-      currentProfile: {
-        name: 'Work',
-        proxyUrl: 'http://proxy.example.com:8080',
-        strictSSL: true,
-        bypassList: []
-      }
+      ...(options.hasConfiguration && {
+        currentProfile: {
+          name: 'Work',
+          proxyUrl: 'http://proxy.example.com:8080',
+          strictSSL: true,
+          bypassList: []
+        }
+      })
     }),
     enableProxy: async (): Promise<void> => {
       calls.enable += 1;
@@ -56,6 +59,25 @@ function failWith(proxyManager: ProxyManagerStub, error: Error): ProxyManagerStu
 }
 
 describe('proxy state commands', () => {
+  it('disable says the proxy is off without naming a profile when none exists', async () => {
+    const vscode = createFakeVscode({
+      settings: { 'proxyToggler.showSwitchNotifications': true }
+    });
+    const notifications = createNotificationRecorder();
+
+    await disableProxyCommand(
+      vscode,
+      createProxyManagerStub({ hasConfiguration: false }),
+      notifications,
+      noRefresh
+    );
+
+    assert.deepEqual(
+      notifications.notifications.map(({ message }) => message),
+      ['Proxy Toggler turned the proxy off.']
+    );
+  });
+
   it('enable offers to configure when nothing is saved', async () => {
     const vscode = createFakeVscode();
     const notifications = createNotificationRecorder(answer('warning', 'configure'));

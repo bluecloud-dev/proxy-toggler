@@ -1,6 +1,11 @@
 import { settingsMatch } from './match';
 import type { ProxySettingValues } from './proxy-settings-writer';
-import { problemWith, validateBypassPattern, validateProxyUrl } from './validation';
+import {
+  problemWith,
+  validateBypassPattern,
+  validateProxyUrl,
+  ValidationError
+} from './validation';
 
 const MAX_NAME_LENGTH = 30;
 
@@ -89,6 +94,14 @@ export function withProfile(
   replacing: string
 ): unknown[] {
   const index = indexOfName(entries, replacing);
+  // Another window or Settings Sync can remove the entry while it is being edited; saving
+  // nothing then must not look like a save.
+  if (index === -1) {
+    throw new ValidationError(
+      'name',
+      `Could not save ${replacing.trim()}: proxyToggler.profiles no longer has it. Another window or Settings Sync may have removed it.`
+    );
+  }
   return entries.map((entry, entryIndex) =>
     entryIndex === index ? { ...(entry as object), ...profile } : entry
   );

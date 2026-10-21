@@ -140,6 +140,35 @@ describe('Edit Profile', () => {
     );
   });
 
+  it('says so, and saves nothing, when the profile is gone before the edit is saved', async () => {
+    let vscode: ReturnType<typeof createFakeVscode> | undefined;
+    ({ vscode } = activate(
+      script(
+        [choose('Proxy URL')],
+        [
+          (box) => {
+            // Another window, or Settings Sync, removes the profile meanwhile.
+            vscode?.changeSettings({ 'proxyToggler.profiles': [HOME] });
+            box.submit('http://new.example.com:3128');
+          }
+        ]
+      )
+    ));
+
+    await vscode.commandHandlers.get(COMMANDS.configure)?.();
+
+    assert.deepEqual(profiles(vscode), [HOME]);
+    assert.deepEqual(
+      vscode.messages.map(({ kind, message }) => [kind, message]),
+      [
+        [
+          'error',
+          'Could not save Work: proxyToggler.profiles no longer has it. Another window or Settings Sync may have removed it.'
+        ]
+      ]
+    );
+  });
+
   it('checks each field like the UI does everywhere else', async () => {
     const problems: unknown[] = [];
     const { vscode } = activate(

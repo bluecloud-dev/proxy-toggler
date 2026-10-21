@@ -503,6 +503,16 @@ describe('ProxyManager', () => {
       assert.deepEqual(profilesSetting.value, [EDITED, duplicate]);
     });
 
+    it('refuses an edit of a profile that is gone, and writes nothing', async () => {
+      // Another window, or Settings Sync, removed it while the edit was open.
+      const { profilesSetting, proxyManager } = setup({ profiles: [HOME] });
+
+      await assert.rejects(() => proxyManager.updateProfile('Work', EDITED), ValidationError);
+
+      assert.deepEqual(profilesSetting.value, [HOME]);
+      assert.deepEqual(profilesSetting.writes ?? [], []);
+    });
+
     it('refuses values the UI would refuse', async () => {
       const { profilesSetting, proxyManager } = setup({ profiles: [WORK] });
 

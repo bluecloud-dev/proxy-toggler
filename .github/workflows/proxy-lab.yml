@@ -14,8 +14,9 @@ jobs:
     name: VS Code through the proxy lab
     runs-on: ubuntu-latest
     # The probe gives up on a stuck Remote-SSH window after 3 minutes, and up to 5 for the
-    # two-window check, so stuck SSH checks on both versions can take 28 minutes on their own.
-    timeout-minutes: 45
+    # two-window check. Seven one-window checks and the two-window one can take 26 minutes per
+    # version when stuck, 52 for both, and the rest of the probe usually takes under 10.
+    timeout-minutes: 75
 
     steps:
       - name: Checkout

@@ -12,8 +12,15 @@ export async function disableProxyCommand(
   try {
     await proxyManager.disableProxy();
     await refreshUi();
-    const name = proxyManager.getState().currentProfile?.name ?? '';
-    await announceSwitch(vscodeApi, notificationService, `Proxy Toggler turned off ${name}.`);
+    // Turning the proxy off also works with no profile, when there is none to name.
+    const name = proxyManager.getState().currentProfile?.name;
+    await announceSwitch(
+      vscodeApi,
+      notificationService,
+      name === undefined
+        ? 'Proxy Toggler turned the proxy off.'
+        : `Proxy Toggler turned off ${name}.`
+    );
   } catch (error: unknown) {
     await showKnownProxyError(vscodeApi, notificationService, error, { offerDisable: false });
   }
