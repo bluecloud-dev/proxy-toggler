@@ -3,7 +3,7 @@ import type * as vscode from 'vscode';
 const USERNAME_SECRET_KEY = 'proxyToggler.credentials.username';
 const PASSWORD_SECRET_KEY = 'proxyToggler.credentials.password';
 
-export type SecretStorage = Pick<vscode.SecretStorage, 'get' | 'store' | 'delete'>;
+export type SecretStorage = Pick<vscode.SecretStorage, 'get' | 'delete'>;
 
 export const KeychainErrorReason = {
   LOCKED: 'locked',
@@ -14,14 +14,6 @@ export const KeychainErrorReason = {
 
 export type KeychainErrorReason = (typeof KeychainErrorReason)[keyof typeof KeychainErrorReason];
 
-const USER_MESSAGES = {
-  locked: 'Your system keychain appears to be locked. Unlock it and try again.',
-  permission_denied:
-    'Permission denied accessing the system keychain. Check your OS keychain permissions.',
-  unavailable: 'The system keychain is unavailable on this machine.',
-  unknown: 'Failed to access the system keychain.'
-} satisfies Record<KeychainErrorReason, string>;
-
 // SecretStorage errors carry no codes, so the reason is a best-effort guess from the message.
 const REASON_HINTS = [
   [KeychainErrorReason.LOCKED, ['locked']],
@@ -31,16 +23,12 @@ const REASON_HINTS = [
 
 export class KeychainError extends Error {
   constructor(
-    public readonly operation: 'store' | 'retrieve' | 'delete',
+    public readonly operation: 'retrieve' | 'delete',
     public readonly reason: KeychainErrorReason,
     options?: ErrorOptions
   ) {
     super(`Keychain ${operation} failed: ${reason}`, options);
     this.name = 'KeychainError';
-  }
-
-  toUserMessage(): string {
-    return USER_MESSAGES[this.reason];
   }
 }
 

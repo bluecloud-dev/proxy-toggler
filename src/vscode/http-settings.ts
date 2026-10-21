@@ -69,3 +69,29 @@ export function createHttpSettings(
     }
   };
 }
+
+type SideSwitchApi = Pick<VscodeApi, 'ConfigurationTarget' | 'workspace'>;
+
+// Gives the remote side of this window its own proxy settings, which applies without a reload
+// (TESTING.md, "Remote windows", check 3), and pins them with an empty http.proxy at once. VS Code
+// makes http.* the remote machine's before the first write resolves, so the second lands there
+// (check 8).
+export async function useOwnProxySettings(vscodeApi: SideSwitchApi): Promise<void> {
+  const http = vscodeApi.workspace.getConfiguration('http');
+  const target = vscodeApi.ConfigurationTarget.Global;
+  await http.update('useLocalProxyConfiguration', false, target);
+  await http.update('proxy', '', target);
+}
+
+// Hands the remote side back to this computer's proxy settings. The remote machine's http.*
+// values go first, while they still belong to it: once the remote side uses this computer's
+// settings, a write of a key that the remote file still holds lands there and changes nothing
+// (check 2). Removing the setting applies without a reload too (check 7).
+export async function useLocalProxySettings(vscodeApi: SideSwitchApi): Promise<void> {
+  const http = vscodeApi.workspace.getConfiguration('http');
+  const target = vscodeApi.ConfigurationTarget.Global;
+  for (const key of ['proxy', 'proxyStrictSSL', 'noProxy']) {
+    await http.update(key, undefined, target);
+  }
+  await http.update('useLocalProxyConfiguration', undefined, target);
+}

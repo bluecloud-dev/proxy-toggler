@@ -151,6 +151,28 @@ describe('testConnection', () => {
     assert.match(timedOut.message, /did not answer/);
   });
 
+  it('fails, saying why, when the target never answers inside the tunnel', async () => {
+    // Opens every tunnel, then reads whatever arrives and never answers.
+    const opener = net.createServer((socket) => {
+      socket.once('data', () => socket.write('HTTP/1.1 200 Connection established\r\n\r\n'));
+      socket.resume();
+    });
+    opener.listen(0, '127.0.0.1');
+    await once(opener, 'listening');
+    cleanup.push(() => new Promise((resolve) => opener.close(() => resolve())));
+    const port = (opener.address() as AddressInfo).port;
+
+    const verdict = await testConnection(`http://127.0.0.1:${port}`, 'https://origin.test', {
+      timeoutMs: 100
+    });
+
+    assert.equal(verdict.outcome, 'fail');
+    assert.match(
+      verdict.message,
+      /origin\.test did not answer through the tunnel within 0\.1 seconds/
+    );
+  });
+
   describe("certificates, checked against Node's built-in authorities only", () => {
     const CA_SECTION =
       'https://github.com/bluecloud-dev/proxy-toggler#trusting-a-companys-certificate-authority';

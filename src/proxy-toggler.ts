@@ -65,7 +65,7 @@ export function createProxyToggler(
         : globalState.update(key, value)
   };
   const keychainService = new KeychainService(context.secrets);
-  const notificationService = new NotificationService(vscodeApi);
+  const notificationService = new NotificationService(vscodeApi, logger);
   const proxyManager = new ProxyManager(
     globalState,
     createHttpSettings(vscodeApi),

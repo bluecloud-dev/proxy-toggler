@@ -3,6 +3,7 @@ import type * as vscode from 'vscode';
 import { type Profile, sortByName } from '../core/profiles';
 import type { ProxyManager } from '../core/proxy-manager';
 import type { VscodeApi } from '../vscode/api';
+import { useLocalProxySettings, useOwnProxySettings } from '../vscode/http-settings';
 import type { Notifier } from '../vscode/notification-service';
 import { pickOne } from '../vscode/quick-pick';
 import { addProfileCommand } from './add-profile';
@@ -10,7 +11,7 @@ import { EXTENSION_ID } from './command-ids';
 import { deleteProfileCommand } from './delete-profile';
 import { editProfileCommand } from './edit-profile';
 import { announceSwitch, showKnownProxyError } from './proxy-feedback';
-import { remoteProxyChoice, useSeparateProxy, useThisComputersProxy } from './remote-proxy';
+import { remoteProxyChoice } from './remote-proxy';
 
 type SwitcherApi = Pick<
   VscodeApi,
@@ -37,6 +38,7 @@ type SwitcherManager = Pick<
   | 'hasConfiguration'
   | 'hasDrift'
   | 'readProxySettings'
+  | 'settingsHoldProxy'
   | 'switchTo'
   | 'updateProfile'
 >;
@@ -68,7 +70,7 @@ export async function switchProfileCommand(
     if (await turnOn(vscodeApi, proxyManager, notificationService, refreshUi, name)) {
       return;
     }
-    void notificationService.showError(`No proxy profile is named "${name}".`);
+    notificationService.inform('error', `No proxy profile is named "${name}".`);
   }
 
   await showSwitcher(vscodeApi, proxyManager, notificationService, refreshUi);
@@ -154,10 +156,10 @@ async function showSwitcher(
   } else if (choice?.action === 'delete') {
     await deleteProfileCommand(vscodeApi, proxyManager, notificationService, refreshUi);
   } else if (choice?.action === 'separate') {
-    await useSeparateProxy(vscodeApi);
+    await useOwnProxySettings(vscodeApi);
     await refreshUi();
   } else if (choice?.action === 'shared') {
-    await useThisComputersProxy(vscodeApi);
+    await useLocalProxySettings(vscodeApi);
     await refreshUi();
   } else if (choice?.action === 'settings') {
     await vscodeApi.commands.executeCommand(

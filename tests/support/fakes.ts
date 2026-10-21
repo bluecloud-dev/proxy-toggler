@@ -29,7 +29,7 @@ export function createMemento(store = new Map<string, unknown>()): FakeMemento {
   };
 }
 
-export type SecretStorageFailures = { get?: Error; store?: Error; delete?: Error };
+export type SecretStorageFailures = { get?: Error; delete?: Error };
 
 export function createSecretStorage(
   values = new Map<string, string>(),
@@ -42,12 +42,6 @@ export function createSecretStorage(
         throw failures.get;
       }
       return values.get(key);
-    },
-    store: async (key, value) => {
-      if (failures.store) {
-        throw failures.store;
-      }
-      values.set(key, value);
     },
     delete: async (key) => {
       if (failures.delete) {
@@ -135,6 +129,7 @@ export function createNotificationRecorder(
   showSuccess(message: string, ...actions: NotificationAction[]): Promise<string | undefined>;
   showWarning(message: string, ...actions: NotificationAction[]): Promise<string | undefined>;
   showError(message: string, ...actions: NotificationAction[]): Promise<string | undefined>;
+  inform(kind: RecordedNotification['kind'], message: string): void;
 } {
   const notifications: RecordedNotification[] = [];
   const record =
@@ -149,7 +144,10 @@ export function createNotificationRecorder(
     notifications,
     showSuccess: record('success'),
     showWarning: record('warning'),
-    showError: record('error')
+    showError: record('error'),
+    inform: (kind, message) => {
+      notifications.push({ kind, message, actions: [] });
+    }
   };
 }
 

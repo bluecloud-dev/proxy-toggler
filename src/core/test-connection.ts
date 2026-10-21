@@ -30,14 +30,11 @@ export async function testConnection(
   targetUrl: string,
   options: TestOptions = {}
 ): Promise<TestVerdict> {
-  const proxy = new URL(proxyUrl);
-  if (proxy.protocol !== 'http:' && proxy.protocol !== 'https:') {
-    return {
-      outcome: 'skip',
-      message:
-        'Test Connection covers only HTTP and HTTPS proxies, so it did not test this SOCKS proxy.'
-    };
+  const untested = untestedProxy(proxyUrl);
+  if (untested) {
+    return untested;
   }
+  const proxy = new URL(proxyUrl);
 
   const target = new URL(targetUrl);
   const settings = {
@@ -70,6 +67,17 @@ export async function testConnection(
   } finally {
     socket.destroy();
   }
+}
+
+// The verdict for a proxy the test does not cover, before any target is asked for.
+export function untestedProxy(proxyUrl: string): TestVerdict | undefined {
+  return /^https?:/i.test(proxyUrl)
+    ? undefined
+    : {
+        outcome: 'skip',
+        message:
+          'Test Connection covers only HTTP and HTTPS proxies, so it did not test this SOCKS proxy.'
+      };
 }
 
 // The worse outcome wins, and every finding is said.
@@ -141,13 +149,14 @@ function commonNameOf(distinguishedName: string): string {
   return line ? line.slice('CN='.length) : distinguishedName;
 }
 
-type Settings = { timeoutMs: number; ca: string[] };
+// The resolved options: how long to wait, and which authorities to trust.
+type Limits = { timeoutMs: number; ca: string[] };
 
 class TimeoutError extends Error {}
 
 function connectToProxy(
   proxy: URL,
-  settings: Settings
+  settings: Limits
 ): Promise<{ socket: net.Socket; finding?: Finding }> {
   // The URL keeps the brackets of an IPv6 host; sockets want the bare address.
   const host = proxy.hostname.replace(/^\[(.*)\]$/, '$1');
@@ -180,7 +189,7 @@ function connectToProxy(
 async function throughTunnel(
   socket: net.Socket,
   target: URL,
-  settings: Settings
+  settings: Limits
 ): Promise<TestVerdict> {
   const authority = `${target.hostname}:${target.port || '443'}`;
   socket.write(`CONNECT ${authority} HTTP/1.1\r\nHost: ${authority}\r\n\r\n`);
@@ -203,10 +212,25 @@ async function throughTunnel(
       ca: settings.ca,
       rejectUnauthorized: false
     });
-    connection.once('secureConnect', () => resolve(connection));
-    connection.once('error', (error: Error) =>
-      reject(new Error(`The TLS connection to ${target.host} failed: ${error.message}`))
-    );
+    // The proxy's socket has no timeout once connected, so the handshake needs its own.
+    const timer = setTimeout(() => {
+      connection.destroy();
+      reject(
+        new Error(
+          `${target.host} did not answer through the tunnel within ${settings.timeoutMs / 1000} seconds`
+        )
+      );
+    }, settings.timeoutMs);
+    connection.once('secureConnect', () => {
+      clearTimeout(timer);
+      resolve(connection);
+    });
+    connection.once('error', (error: Error) => {
+      clearTimeout(timer);
+      reject(
+        new Error(`The TLS connection to ${target.host} failed: ${error.message}`, { cause: error })
+      );
+    });
   });
   try {
     const finding = checkCertificate(secure, host, `${target.host}'s`);

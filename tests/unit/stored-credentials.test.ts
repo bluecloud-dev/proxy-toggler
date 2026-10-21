@@ -43,18 +43,22 @@ describe('0.1.x stored credentials', () => {
   });
 
   it('are announced in the next focused window', async () => {
+    const state = new Map<string, unknown>();
     const vscode = createFakeVscode({ focused: false });
     createProxyToggler(
       vscode,
-      createExtensionContext({ secrets: new Map([[PASSWORD_KEY, 'secret']]) })
+      createExtensionContext({ state, secrets: new Map([[PASSWORD_KEY, 'secret']]) })
     );
     await flushBackgroundTasks();
     const beforeFocus = vscode.messages.length;
+    // The key is a contract with installed copies (ARCHITECTURE.md, "Persisted data").
+    const pending = state.get('proxyToggler.credentialsNoticePending');
 
     vscode.setFocused(true);
     await flushBackgroundTasks();
 
     assert.equal(beforeFocus, 0);
+    assert.equal(pending, true);
     assert.deepEqual(
       vscode.messages.map((message) => message.kind),
       ['info']

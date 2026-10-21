@@ -43,11 +43,20 @@ export function windowSendsDirect(host: string, patterns: readonly string[]): bo
 
 function isImplicitlyDirect(name: string): boolean {
   return (
+    isLoopback(name) ||
+    (isIP(name) === 4 && name.startsWith('169.254.')) ||
+    (isIP(name) === 6 && /^fe[89ab]/.test(name))
+  );
+}
+
+// localhost and its subdomains, 127.0.0.0/8 and ::1: this machine, wherever the name is used.
+export function isLoopback(host: string): boolean {
+  const name = normalize(host);
+  return (
     name === 'localhost' ||
     name.endsWith('.localhost') ||
     name === '::1' ||
-    (isIP(name) === 4 && (name.startsWith('127.') || name.startsWith('169.254.'))) ||
-    (isIP(name) === 6 && /^fe[89ab]/.test(name))
+    (isIP(name) === 4 && name.startsWith('127.'))
   );
 }
 

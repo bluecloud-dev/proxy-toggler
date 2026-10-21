@@ -1,6 +1,6 @@
 import { settingsMatch } from './match';
 import type { ProxySettingValues } from './proxy-settings-writer';
-import { validateBypassPattern, validateProxyUrl, ValidationError } from './validation';
+import { problemWith, validateBypassPattern, validateProxyUrl } from './validation';
 
 const MAX_NAME_LENGTH = 30;
 
@@ -222,16 +222,4 @@ function toProfile(entry: unknown): Profile | string {
     strictSSL: strictSSL ?? true,
     bypassList: patterns.map((pattern) => pattern.trim())
   };
-}
-
-function problemWith(validate: () => void): string | undefined {
-  try {
-    validate();
-    return undefined;
-  } catch (error: unknown) {
-    if (error instanceof ValidationError) {
-      return error.reason;
-    }
-    throw error;
-  }
 }

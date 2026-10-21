@@ -110,6 +110,14 @@ describe('remote windows', () => {
     assert.equal(host.settings.has('http.proxy'), false);
     assert.equal(ssh.api.getState().currentProfile?.name, 'Work');
     assert.equal(ssh.api.getState().isEnabled, true);
+    // The file and its shape are a contract with installed copies (ARCHITECTURE.md, "Persisted
+    // data").
+    const remoteRecord: unknown = JSON.parse(
+      await fs.readFile(path.join(storageRoot, 'ssh-remote', 'state.json'), 'utf8')
+    );
+    assert.deepEqual(remoteRecord, {
+      'proxyToggler.state': { isEnabled: true, hasConfiguration: true, currentProfile: WORK }
+    });
     assert.equal(local.api.getState().currentProfile?.name, 'Home');
     assert.equal(local.api.getState().isEnabled, false);
   });
@@ -242,12 +250,15 @@ describe('remote windows', () => {
       await wsl.vscode.commandHandlers.get(COMMANDS.switchProfile)?.();
       await settle();
       const afterSeparate = wsl.api.getStatusBarText();
+      // Pinned at once, so that this computer's proxy cannot reach the remote side at start-up.
+      const pinned = Object.fromEntries(remote.settings);
       await wsl.vscode.commandHandlers.get(COMMANDS.switchProfile)?.();
       await settle();
 
       // A proxy that is not on loopback leaves the action among the others, after the profiles.
       assert.equal(wsl.vscode.quickPicks[0]?.items[0]?.label, 'Home');
       assert.equal(afterSeparate, '$(debug-disconnect) Proxy (WSL): OFF');
+      assert.deepEqual(pinned, { 'http.useLocalProxyConfiguration': false, 'http.proxy': '' });
       assert.deepEqual(Object.fromEntries(remote.settings), {
         'http.useLocalProxyConfiguration': false,
         'http.proxy': HOME.proxyUrl,

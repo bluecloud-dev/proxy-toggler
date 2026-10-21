@@ -3,7 +3,7 @@ import type * as vscode from 'vscode';
 import { parseNoProxyList } from '../core/no-proxy';
 import { findProfileByName, type Profile, sameName, validateProfileName } from '../core/profiles';
 import type { ProxyManager } from '../core/proxy-manager';
-import { validateBypassPattern, validateProxyUrl, ValidationError } from '../core/validation';
+import { problemWith, validateBypassPattern, validateProxyUrl } from '../core/validation';
 import type { VscodeApi } from '../vscode/api';
 import type { Notifier } from '../vscode/notification-service';
 import { askText } from '../vscode/quick-input';
@@ -64,7 +64,8 @@ export async function editProfileCommand(
     }
     await refreshUi();
     if (edited.name !== profile.name) {
-      void notificationService.showWarning(
+      notificationService.inform(
+        'warning',
         `Renamed ${profile.name} to ${edited.name}. Keybindings that switch to "${profile.name}" by name stop working.`
       );
     }
@@ -170,16 +171,4 @@ function validatePatterns(value: string): string | undefined {
     }
   }
   return undefined;
-}
-
-function problemWith(validate: () => void): string | undefined {
-  try {
-    validate();
-    return undefined;
-  } catch (error: unknown) {
-    if (error instanceof ValidationError) {
-      return error.reason;
-    }
-    throw error;
-  }
 }

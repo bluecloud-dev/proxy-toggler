@@ -1,6 +1,10 @@
 import { strict as assert } from 'node:assert';
 
-import { validateNoProxyList, validateProxyUrl, ValidationError } from '../../src/core/validation';
+import {
+  validateBypassPattern,
+  validateProxyUrl,
+  ValidationError
+} from '../../src/core/validation';
 
 function captureValidationError(operation: () => void): ValidationError {
   try {
@@ -168,41 +172,32 @@ describe('validation', () => {
     });
   });
 
-  describe('validateNoProxyList', () => {
-    it('accepts empty or undefined patterns', () => {
-      assert.doesNotThrow(() => validateNoProxyList());
-      assert.doesNotThrow(() => validateNoProxyList(''));
-      assert.doesNotThrow(() => validateNoProxyList('   '));
-    });
-
+  describe('validateBypassPattern', () => {
     it('accepts hostnames, IP literals, domain suffixes, and *.-wildcards', () => {
-      assert.doesNotThrow(() => validateNoProxyList('localhost,127.0.0.1'));
-      assert.doesNotThrow(() => validateNoProxyList('.example.com,*.local'));
-      assert.doesNotThrow(() => validateNoProxyList('::1'));
-      assert.doesNotThrow(() => validateNoProxyList('localhost, 127.0.0.1,'));
+      for (const pattern of ['localhost', '127.0.0.1', '.example.com', '*.local', '::1']) {
+        assert.doesNotThrow(() => validateBypassPattern(pattern), pattern);
+      }
     });
 
     it('rejects CIDR patterns (out of scope for v1)', () => {
-      const error = captureValidationError(() => validateNoProxyList('10.0.0.0/8'));
+      const error = captureValidationError(() => validateBypassPattern('10.0.0.0/8'));
       assert.equal(error.field, 'noProxy');
       assert.match(error.reason, /cidr/i);
     });
 
     it('rejects schemes and invalid wildcard patterns', () => {
-      const schemeError = captureValidationError(() => validateNoProxyList('http://localhost'));
+      const schemeError = captureValidationError(() => validateBypassPattern('http://localhost'));
       assert.equal(schemeError.field, 'noProxy');
 
-      assert.throws(() => validateNoProxyList('**.example.com'), ValidationError);
-      assert.throws(() => validateNoProxyList('example.*.com'), ValidationError);
-      assert.throws(() => validateNoProxyList('*..example.com'), ValidationError);
+      for (const pattern of ['**.example.com', 'example.*.com', '*..example.com']) {
+        assert.throws(() => validateBypassPattern(pattern), ValidationError, pattern);
+      }
     });
 
     it('rejects invalid bypass entries', () => {
-      assert.throws(() => validateNoProxyList('.'), ValidationError);
-      assert.throws(() => validateNoProxyList('user@host'), ValidationError);
-      assert.throws(() => validateNoProxyList('example.com:8080'), ValidationError);
-      assert.throws(() => validateNoProxyList('local host'), ValidationError);
-      assert.throws(() => validateNoProxyList('*.127.0.0.1'), ValidationError);
+      for (const pattern of ['.', 'user@host', 'example.com:8080', 'local host', '*.127.0.0.1']) {
+        assert.throws(() => validateBypassPattern(pattern), ValidationError, pattern);
+      }
     });
   });
 });

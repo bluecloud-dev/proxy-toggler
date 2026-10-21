@@ -10,7 +10,7 @@ const NOTICE =
 // Says once, before the first write that removes them, what happens to credentials in http.proxy.
 export function createCredentialsNotice(
   globalState: Memento,
-  notificationService: Pick<Notifier, 'showWarning'>
+  notificationService: Pick<Notifier, 'inform'>
 ): ProxyNotices {
   return {
     credentialsWillBeRemoved: async () => {
@@ -19,7 +19,7 @@ export function createCredentialsNotice(
       }
       await globalState.update(SHOWN_KEY, true);
       // Shown without waiting for the user, so the write goes ahead.
-      void notificationService.showWarning(NOTICE);
+      notificationService.inform('warning', NOTICE);
     }
   };
 }

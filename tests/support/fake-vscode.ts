@@ -66,10 +66,6 @@ export type FakeVscodeOptions = {
   // Whether VS Code hands the remote side this computer's http.* values until they next change,
   // while the remote machine's settings hold none (TESTING.md, "Remote windows", result 1).
   remoteSeesLocalProxy?: boolean;
-  // Answers for successive showInputBox calls. Each answer runs through validateInput, and one it
-  // rejects throws: VS Code keeps the input box open, so that answer could never be submitted.
-  inputs?: Array<string | undefined>;
-  pick?: (items: readonly QuickPickItem[], callIndex: number) => QuickPickItem | undefined;
   // Drives each QuickPick once it shows; one left alone is dismissed.
   quickPick?: (quickPick: FakeQuickPick, callIndex: number) => void;
   // Drives each InputBox once it shows; one left alone is dismissed.
@@ -122,8 +118,6 @@ export function createFakeVscode(options: FakeVscodeOptions = {}): FakeVscode {
   const settingUpdates: FakeVscode['settingUpdates'] = [];
   const statusBarItems: FakeStatusBarItem[] = [];
   const logs: string[] = [];
-  const inputs = [...(options.inputs ?? [])];
-  let quickPickCalls = 0;
   const configurationListeners: Array<(event: ConfigurationChangeEvent) => unknown> = [];
   const remote = options.remote;
   let remoteSeesLocalProxy = options.remoteSeesLocalProxy ?? false;
@@ -420,18 +414,6 @@ export function createFakeVscode(options: FakeVscodeOptions = {}): FakeVscode {
       showErrorMessage: showMessage('error'),
       showInformationMessage: showMessage('info'),
       showWarningMessage: showMessage('warning'),
-      showInputBox: async (inputOptions) => {
-        const value = inputs.shift();
-        const rejection =
-          value === undefined ? undefined : await inputOptions.validateInput?.(value);
-        if (rejection) {
-          const reason = typeof rejection === 'string' ? rejection : rejection.message;
-          throw new Error(`The input box rejects the answer: ${reason}`);
-        }
-        return value;
-      },
-      showQuickPick: async <T extends QuickPickItem>(items: readonly T[]) =>
-        options.pick?.(items, quickPickCalls++) as T | undefined,
       withProgress: async (_options, task) => task(),
       state: windowState,
       onDidChangeWindowState: (listener) => {

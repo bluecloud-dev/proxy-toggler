@@ -234,7 +234,8 @@ computer's settings, the VS Code window connects from this computer, so the test
 WSL and local Dev Containers use this computer's proxy settings by default. When their remote side
 needs another proxy, pick **Use a Separate Proxy for This Remote** in the switcher. Proxy Toggler
 sets `http.useLocalProxyConfiguration` to `false` in the remote machine's settings, which applies
-without a reload, and from then on the toggle manages that remote's own proxy.
+without a reload, and writes an empty `http.proxy` there, so the remote side starts with no proxy.
+From then on the toggle manages that remote's own proxy.
 
 **Use This Computer's Proxy Again** reverses it, and removes the remote machine's `http.*` values:
 while they remain, a later write would land in the remote file and change nothing.

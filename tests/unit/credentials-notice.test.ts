@@ -46,6 +46,8 @@ describe('credentials in http.proxy', () => {
       message.includes('http.proxy')
     );
     assert.equal(notices.length, 1);
+    // The key is a contract with installed copies (ARCHITECTURE.md, "Persisted data").
+    assert.equal(state.get('proxyToggler.credentialsRemovalNoticeShown'), true);
     assert.equal(notices[0]?.kind, 'warning');
     assert.match(notices[0]?.message ?? '', /user name and password.*removed/);
     assert.match(notices[0]?.message ?? '', /VS Code's login dialog/);

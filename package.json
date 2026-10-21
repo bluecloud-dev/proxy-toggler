@@ -119,6 +119,7 @@
         },
         "proxyToggler.showSwitchNotifications": {
           "type": "boolean",
+          "scope": "application",
           "default": false,
           "description": "%configuration.showSwitchNotifications.description%"
         }

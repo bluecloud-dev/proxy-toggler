@@ -47,7 +47,6 @@ describe('KeychainService', () => {
           assert.equal(error.operation, operation);
           assert.equal(error.reason, reason);
           assert.equal(error.cause, failure);
-          assert.ok(error.toUserMessage().length > 0);
           return true;
         },
         failure.message

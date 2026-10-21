@@ -46,6 +46,9 @@ describe('hidden profile entries', () => {
     await flushBackgroundTasks();
 
     assert.deepEqual(warnings(reloaded), []);
+    // The key is a contract with installed copies (ARCHITECTURE.md, "Persisted data"), and holds
+    // a SHA-256 hash, never the entries.
+    assert.match(String(state.get('proxyToggler.hiddenProfilesWarned')), /^[0-9a-f]{64}$/);
   });
 
   it('are warned about again when they change', async () => {

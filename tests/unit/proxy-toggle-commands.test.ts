@@ -3,7 +3,6 @@ import { strict as assert } from 'node:assert';
 import { disableProxyCommand } from '../../src/commands/disable-proxy';
 import { enableProxyCommand } from '../../src/commands/enable-proxy';
 import { toggleProxyCommand } from '../../src/commands/toggle-proxy';
-import { KeychainError, KeychainErrorReason } from '../../src/core/keychain-service';
 import { ConfigurationError } from '../../src/core/proxy-settings-writer';
 import { createFakeVscode } from '../support/fake-vscode';
 import { createNotificationRecorder, type RecordedNotification } from '../support/fakes';
@@ -150,7 +149,7 @@ describe('proxy state commands', () => {
 
     await toggleProxyCommand(vscode, proxyManager, notifications, noRefresh);
 
-    assert.equal(proxyManager.calls.toggle, 1);
+    assert.equal(proxyManager.calls.enable, 1);
     assert.deepEqual(
       notifications.notifications.map(({ message, actions }) => [
         message,
@@ -174,19 +173,6 @@ describe('proxy state commands', () => {
       vscode.executedCommands.map((call) => call.command),
       ['proxyToggler.configure']
     );
-  });
-
-  it('shows the keychain message when the keychain fails', async () => {
-    const notifications = createNotificationRecorder();
-    const proxyManager = failWith(
-      createProxyManagerStub({ hasConfiguration: true }),
-      new KeychainError('retrieve', KeychainErrorReason.LOCKED)
-    );
-
-    await enableProxyCommand(createFakeVscode(), proxyManager, notifications, noRefresh);
-
-    assert.equal(notifications.notifications.length, 1);
-    assert.match(notifications.notifications[0]?.message ?? '', /locked/i);
   });
 
   const settingFailures = [

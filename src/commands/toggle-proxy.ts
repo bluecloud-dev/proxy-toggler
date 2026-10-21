@@ -7,7 +7,10 @@ const ACTION_CANCEL: NotificationAction = { id: 'cancel', title: 'Cancel' };
 
 export async function toggleProxyCommand(
   vscodeApi: Pick<VscodeApi, 'commands' | 'workspace'>,
-  proxyManager: Pick<ProxyManager, 'hasConfiguration' | 'getState' | 'toggleProxy'>,
+  proxyManager: Pick<
+    ProxyManager,
+    'disableProxy' | 'enableProxy' | 'hasConfiguration' | 'getState' | 'toggleProxy'
+  >,
   notificationService: Notifier,
   refreshUi: () => Promise<void>
 ): Promise<void> {
@@ -16,15 +19,18 @@ export async function toggleProxyCommand(
     return;
   }
 
+  // A confirmed toggle does what its button said: another window may change the state while
+  // the prompt is open.
+  let turnOn: boolean | undefined;
   if (shouldConfirmToggle(vscodeApi)) {
-    const confirmed = await confirmToggle(notificationService, proxyManager.getState().isEnabled);
-    if (!confirmed) {
+    turnOn = !proxyManager.getState().isEnabled;
+    if (!(await confirmToggle(notificationService, turnOn))) {
       return;
     }
   }
 
   try {
-    const isEnabled = await proxyManager.toggleProxy();
+    const isEnabled = await turnProxy(proxyManager, turnOn);
     await refreshUi();
     const name = proxyManager.getState().currentProfile?.name ?? '';
     await announceSwitch(
@@ -43,13 +49,25 @@ function shouldConfirmToggle(vscodeApi: Pick<VscodeApi, 'workspace'>): boolean {
     .get<boolean>('confirmBeforeToggle', false);
 }
 
+// Turns the proxy on or off as asked, or toggles it; resolves with whether it is on.
+async function turnProxy(
+  proxyManager: Pick<ProxyManager, 'disableProxy' | 'enableProxy' | 'toggleProxy'>,
+  turnOn: boolean | undefined
+): Promise<boolean> {
+  if (turnOn === undefined) {
+    return proxyManager.toggleProxy();
+  }
+  await (turnOn ? proxyManager.enableProxy() : proxyManager.disableProxy());
+  return turnOn;
+}
+
 // Only the toggle asks first: confirmBeforeToggle guards the status bar toggle and this command.
-async function confirmToggle(notificationService: Notifier, isEnabled: boolean): Promise<boolean> {
+async function confirmToggle(notificationService: Notifier, turnOn: boolean): Promise<boolean> {
   const confirmAction: NotificationAction = {
     id: 'confirm',
-    title: isEnabled ? 'Turn Off' : 'Turn On'
+    title: turnOn ? 'Turn On' : 'Turn Off'
   };
-  const message = isEnabled ? 'Turn proxy off?' : 'Turn proxy on?';
+  const message = turnOn ? 'Turn proxy on?' : 'Turn proxy off?';
 
   const choice = await notificationService.showWarning(message, confirmAction, ACTION_CANCEL);
   return choice === confirmAction.id;

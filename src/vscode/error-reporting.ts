@@ -1,6 +1,5 @@
 import type * as vscode from 'vscode';
 
-import { KeychainError } from '../core/keychain-service';
 import { ConfigurationError } from '../core/proxy-settings-writer';
 import type { Logger, VscodeApi } from './api';
 import type { Notifier } from './notification-service';
@@ -41,7 +40,5 @@ export function runInBackground(logger: Logger, task: string, run: () => Promise
 }
 
 function userMessageFor(error: unknown, failureMessage: string): string {
-  return error instanceof KeychainError || error instanceof ConfigurationError
-    ? error.toUserMessage()
-    : failureMessage;
+  return error instanceof ConfigurationError ? error.toUserMessage() : failureMessage;
 }

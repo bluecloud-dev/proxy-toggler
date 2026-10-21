@@ -113,4 +113,35 @@ describe('windows and VS Code Profiles', () => {
     assert.equal(beforeFocus, WORK.proxyUrl);
     assert.equal(host.settings.get('http.proxy'), edited.proxyUrl);
   });
+
+  it('do what a confirmation said when it is clicked, whatever another window did meanwhile', async () => {
+    const host = createFakeHost({
+      'proxyToggler.profiles': [WORK],
+      'proxyToggler.confirmBeforeToggle': true,
+      ...APPLIED_WORK
+    });
+    const state = new Map<string, unknown>();
+    let click: (title: string) => void = () => undefined;
+    const confirming = createFakeVscode({
+      host,
+      answer: () =>
+        new Promise<string>((resolve) => {
+          click = resolve;
+        })
+    });
+    createProxyToggler(confirming, createExtensionContext({ state }));
+    const other = openWindow(host, state, false);
+    await settle();
+
+    // "Turn proxy off?" stays open while the other window turns the proxy off.
+    const toggled = confirming.commandHandlers.get(COMMANDS.toggle)?.();
+    await settle();
+    await other.vscode.commandHandlers.get(COMMANDS.disable)?.();
+    await settle();
+    click('Turn Off');
+    await toggled;
+    await settle();
+
+    assert.equal(host.settings.has('http.proxy'), false);
+  });
 });

@@ -155,7 +155,7 @@ describe('ProxyManager', () => {
       await proxyManager.enableProxy();
 
       assert.equal(httpSettings.current.proxy, socks.proxyUrl);
-      assert.equal(proxyManager.isConfigurationApplied(), true);
+      assert.equal(proxyManager.hasDrift(), false);
     });
 
     it('switches to a named profile, turning it on and making it current', async () => {
@@ -491,6 +491,16 @@ describe('ProxyManager', () => {
       await proxyManager.updateProfile('Work', { ...WORK, name: 'WORK' });
 
       assert.equal(proxyManager.getProfiles()[0]?.name, 'WORK');
+    });
+
+    it('keeps its name when a hidden later entry holds the same one', async () => {
+      // The first entry with a name owns it, as after a Settings Sync merge kept both sides.
+      const duplicate = { ...WORK, proxyUrl: 'http://other.example.com:3128' };
+      const { profilesSetting, proxyManager } = setup({ profiles: [WORK, duplicate] });
+
+      await proxyManager.updateProfile('Work', EDITED);
+
+      assert.deepEqual(profilesSetting.value, [EDITED, duplicate]);
     });
 
     it('refuses values the UI would refuse', async () => {
@@ -858,47 +868,6 @@ describe('ProxyManager', () => {
         hasConfiguration: true,
         lastProfile: 'work'
       });
-    });
-  });
-
-  describe('isConfigurationApplied', () => {
-    it('is false without profiles', () => {
-      assert.equal(setup().proxyManager.isConfigurationApplied(), false);
-    });
-
-    it('compares the bypass list entry by entry, whatever its shape', () => {
-      const { proxyManager } = setup({
-        profiles: [WORK],
-        http: {
-          current: { proxy: WORK.proxyUrl, proxyStrictSSL: true, noProxy: [' localhost '] }
-        }
-      });
-
-      assert.equal(proxyManager.isConfigurationApplied(), true);
-    });
-
-    it('matches a reordered bypass list and a proxy URL with credentials', () => {
-      const { proxyManager } = setup({
-        profiles: [{ ...WORK, bypassList: ['localhost', 'b.internal'] }],
-        http: {
-          current: {
-            proxy: 'http://alice:secret@proxy.example.com:8080',
-            proxyStrictSSL: true,
-            noProxy: ['b.internal', 'localhost']
-          }
-        }
-      });
-
-      assert.equal(proxyManager.isConfigurationApplied(), true);
-    });
-
-    it('is false when any applied value differs', () => {
-      const { proxyManager } = setup({
-        profiles: [WORK],
-        http: { current: { proxy: WORK.proxyUrl, proxyStrictSSL: false, noProxy: [] } }
-      });
-
-      assert.equal(proxyManager.isConfigurationApplied(), false);
     });
   });
 });

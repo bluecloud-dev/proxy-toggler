@@ -10,12 +10,25 @@ import type { Memento } from '../core/proxy-manager';
 // window shows at once.
 export function fileMemento(file: string): Memento {
   const read = (): Record<string, unknown> => {
+    let text: string;
     try {
-      const value: unknown = JSON.parse(fs.readFileSync(file, 'utf8'));
+      text = fs.readFileSync(file, 'utf8');
+    } catch (error: unknown) {
+      // No file yet: nothing recorded.
+      if ((error as NodeJS.ErrnoException).code === 'ENOENT') {
+        return {};
+      }
+      throw error;
+    }
+    try {
+      const value: unknown = JSON.parse(text);
       return typeof value === 'object' && value !== null ? (value as Record<string, unknown>) : {};
-    } catch {
-      // No file yet, or one that another write is replacing: nothing recorded.
-      return {};
+    } catch (error: unknown) {
+      // A file that is not JSON, such as one edited by hand, records nothing.
+      if (error instanceof SyntaxError) {
+        return {};
+      }
+      throw error;
     }
   };
 

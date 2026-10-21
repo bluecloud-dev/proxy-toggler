@@ -1,7 +1,7 @@
 import { valuesFromSettings } from '../core/from-settings';
 import { defaultProfileName, type Profile, validateProfileName } from '../core/profiles';
 import type { ProxyManager } from '../core/proxy-manager';
-import { validateProxyUrl, ValidationError } from '../core/validation';
+import { problemWith, validateProxyUrl } from '../core/validation';
 import type { VscodeApi } from '../vscode/api';
 import type { NotificationAction, Notifier } from '../vscode/notification-service';
 import { askText, BACK } from '../vscode/quick-input';
@@ -15,7 +15,12 @@ type AddApi = Pick<
 
 type AddManager = Pick<
   ProxyManager,
-  'addProfile' | 'getEntryNames' | 'hasConfiguration' | 'readProxySettings' | 'switchTo'
+  | 'addProfile'
+  | 'getEntryNames'
+  | 'hasConfiguration'
+  | 'readProxySettings'
+  | 'settingsHoldProxy'
+  | 'switchTo'
 >;
 
 const ACTION_CONTINUE: NotificationAction = { id: 'continue', title: 'Continue Without Them' };
@@ -120,9 +125,9 @@ function startingValues(proxyManager: AddManager): Start {
     return fresh;
   }
 
-  const settings = proxyManager.readProxySettings();
-  const hasProxy = typeof settings.proxy === 'string' && settings.proxy.trim().length > 0;
-  return hasProxy ? valuesFromSettings(settings) : fresh;
+  return proxyManager.settingsHoldProxy()
+    ? valuesFromSettings(proxyManager.readProxySettings())
+    : fresh;
 }
 
 async function askForProfile(
@@ -174,17 +179,5 @@ async function askForProfile(
       return undefined;
     }
     return { proxyUrl: url, name: nameAnswer.trim() };
-  }
-}
-
-function problemWith(validate: () => void): string | undefined {
-  try {
-    validate();
-    return undefined;
-  } catch (error: unknown) {
-    if (error instanceof ValidationError) {
-      return error.reason;
-    }
-    throw error;
   }
 }

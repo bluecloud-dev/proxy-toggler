@@ -27,11 +27,6 @@ export type VscodeApi = {
     createStatusBarItem(alignment: vscode.StatusBarAlignment, priority: number): StatusBarItem;
     showErrorMessage(message: string, ...items: string[]): PromiseLike<string | undefined>;
     showInformationMessage(message: string, ...items: string[]): PromiseLike<string | undefined>;
-    showInputBox(options: vscode.InputBoxOptions): PromiseLike<string | undefined>;
-    showQuickPick<T extends vscode.QuickPickItem>(
-      items: readonly T[],
-      options: vscode.QuickPickOptions
-    ): PromiseLike<T | undefined>;
     showWarningMessage(message: string, ...items: string[]): PromiseLike<string | undefined>;
     withProgress<R>(options: vscode.ProgressOptions, task: () => PromiseLike<R>): PromiseLike<R>;
     readonly state: Pick<vscode.WindowState, 'focused'>;

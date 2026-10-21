@@ -1,4 +1,3 @@
-import { KeychainError } from '../core/keychain-service';
 import { ConfigurationError } from '../core/proxy-settings-writer';
 import type { VscodeApi } from '../vscode/api';
 import type { NotificationAction, Notifier } from '../vscode/notification-service';
@@ -45,11 +44,6 @@ export async function showKnownProxyError(
   error: unknown,
   options: { offerDisable: boolean }
 ): Promise<void> {
-  if (error instanceof KeychainError) {
-    await notificationService.showError(error.toUserMessage());
-    return;
-  }
-
   if (!(error instanceof ConfigurationError)) {
     throw error;
   }

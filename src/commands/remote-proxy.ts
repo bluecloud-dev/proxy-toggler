@@ -1,10 +1,9 @@
-import { isIP } from 'node:net';
-
+import { isLoopback } from '../core/bypass';
 import type { Profile } from '../core/profiles';
 import type { VscodeApi } from '../vscode/api';
 import { proxySide } from '../vscode/proxy-side';
 
-type RemoteProxyApi = Pick<VscodeApi, 'ConfigurationTarget' | 'env' | 'l10n' | 'workspace'>;
+type RemoteProxyApi = Pick<VscodeApi, 'env' | 'l10n' | 'workspace'>;
 
 export type RemoteProxyChoice = {
   label: string;
@@ -37,7 +36,7 @@ export function remoteProxyChoice(
     action: 'separate',
     ...(loopback && {
       detail: l10n.t(
-        "{0} uses {1}, a loopback address, which WSL's NAT mode cannot reach on this computer.",
+        '{0} uses {1}, a loopback address, which WSL in NAT mode and containers cannot reach on this computer.',
         currentProfile.name,
         loopback
       )
@@ -46,39 +45,12 @@ export function remoteProxyChoice(
   };
 }
 
-// The remote side switches without a reload (TESTING.md, "Remote windows", check 3).
-export async function useSeparateProxy(vscodeApi: RemoteProxyApi): Promise<void> {
-  await vscodeApi.workspace
-    .getConfiguration('http')
-    .update('useLocalProxyConfiguration', false, vscodeApi.ConfigurationTarget.Global);
-}
-
-// The remote machine's http.* values go first, while they still belong to it. Once the remote
-// side uses this computer's settings, a write of a key that the remote file still holds lands
-// there and changes nothing (TESTING.md, "Remote windows", check 2).
-export async function useThisComputersProxy(vscodeApi: RemoteProxyApi): Promise<void> {
-  const http = vscodeApi.workspace.getConfiguration('http');
-  const target = vscodeApi.ConfigurationTarget.Global;
-  for (const key of ['proxy', 'proxyStrictSSL', 'noProxy']) {
-    await http.update(key, undefined, target);
-  }
-  await http.update('useLocalProxyConfiguration', undefined, target);
-}
-
-// The proxy's host when it is a loopback address, which means a different machine on the remote
-// side.
+// The proxy's host when it is a loopback address, which on the remote side means the remote
+// machine, not this computer.
 function loopbackHost(proxyUrl: string): string | undefined {
-  let host: string;
-  try {
-    host = new URL(proxyUrl).hostname.toLowerCase();
-  } catch {
+  if (!URL.canParse(proxyUrl)) {
     return undefined;
   }
-  const address = host.replace(/^\[(.*)\]$/, '$1');
-  const loopback =
-    address === 'localhost' ||
-    address.endsWith('.localhost') ||
-    (isIP(address) === 4 && address.startsWith('127.')) ||
-    address === '::1';
-  return loopback ? host : undefined;
+  const host = new URL(proxyUrl).hostname;
+  return isLoopback(host) ? host : undefined;
 }

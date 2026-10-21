@@ -1,7 +1,5 @@
 import { isIP } from 'node:net';
 
-import { parseNoProxyList } from './no-proxy';
-
 const PROXY_URL_EXAMPLES = [
   'http://proxy.example.com:8080',
   'https://10.0.0.1:3128',
@@ -94,12 +92,6 @@ function explicitPort(url: string, parsedUrl: URL): string {
   return new URL(url.replace(/^[^:]*:/, otherScheme)).port;
 }
 
-export function validateNoProxyList(noProxy?: string): void {
-  for (const entry of parseNoProxyList(noProxy)) {
-    validateBypassPattern(entry);
-  }
-}
-
 export function validateBypassPattern(entry: string): void {
   const invalidEntry = (reason: string): ValidationError =>
     new ValidationError('noProxy', reason, NO_PROXY_EXAMPLES);
@@ -156,5 +148,19 @@ function isValidHostname(value: string): boolean {
     return url.hostname.length > 0 && url.port.length === 0;
   } catch {
     return false;
+  }
+}
+
+// The reason a validation fails, or undefined when it passes. Errors other than ValidationError
+// are not the input's fault, so they go on.
+export function problemWith(validate: () => void): string | undefined {
+  try {
+    validate();
+    return undefined;
+  } catch (error: unknown) {
+    if (error instanceof ValidationError) {
+      return error.reason;
+    }
+    throw error;
   }
 }

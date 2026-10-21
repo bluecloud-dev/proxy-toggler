@@ -1,6 +1,6 @@
 import { extensionsSendDirect, windowSendsDirect } from '../core/bypass';
 import type { Profile } from '../core/profiles';
-import { testConnection, type TestOptions } from '../core/test-connection';
+import { testConnection, type TestOptions, untestedProxy } from '../core/test-connection';
 import type { VscodeApi } from '../vscode/api';
 import type { Notifier } from '../vscode/notification-service';
 import { proxySide } from '../vscode/proxy-side';
@@ -22,10 +22,9 @@ export async function testConnectionCommand(
   options: TestOptions = {}
 ): Promise<void> {
   const { l10n } = vscodeApi;
-  if (!/^https?:/i.test(profile.proxyUrl)) {
-    void notificationService.showSuccess(
-      `${profile.name}: Test Connection covers only HTTP and HTTPS proxies, so it did not test this SOCKS proxy.`
-    );
+  const untested = untestedProxy(profile.proxyUrl);
+  if (untested) {
+    notificationService.inform('success', `${profile.name}: ${untested.message}`);
     return;
   }
 
@@ -54,7 +53,8 @@ export async function testConnectionCommand(
   const windowDirect = windowSendsDirect(host, profile.bypassList);
   const extensionsDirect = proxySupportOff || extensionsSendDirect(host, profile.bypassList);
   if (extensionsDirect && (windowDirect || !windowUsesProfile)) {
-    void notificationService.showSuccess(
+    notificationService.inform(
+      'success',
       windowUsesProfile
         ? `${profile.name}: Both VS Code's window and extensions reach ${host} directly, so there is nothing to test through this proxy.`
         : `${profile.name}: Extensions reach ${host} directly, so there is nothing to test through this proxy.`
@@ -89,10 +89,10 @@ export async function testConnectionCommand(
 
   // Shown without waiting for the user to dismiss it.
   if (verdict.outcome === 'fail') {
-    void notificationService.showError(message);
+    notificationService.inform('error', message);
   } else if (verdict.outcome === 'warn') {
-    void notificationService.showWarning(message);
+    notificationService.inform('warning', message);
   } else {
-    void notificationService.showSuccess(message);
+    notificationService.inform('success', message);
   }
 }

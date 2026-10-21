@@ -154,7 +154,9 @@ Credentials never go to `globalState`, settings, logs, or messages.
 | `ConfigurationError` | `ProxySettingsWriter` writing a setting | `toUserMessage()` with an **Open Settings** action          |
 | Anything else        | Anywhere                                | Logged with its stack; the command's failure message        |
 
-Errors carry the original failure as the standard ES2022 `cause`.
+Errors carry the original failure as the standard ES2022 `cause`. A message shown without waiting
+for the user, such as a test result, goes through `NotificationService.inform`, which logs a
+failure to show it.
 
 ### Failed setting writes
 
@@ -169,13 +171,14 @@ Errors carry the original failure as the standard ES2022 `cause`.
   the one the user can act on. The error's `restoreErrors` holds each setting it could not restore,
   with the error that write raised, and its message names those settings.
 - Disabling has no rollback. It clears `http.proxy` first, so a partial disable leaves the proxy
-  off while the stored state still says enabled; the drift check offers to sync at the next
-  activation.
+  off while the record still says on; reconciliation turns the record off once the settings
+  settle, because cleared settings mean off.
 
 ## Design decisions
 
-- **VS Code-shaped ports instead of custom wrappers.** The configure wizard calls `showInputBox`
-  and `showQuickPick` through the injected `VscodeApi` slice. Wrapping each prompt behind an
+- **VS Code-shaped ports instead of custom wrappers.** Commands build their prompts with
+  `createQuickPick` and `createInputBox` through the injected `VscodeApi` slice, behind two small
+  helpers, `pickOne` and `askText`, that handle Back and Escape. Wrapping each prompt behind an
   application-specific interface would add a parallel API without adding any guarantee.
 - **Minimum VS Code 1.97.** `http.noProxy` first shipped in 1.91; on older releases enabling the
   proxy cannot complete. On 1.91 the VS Code window ignores an `http.proxy` that holds
@@ -191,8 +194,8 @@ Errors carry the original failure as the standard ES2022 `cause`.
   ignores workspace values of the `http.*` settings, which it marks restricted, so a workspace can
   change only `proxyToggler.confirmBeforeToggle`, which adds or removes a confirmation prompt.
   Without the declaration, VS Code disables the extension in every untrusted folder.
-- **Bypass list stored as a string.** The stored shape predates VS Code's array setting and is kept
-  for compatibility; it is converted to an array when written.
+- **Bypass lists are arrays.** Profiles keep `bypassList` as a list, like VS Code's `http.noProxy`.
+  0.1.x stored a comma-separated string, which migration splits.
 - **State changes run one at a time.** VS Code runs commands concurrently, and a double click on
   the status bar item starts two toggles. `ProxyManager` queues every change of the profiles, the
   record and the `http.*` settings: each starts after the previous one settles, whether it

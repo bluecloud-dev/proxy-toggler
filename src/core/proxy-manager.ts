@@ -26,7 +26,12 @@ import {
   type HttpSettings,
   ProxySettingsWriter
 } from './proxy-settings-writer';
-import { validateBypassPattern, validateProxyUrl, ValidationError } from './validation';
+import {
+  problemWith,
+  validateBypassPattern,
+  validateProxyUrl,
+  ValidationError
+} from './validation';
 
 const STORAGE_KEYS = {
   // 0.1.x's configuration, which v0.2.0 reads and never writes or deletes (ADR 0001).
@@ -108,9 +113,11 @@ export class ProxyManager {
   updateProfile(originalName: string, profile: Profile): Promise<void> {
     return this.serialize(async () => {
       const entries = this.profileEntries();
+      // The profile keeps its own name even when a hidden later entry holds it too: the first
+      // entry with a name owns it.
       const nameProblem = validateProfileName(
         profile.name,
-        entryNames(withoutProfile(entries, originalName))
+        entryNames(entries).filter((name) => !sameName(name, originalName))
       );
       if (nameProblem) {
         throw new ValidationError('name', nameProblem);
@@ -191,15 +198,6 @@ export class ProxyManager {
         await this.writeState({ currentProfile: profile });
       }
     });
-  }
-
-  // Whether VS Code's settings match the current profile.
-  isConfigurationApplied(): boolean {
-    const current = this.getState().currentProfile;
-    return (
-      current !== undefined &&
-      settingsMatch(this.httpSettings.read(), profileSettingValues(current))
-    );
   }
 
   enableProxy(): Promise<void> {
@@ -429,9 +427,7 @@ function savedProxyValues(saved: unknown): Omit<Profile, 'name'> | undefined {
     return undefined;
   }
 
-  try {
-    validateProxyUrl(proxyUrl);
-  } catch {
+  if (problemWith(() => validateProxyUrl(proxyUrl)) !== undefined) {
     return undefined;
   }
 
