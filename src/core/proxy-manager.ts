@@ -1,6 +1,6 @@
 import type * as vscode from 'vscode';
 
-import { settingsMatch } from './match';
+import { hasCredentials, settingsMatch } from './match';
 import { parseNoProxyList } from './no-proxy';
 import {
   checkProfiles,
@@ -47,6 +47,12 @@ type StoredRecord = {
   currentProfile?: Profile;
 };
 
+// What the UI says while ProxyManager changes the settings.
+export type ProxyNotices = {
+  // Before Proxy Toggler overwrites or clears an http.proxy that holds credentials.
+  credentialsWillBeRemoved(): Promise<void>;
+};
+
 // Profiles hold no credentials, and none reach settings or globalState (ADR 0003).
 export class ProxyManager {
   // Settles once the most recent state change has settled; see serialize().
@@ -56,7 +62,8 @@ export class ProxyManager {
   constructor(
     private readonly globalState: Memento,
     private readonly httpSettings: HttpSettings,
-    private readonly profilesSetting: ProfilesSetting
+    private readonly profilesSetting: ProfilesSetting,
+    private readonly notices: ProxyNotices = { credentialsWillBeRemoved: () => Promise.resolve() }
   ) {
     this.settingsWriter = new ProxySettingsWriter(httpSettings);
   }
@@ -118,7 +125,7 @@ export class ProxyManager {
       await this.profilesSetting.write(withProfile(entries, saved, originalName));
       if (isCurrent) {
         if (isEnabled) {
-          await this.settingsWriter.apply(profileSettingValues(saved));
+          await this.applySettings(saved);
         }
         await this.writeState({ currentProfile: saved });
       }
@@ -216,7 +223,7 @@ export class ProxyManager {
     return this.serialize(async () => {
       const profile = findProfileByName(this.getProfiles(), name);
       if (profile) {
-        await this.settingsWriter.apply(profileSettingValues(profile));
+        await this.applySettings(profile);
         await this.writeState({ isEnabled: true, currentProfile: profile });
       }
       return profile;
@@ -275,14 +282,31 @@ export class ProxyManager {
       throw new Error('No proxy configuration found');
     }
 
-    await this.settingsWriter.apply(profileSettingValues(current));
+    await this.applySettings(current);
     // Turning on is a UI action, so it remembers the profile even when it was only the fallback.
     await this.writeState({ isEnabled: true, currentProfile: current });
   }
 
   private async disable(): Promise<void> {
-    await this.settingsWriter.clear();
+    await this.clearSettings();
     await this.writeState({ isEnabled: false });
+  }
+
+  private async applySettings(profile: Profile): Promise<void> {
+    await this.noticeRemovedCredentials();
+    await this.settingsWriter.apply(profileSettingValues(profile));
+  }
+
+  private async clearSettings(): Promise<void> {
+    await this.noticeRemovedCredentials();
+    await this.settingsWriter.clear();
+  }
+
+  // Profiles hold no credentials, so a write always removes any that http.proxy holds.
+  private async noticeRemovedCredentials(): Promise<void> {
+    if (hasCredentials(this.httpSettings.readUserSettings().proxy)) {
+      await this.notices.credentialsWillBeRemoved();
+    }
   }
 
   private alreadyMigrated(values: Omit<Profile, 'name'>): boolean {

@@ -51,8 +51,15 @@ function setup(
   );
   const httpSettings = createHttpSettings(options.http);
   const profilesSetting = createProfilesSetting(options.profiles);
-  const proxyManager = new ProxyManager(globalState, httpSettings, profilesSetting);
-  return { globalState, httpSettings, profilesSetting, proxyManager };
+  // Each event records the http.proxy value that the next write replaces.
+  const events: string[] = [];
+  const notices = {
+    credentialsWillBeRemoved: async (): Promise<void> => {
+      events.push(`notice before ${String(httpSettings.current.proxy)}`);
+    }
+  };
+  const proxyManager = new ProxyManager(globalState, httpSettings, profilesSetting, notices);
+  return { globalState, httpSettings, profilesSetting, proxyManager, events };
 }
 
 describe('ProxyManager', () => {
@@ -212,6 +219,47 @@ describe('ProxyManager', () => {
       );
       assert.deepEqual(profilesSetting.writes, []);
       assert.deepEqual(globalState.updates, []);
+    });
+  });
+
+  describe('credentials in http.proxy', () => {
+    const WITH_CREDENTIALS = 'http://alice:secret@proxy.example.com:8080';
+
+    it('says so before it first overwrites them, then writes', async () => {
+      const { events, httpSettings, proxyManager } = setup({
+        profiles: [WORK, HOME],
+        record: { isEnabled: true, currentProfile: WORK },
+        http: { current: { proxy: WITH_CREDENTIALS } }
+      });
+
+      await proxyManager.switchTo('Home');
+
+      assert.deepEqual(events, [`notice before ${WITH_CREDENTIALS}`]);
+      assert.equal(httpSettings.current.proxy, HOME.proxyUrl);
+    });
+
+    it('says so before it clears them', async () => {
+      const { events, proxyManager } = setup({
+        profiles: [WORK],
+        record: { isEnabled: true, currentProfile: WORK },
+        http: { current: { proxy: WITH_CREDENTIALS } }
+      });
+
+      await proxyManager.disableProxy();
+
+      assert.deepEqual(events, [`notice before ${WITH_CREDENTIALS}`]);
+    });
+
+    it('says nothing when http.proxy holds none', async () => {
+      const { events, proxyManager } = setup({
+        profiles: [WORK],
+        http: { current: { proxy: HOME.proxyUrl } }
+      });
+
+      await proxyManager.enableProxy();
+      await proxyManager.disableProxy();
+
+      assert.deepEqual(events, []);
     });
   });
 

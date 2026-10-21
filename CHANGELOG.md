@@ -33,6 +33,10 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
   labels always name the current profile.
 - `proxyToggler.showSwitchNotifications` turns on a short notification that names the profile
   when the proxy turns on or off or switches profiles.
+- An `http.proxy` that holds `user:pass@` matches the profile with the same URL, and the
+  credentials never show anywhere Proxy Toggler shows or remembers a URL. Before Proxy Toggler
+  first overwrites or clears such a value, a one-time notice says the credentials will be removed
+  and what that means for sign-in.
 - Profiles edited by hand or synced from another machine are checked like the UI's input. Invalid
   entries, and later entries that repeat a name, stay hidden, and one warning names them, once per
   distinct set. Its **Open Settings** button opens the application settings file.

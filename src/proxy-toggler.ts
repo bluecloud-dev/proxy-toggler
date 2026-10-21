@@ -1,6 +1,7 @@
 import { addProfileCommand } from './commands/add-profile';
 import { checkSettingsDrift } from './commands/check-settings-drift';
 import { COMMANDS, CONTEXT_KEYS } from './commands/command-ids';
+import { createCredentialsNotice } from './commands/credentials-notice';
 import { disableProxyCommand } from './commands/disable-proxy';
 import { editProfileCommand } from './commands/edit-profile';
 import { enableProxyCommand } from './commands/enable-proxy';
@@ -39,12 +40,13 @@ export function createProxyToggler(
   const logger = vscodeApi.window.createOutputChannel('Proxy Toggler', { log: true });
   const globalState = readYourWrites(context.globalState);
   const keychainService = new KeychainService(context.secrets);
+  const notificationService = new NotificationService(vscodeApi);
   const proxyManager = new ProxyManager(
     globalState,
     createHttpSettings(vscodeApi),
-    createProfilesSetting(vscodeApi)
+    createProfilesSetting(vscodeApi),
+    createCredentialsNotice(globalState, notificationService)
   );
-  const notificationService = new NotificationService(vscodeApi);
   const statusBarController = new StatusBarController(
     vscodeApi,
     COMMANDS.toggle,

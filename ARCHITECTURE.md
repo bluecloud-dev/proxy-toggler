@@ -108,6 +108,7 @@ tests pin them.
 | `globalState`   | `proxyToggler.hiddenProfilesWarned`                                      | a SHA-256 hash of the hidden entries last warned about; never the entries themselves             |
 | `SecretStorage` | `proxyToggler.credentials.username`, `proxyToggler.credentials.password` | trimmed strings; no version applied them, and every activation deletes them (ADR 0003)           |
 | `globalState`   | `proxyToggler.credentialsNoticePending`                                  | `true` from a removal that found a secret until the notice shows                                 |
+| `globalState`   | `proxyToggler.credentialsRemovalNoticeShown`                             | `true` once the notice about removing the credentials in `http.proxy` has shown                  |
 | User settings   | `http.proxy`, `http.proxyStrictSSL`, `http.noProxy` (array)              | written on enable, removed on disable                                                            |
 | Context keys    | `proxyToggler.hasConfiguration`, `proxyToggler.isEnabled`                | booleans used by `contributes.menus.commandPalette`                                              |
 

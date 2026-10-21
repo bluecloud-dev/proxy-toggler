@@ -8,6 +8,19 @@ export function defaultPortOf(protocol: string): string | undefined {
   return DEFAULT_PORTS[protocol];
 }
 
+// Whether a proxy URL holds a user name or password.
+export function hasCredentials(value: unknown): boolean {
+  if (typeof value !== 'string') {
+    return false;
+  }
+  try {
+    const url = new URL(value.trim());
+    return url.username !== '' || url.password !== '';
+  } catch {
+    return false;
+  }
+}
+
 // Whether VS Code's proxy settings carry these values; see Match in GLOSSARY.md.
 export function settingsMatch(
   settings: Record<HttpSettingKey, unknown>,
