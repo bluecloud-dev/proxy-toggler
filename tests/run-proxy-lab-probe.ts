@@ -319,6 +319,32 @@ const CHECKS: readonly Check[] = [
     logs: [{ service: 'squid-open', pattern: REMOTE_PROBE_REQUEST }]
   },
   {
+    // "Use This Computer's Proxy Again" removes the setting rather than writing true. Over SSH,
+    // whose default is false, a removal switches the other way.
+    name: 'SSH window, http.useLocalProxyConfiguration removed while open',
+    client: 'ssh',
+    since: REMOTE_SINCE,
+    settings: { 'http.proxy': SQUID_OPEN },
+    machineSettings: { 'http.useLocalProxyConfiguration': true, 'http.proxy': REMOTE_SQUID_OPEN },
+    plan: {
+      steps: [
+        { observe: 'before' },
+        { label: 'removed', update: 'useLocalProxyConfiguration', value: null },
+        { observe: 'removed' }
+      ]
+    },
+    observations: {
+      'before: http.proxy': recorded(SQUID_OPEN),
+      'before: request': LOCAL_PROXY_ON_REMOTE,
+      'removed: update': /^ok$/,
+      'removed: event': /^http\.proxy changed$/,
+      'removed: http.proxy': recorded(REMOTE_SQUID_OPEN),
+      'removed: request': ORIGIN_REPLY,
+      'remote Machine/settings.json http.useLocalProxyConfiguration': /^absent$/
+    },
+    logs: [{ service: 'squid-open', pattern: REMOTE_PROBE_REQUEST }]
+  },
+  {
     // Proxy Toggler pins every remote machine it manages: turning the proxy off there writes an
     // empty http.proxy instead of removing it, so that the local value cannot leak in (check 1).
     name: 'SSH window whose remote settings pin an empty http.proxy',

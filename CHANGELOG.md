@@ -15,6 +15,10 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
   VS Code from handing the remote side this computer's proxy at start-up. In WSL and local
   container windows, the toggle manages this computer's settings, and its tooltip says so. Test
   Connection says where it ran.
+- In WSL and local container windows, the switcher offers **Use a Separate Proxy for This Remote**,
+  which gives the remote side its own proxy settings without a reload, and **Use This Computer's
+  Proxy Again**, which also removes the remote machine's `http.*` values. While the current profile
+  uses a loopback proxy, which WSL's NAT mode cannot reach, the first comes first.
 - **Add Profile…** in two native steps with a Back button: the proxy URL, then the name, which
   defaults to the proxy host. When no profile exists and VS Code already uses a proxy, setup
   starts from those settings and names anything a profile cannot hold.

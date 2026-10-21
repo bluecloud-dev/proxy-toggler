@@ -229,6 +229,20 @@ When the remote machine keeps its own settings:
 Test Connection runs on the remote side and says where it ran. Where the remote uses this
 computer's settings, the VS Code window connects from this computer, so the test does not cover it.
 
+#### Giving a WSL or container remote its own proxy
+
+WSL and local Dev Containers use this computer's proxy settings by default. When their remote side
+needs another proxy, pick **Use a Separate Proxy for This Remote** in the switcher. Proxy Toggler
+sets `http.useLocalProxyConfiguration` to `false` in the remote machine's settings, which applies
+without a reload, and from then on the toggle manages that remote's own proxy.
+
+**Use This Computer's Proxy Again** reverses it, and removes the remote machine's `http.*` values:
+while they remain, a later write would land in the remote file and change nothing.
+
+A proxy on a loopback address, such as `127.0.0.1`, is this computer for the VS Code window, but not
+for WSL in its default NAT mode, nor for a container. While the current profile uses one, the
+switcher lists **Use a Separate Proxy for This Remote** first.
+
 ## :bulb: How It Works
 
 ```mermaid

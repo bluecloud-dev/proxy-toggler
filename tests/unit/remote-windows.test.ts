@@ -12,8 +12,10 @@ import {
   createFakeRemote,
   createFakeVscode,
   type FakeHost,
+  type FakeQuickPick,
   type FakeRemote,
-  type FakeVscode
+  type FakeVscode,
+  type FakeVscodeOptions
 } from '../support/fake-vscode';
 import { createExtensionContext, flushBackgroundTasks } from '../support/fakes';
 
@@ -38,6 +40,16 @@ const toggleOf = (vscode: FakeVscode) => {
   assert.ok(toggle);
   return toggle;
 };
+
+// Accepts the switcher item with this label.
+const choose =
+  (label: string) =>
+  (quickPick: FakeQuickPick): void => {
+    quickPick.accept(quickPick.items.find((item) => item.label === label));
+  };
+
+const SEPARATE = 'Use a Separate Proxy for This Remote';
+const SHARED = "Use This Computer's Proxy Again";
 
 // Longer than any wait for the settings to settle.
 const SETTLED = 10_000;
@@ -67,7 +79,7 @@ describe('remote windows', () => {
     host: FakeHost,
     state: Map<string, unknown>,
     remote?: FakeRemote,
-    options: { remoteSeesLocalProxy?: boolean; focused?: boolean } = {}
+    options: Pick<FakeVscodeOptions, 'remoteSeesLocalProxy' | 'focused' | 'quickPick'> = {}
   ) {
     const vscode = createFakeVscode({ host, remote, ...options });
     const globalStorage = remote ? path.join(storageRoot, remote.name) : undefined;
@@ -215,5 +227,84 @@ describe('remote windows', () => {
 
     assert.equal(before, '$(plug) Proxy: ON');
     assert.equal(wsl.api.getStatusBarText(), '$(debug-disconnect) Proxy (WSL): OFF');
+  });
+
+  describe('a WSL or container remote of its own', () => {
+    it('gets a proxy of its own, which the window then manages', async () => {
+      const host = createFakeHost({ 'proxyToggler.profiles': [WORK, HOME], ...APPLIED_WORK });
+      const remote = createFakeRemote('wsl');
+      const wsl = openWindow(host, new Map(), remote, {
+        quickPick: (quickPick, index) =>
+          index === 0 ? choose(SEPARATE)(quickPick) : choose('Home')(quickPick)
+      });
+      await settle();
+
+      await wsl.vscode.commandHandlers.get(COMMANDS.switchProfile)?.();
+      await settle();
+      const afterSeparate = wsl.api.getStatusBarText();
+      await wsl.vscode.commandHandlers.get(COMMANDS.switchProfile)?.();
+      await settle();
+
+      // A proxy that is not on loopback leaves the action among the others, after the profiles.
+      assert.equal(wsl.vscode.quickPicks[0]?.items[0]?.label, 'Home');
+      assert.equal(afterSeparate, '$(debug-disconnect) Proxy (WSL): OFF');
+      assert.deepEqual(Object.fromEntries(remote.settings), {
+        'http.useLocalProxyConfiguration': false,
+        'http.proxy': HOME.proxyUrl,
+        'http.proxyStrictSSL': true,
+        'http.noProxy': []
+      });
+      assert.equal(host.settings.get('http.proxy'), WORK.proxyUrl);
+      assert.equal(wsl.api.getStatusBarText(), '$(plug) Proxy (WSL): Home');
+    });
+
+    it("uses this computer's proxy again, leaving no remote http.* values behind", async () => {
+      const host = createFakeHost({ 'proxyToggler.profiles': [WORK], ...APPLIED_WORK });
+      const remote = createFakeRemote('wsl', {
+        'http.useLocalProxyConfiguration': false,
+        'http.proxy': HOME.proxyUrl,
+        'http.proxyStrictSSL': true,
+        'http.noProxy': []
+      });
+      const wsl = openWindow(host, new Map(), remote, { quickPick: choose(SHARED) });
+      await settle();
+
+      await wsl.vscode.commandHandlers.get(COMMANDS.switchProfile)?.();
+      await settle();
+
+      assert.deepEqual(Object.fromEntries(remote.settings), {});
+      assert.equal(host.settings.get('http.proxy'), WORK.proxyUrl);
+      assert.equal(wsl.api.getStatusBarText(), '$(plug) Proxy: ON');
+    });
+
+    it('puts the action first, with a note, while the current profile uses a loopback proxy', async () => {
+      const loopback = { ...WORK, name: 'Local', proxyUrl: 'http://127.0.0.1:3128' };
+      const host = createFakeHost({
+        'proxyToggler.profiles': [loopback, WORK],
+        'http.proxy': loopback.proxyUrl,
+        'http.proxyStrictSSL': true,
+        'http.noProxy': []
+      });
+      const wsl = openWindow(host, new Map(), createFakeRemote('wsl'));
+      await settle();
+
+      await wsl.vscode.commandHandlers.get(COMMANDS.switchProfile)?.();
+
+      const first = wsl.vscode.quickPicks[0]?.items[0];
+      assert.equal(first?.label, SEPARATE);
+      assert.match(first?.detail ?? '', /127\.0\.0\.1.*NAT mode/);
+    });
+
+    it('offers neither action in an SSH window', async () => {
+      const host = createFakeHost({ 'proxyToggler.profiles': [WORK] });
+      const ssh = openWindow(host, new Map(), createFakeRemote('ssh-remote'));
+      await settle();
+
+      await ssh.vscode.commandHandlers.get(COMMANDS.switchProfile)?.();
+
+      const labels = ssh.vscode.quickPicks[0]?.items.map((item) => item.label) ?? [];
+      assert.equal(labels.includes(SEPARATE), false);
+      assert.equal(labels.includes(SHARED), false);
+    });
   });
 });

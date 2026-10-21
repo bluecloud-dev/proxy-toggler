@@ -6,7 +6,10 @@ import type { VscodeApi } from './api';
 // remote window whose remote side uses this computer's proxy settings (WSL and local containers
 // by default), manage this computer's. A remote window whose remote side keeps its own (SSH,
 // Tunnels and remote containers by default) manages the remote machine's.
-export type ProxySide = { kind: 'local'; remote?: string } | { kind: 'remote'; remote: string };
+// `sharedByDefault`: the remote type uses this computer's proxy settings unless the remote
+// machine's settings say otherwise, as WSL and local containers do.
+export type ProxySide =
+  { kind: 'local'; remote?: string } | { kind: 'remote'; remote: string; sharedByDefault: boolean };
 
 type SideApi = Pick<VscodeApi, 'env' | 'workspace'>;
 
@@ -17,11 +20,15 @@ export function proxySide(vscodeApi: SideApi): ProxySide {
   }
   // A machine setting, so in a remote window it reads the remote machine's value or its default,
   // which the remote server sets by remote type.
-  const usesLocal = vscodeApi.workspace
-    .getConfiguration('http')
-    .get<boolean>('useLocalProxyConfiguration');
+  const http = vscodeApi.workspace.getConfiguration('http');
+  const usesLocal = http.get<boolean>('useLocalProxyConfiguration');
   const remote = remoteLabel(remoteName);
-  return usesLocal === false ? { kind: 'remote', remote } : { kind: 'local', remote };
+  if (usesLocal !== false) {
+    return { kind: 'local', remote };
+  }
+  const sharedByDefault =
+    http.inspect<boolean>('useLocalProxyConfiguration')?.defaultValue === true;
+  return { kind: 'remote', remote, sharedByDefault };
 }
 
 // The host name for SSH and Tunnels, where it names the machine; the remote type otherwise, as

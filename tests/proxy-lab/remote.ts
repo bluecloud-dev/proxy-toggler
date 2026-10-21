@@ -16,8 +16,12 @@ export type RemoteStep =
   // request from this extension host to REQUEST_URL ends.
   | { observe: string }
   // Writes an http.* setting with ConfigurationTarget.Global, as Proxy Toggler does, then waits
-  // for an http.proxy change event.
-  | { label: string; update: 'proxy' | 'useLocalProxyConfiguration'; value: string | boolean }
+  // for an http.proxy change event. A null value removes the setting.
+  | {
+      label: string;
+      update: 'proxy' | 'useLocalProxyConfiguration';
+      value: string | boolean | null;
+    }
   // Creates the file `ready` in the folder, which tells the runner to change something from
   // outside this window, then waits for an http.proxy change event.
   | { label: string; awaitOutsideChange: true }
@@ -60,7 +64,7 @@ export async function run(): Promise<void> {
         Object.assign(results, await observe(step.observe, proxyToggler?.exports));
       } else if ('update' in step) {
         const change = nextProxyChange(EVENT_WAIT_MS);
-        results[`${step.label}: update`] = await update(step.update, step.value);
+        results[`${step.label}: update`] = await update(step.update, step.value ?? undefined);
         results[`${step.label}: event`] = await change;
       } else if ('command' in step) {
         const change = nextProxyChange(EVENT_WAIT_MS);

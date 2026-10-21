@@ -10,9 +10,11 @@ import { EXTENSION_ID } from './command-ids';
 import { deleteProfileCommand } from './delete-profile';
 import { editProfileCommand } from './edit-profile';
 import { announceSwitch, showKnownProxyError } from './proxy-feedback';
+import { remoteProxyChoice, useSeparateProxy, useThisComputersProxy } from './remote-proxy';
 
 type SwitcherApi = Pick<
   VscodeApi,
+  | 'ConfigurationTarget'
   | 'ProgressLocation'
   | 'QuickInputButtons'
   | 'QuickPickItemKind'
@@ -41,7 +43,17 @@ type SwitcherManager = Pick<
 
 type SwitcherItem = vscode.QuickPickItem & {
   profile?: Profile;
-  action?: 'toggle' | 'save' | 'reapply' | 'clear' | 'add' | 'edit' | 'delete' | 'settings';
+  action?:
+    | 'toggle'
+    | 'save'
+    | 'reapply'
+    | 'clear'
+    | 'add'
+    | 'edit'
+    | 'delete'
+    | 'separate'
+    | 'shared'
+    | 'settings';
 };
 
 // Opens the switcher, or switches straight to the profile a keybinding names.
@@ -87,6 +99,11 @@ async function showSwitcher(
             : { label: l10n.t('Turn Proxy Off'), action: 'clear' }
         ]
       : [];
+  // Whose proxy settings the remote side uses: first while the current profile cannot work there.
+  const remote = remoteProxyChoice(vscodeApi, currentProfile);
+  const remoteItem: SwitcherItem[] = remote
+    ? [{ label: remote.label, detail: remote.detail, action: remote.action }]
+    : [];
   const actionItems: SwitcherItem[] = [
     ...driftItems,
     ...(currentProfile
@@ -104,14 +121,16 @@ async function showSwitcher(
           { label: l10n.t('Delete Profile…'), action: 'delete' as const }
         ]
       : []),
+    ...(remote?.first ? [] : remoteItem),
     { label: l10n.t('Extension Settings'), action: 'settings' }
   ];
   const separator: SwitcherItem[] =
     profileItems.length > 0 ? [{ label: '', kind: vscodeApi.QuickPickItemKind.Separator }] : [];
+  const leading = remote?.first ? [...remoteItem, ...separator] : [];
 
   // Opens on the current profile, so Enter keeps it, or turns it on while the proxy is off.
   const choice = await pickOne(vscodeApi, {
-    items: [...profileItems, ...separator, ...actionItems],
+    items: [...leading, ...profileItems, ...separator, ...actionItems],
     activeItem: profileItems.find((item) => item.profile && isCurrent(item.profile)),
     placeholder: l10n.t('Pick a proxy profile to turn on')
   });
@@ -134,6 +153,12 @@ async function showSwitcher(
     await editProfileCommand(vscodeApi, proxyManager, notificationService, refreshUi);
   } else if (choice?.action === 'delete') {
     await deleteProfileCommand(vscodeApi, proxyManager, notificationService, refreshUi);
+  } else if (choice?.action === 'separate') {
+    await useSeparateProxy(vscodeApi);
+    await refreshUi();
+  } else if (choice?.action === 'shared') {
+    await useThisComputersProxy(vscodeApi);
+    await refreshUi();
   } else if (choice?.action === 'settings') {
     await vscodeApi.commands.executeCommand(
       'workbench.action.openSettings',
