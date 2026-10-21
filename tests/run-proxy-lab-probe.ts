@@ -298,6 +298,23 @@ const CHECKS: readonly Check[] = [
     logs: [{ service: 'squid-open', pattern: REMOTE_PROBE_REQUEST }]
   },
   {
+    // Proxy Toggler pins every remote machine it manages: turning the proxy off there writes an
+    // empty http.proxy instead of removing it, so that the local value cannot leak in (check 1).
+    name: 'SSH window whose remote settings pin an empty http.proxy',
+    client: 'ssh',
+    since: REMOTE_SINCE,
+    settings: { 'http.proxy': SQUID_OPEN },
+    machineSettings: { 'http.proxy': '' },
+    plan: { steps: [{ observe: 'initial' }] },
+    observations: {
+      remoteName: /^ssh-remote$/,
+      'initial: http.proxy': recorded(''),
+      'initial: request': DIRECT,
+      'remote Machine/settings.json http.proxy': recorded('')
+    },
+    logs: []
+  },
+  {
     name: 'Two SSH windows, the second writes the remote http.proxy',
     client: 'ssh',
     since: REMOTE_SINCE,

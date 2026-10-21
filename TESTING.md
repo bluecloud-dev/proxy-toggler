@@ -278,6 +278,7 @@ host, in October 2026:
 | 3   | Changing `http.useLocalProxyConfiguration` | The local and the remote `http.proxy` differ. The window is open.                                                                              | **Applies without a reload.** Writing `true` with `Global` lands in `Machine/settings.json`, fires an `http.proxy` change event, and switches the remote extension host to the local value, for `get()` and for requests. Writing `false` switches it back the same way.                                                                                                                                          | The same                                                                                                                                                                                                                            |
 | 4   | Change events across windows               | Two windows on the SSH host, each in its own VS Code profile. One writes `http.proxy` with `Global`.                                           | **The event fires.** The write lands in `Machine/settings.json`, and the other window's remote extension host gets `onDidChangeConfiguration` for `http.proxy`, then reads and uses the new value.                                                                                                                                                                                                                | The same                                                                                                                                                                                                                            |
 | 5   | `http.proxy` with `socks5h://`             | A local window.                                                                                                                                | **`ERR_NO_SUPPORTED_PROXIES`, not direct.** Chromium's net log shows every Marketplace request from the window failing with that error, from an empty proxy list. The extension host reads the scheme as SOCKS5 and reaches `origin.lab.test` through `socks5`.                                                                                                                                                   | The same                                                                                                                                                                                                                            |
+| 6   | An empty `http.proxy` in the remote file   | The SSH host's `Machine/settings.json` holds `http.proxy: ""`. The local settings hold `http://127.0.0.1:3128`.                                | **The empty value pins the remote side from start-up.** In all 5 windows, `get('proxy')` returned `""` at start-up, `inspect('proxy')` showed `""` as `globalRemoteValue` and `globalValue` and the local value as `globalLocalValue`, and requests went direct.                                                                                                                                                  | **The same** in all 5 windows, except that `inspect('proxy')` showed no `globalLocalValue`.                                                                                                                                         |
 
 - Result 1 contradicts a reading of VS Code's source, which has `http.*` machine-scoped in SSH
   windows and so predicted that the local value stays hidden. It looks like a race at start-up:
@@ -289,6 +290,9 @@ host, in October 2026:
 - Check 4 runs the two windows in two VS Code processes, because the probe starts one window per
   process. Each window watches the remote file over its own connection, as two windows of one VS
   Code do.
+- Proxy Toggler relies on result 6 in a window that manages a remote machine's own settings:
+  turning the proxy off there writes `http.proxy: ""` instead of removing the key, so the remote
+  file always holds a value, and it wins over the local value that result 1 hands over.
 - Result 1 does not decide checks 2 to 4. Where they expect the remote value, the SSH host's file
   holds one, and it takes precedence over the local value, which `inspect()` still shows as
   `globalLocalValue` in check 3.
@@ -346,4 +350,5 @@ check:
       `~/window-1/ready` appears, start a second window the same way, with its own profile and
       `window-2`. Source reading predicts that the event fires.
 
-Not run yet, and the procedure itself is untried: the lab has no Windows machine.
+Not run for v0.2.0, and the procedure itself is untried: the lab has no Windows machine. Proxy
+Toggler's WSL behavior rests on the source readings above until someone runs these checks.
