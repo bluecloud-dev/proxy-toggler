@@ -11,6 +11,7 @@ import {
   createHttpSettings,
   createMemento,
   createNotificationRecorder,
+  createProfilesSetting,
   createSecretStorage
 } from '../support/fakes';
 
@@ -30,13 +31,15 @@ const SET_CREDENTIALS = {
 
 function createProxyManager(
   state = new Map<string, unknown>(),
-  secrets = new Map<string, string>()
+  secrets = new Map<string, string>(),
+  profilesSetting = createProfilesSetting()
 ) {
   const globalState = createMemento(state);
   const proxyManager = new ProxyManager(
     globalState,
     new KeychainService(createSecretStorage(secrets)),
-    createHttpSettings()
+    createHttpSettings(),
+    profilesSetting
   );
   return { globalState, proxyManager };
 }
@@ -65,12 +68,17 @@ describe('credential handling (security)', () => {
   it('keeps credentials across a restart', async () => {
     const state = new Map<string, unknown>();
     const secrets = new Map<string, string>();
-    await createProxyManager(state, secrets).proxyManager.saveConfiguration(
+    const profilesSetting = createProfilesSetting();
+    await createProxyManager(state, secrets, profilesSetting).proxyManager.saveConfiguration(
       CONFIGURATION,
       SET_CREDENTIALS
     );
 
-    const afterRestart = await createProxyManager(state, secrets).proxyManager.loadConfiguration();
+    const afterRestart = await createProxyManager(
+      state,
+      secrets,
+      profilesSetting
+    ).proxyManager.loadConfiguration();
 
     assert.equal(afterRestart?.hasStoredCredentials, true);
   });

@@ -1,4 +1,5 @@
 import type { SecretStorage } from '../../src/core/keychain-service';
+import type { ProfilesSetting } from '../../src/core/profiles';
 import type { Memento } from '../../src/core/proxy-manager';
 import type { HttpSettingKey, HttpSettings } from '../../src/core/proxy-settings-writer';
 import type { ExtensionContext } from '../../src/vscode/api';
@@ -97,6 +98,24 @@ export function createHttpSettings(
       current[key] = value;
     }
   };
+}
+
+export type FakeProfilesSetting = ProfilesSetting & {
+  value: unknown;
+  writes: unknown[][];
+};
+
+export function createProfilesSetting(value?: unknown): FakeProfilesSetting {
+  const setting: FakeProfilesSetting = {
+    value,
+    writes: [],
+    read: () => setting.value,
+    write: async (entries) => {
+      setting.writes.push([...entries]);
+      setting.value = [...entries];
+    }
+  };
+  return setting;
 }
 
 export type RecordedNotification = {

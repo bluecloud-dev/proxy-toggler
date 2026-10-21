@@ -14,7 +14,8 @@ export type HttpSettings = {
 export type ProxySettingValues = {
   proxy: string;
   proxyStrictSSL: boolean;
-  noProxy: string;
+  // A comma-separated string or a list; VS Code's setting is a list.
+  noProxy: string | readonly string[];
 };
 
 export class ConfigurationError extends Error {

@@ -2,17 +2,20 @@ import type * as vscode from 'vscode';
 
 import type { KeychainService } from './keychain-service';
 import { settingsMatch } from './match';
-import { withDefaultNoProxy } from './no-proxy';
-import type { ProxyConfiguration, ProxyCredentials, ToggleState } from './proxy-configuration';
+import { parseNoProxyList, withDefaultNoProxy } from './no-proxy';
 import {
-  type HttpSettings,
-  ProxySettingsWriter,
-  type ProxySettingValues
-} from './proxy-settings-writer';
+  findCurrentProfile,
+  type Profile,
+  profileSettingValues,
+  type ProfilesSetting,
+  readProfiles,
+  withProfile
+} from './profiles';
+import type { ProxyConfiguration, ProxyCredentials, ToggleState } from './proxy-configuration';
+import { type HttpSettings, ProxySettingsWriter } from './proxy-settings-writer';
 import { validateCredentials, validateNoProxyList, validateProxyUrl } from './validation';
 
 const STORAGE_KEYS = {
-  proxyConfig: 'proxyToggler.savedProxy',
   toggleState: 'proxyToggler.state'
 } as const;
 
@@ -30,6 +33,15 @@ export type LoadedProxyConfiguration = ProxyConfiguration & {
 export type CredentialsUpdate =
   { mode: 'keep' } | { mode: 'clear' } | { mode: 'set'; credentials: ProxyCredentials };
 
+// The record of the local proxy settings (GLOSSARY.md), per VS Code Profile. 0.1.x wrote
+// isEnabled and hasConfiguration and keeps fields it does not know, such as currentProfile, which
+// remembers the current profile by name and values.
+type StoredRecord = {
+  isEnabled?: boolean;
+  hasConfiguration?: boolean;
+  currentProfile?: Profile;
+};
+
 // Credentials go through KeychainService only; never write them to settings or globalState.
 export class ProxyManager {
   // Settles once the most recent state change has settled; see serialize().
@@ -39,7 +51,8 @@ export class ProxyManager {
   constructor(
     private readonly globalState: Memento,
     private readonly keychainService: CredentialStore,
-    private readonly httpSettings: HttpSettings
+    private readonly httpSettings: HttpSettings,
+    private readonly profilesSetting: ProfilesSetting
   ) {
     this.settingsWriter = new ProxySettingsWriter(httpSettings);
   }
@@ -62,7 +75,15 @@ export class ProxyManager {
         validateCredentials(username, password);
       }
 
-      await this.globalState.update(STORAGE_KEYS.proxyConfig, normalized);
+      // Configure edits the current profile, or adds the first one, named after its host.
+      const current = this.getState().currentProfile;
+      const profile: Profile = {
+        name: current?.name ?? new URL(normalized.proxyUrl).hostname,
+        proxyUrl: normalized.proxyUrl,
+        strictSSL: normalized.strictSSL,
+        bypassList: parseNoProxyList(normalized.noProxy)
+      };
+      await this.profilesSetting.write(withProfile(this.profileEntries(), profile, current?.name));
 
       if (credentialsUpdate.mode === 'set') {
         const { username, password } = credentialsUpdate.credentials;
@@ -71,30 +92,31 @@ export class ProxyManager {
         await this.keychainService.clearCredentials();
       }
 
-      await this.writeState({ hasConfiguration: true });
+      await this.writeState({ currentProfile: profile });
     });
   }
 
   async loadConfiguration(): Promise<LoadedProxyConfiguration | undefined> {
-    const saved = this.savedConfiguration();
-    if (!saved) {
+    const current = this.getState().currentProfile;
+    if (!current) {
       return undefined;
     }
 
     return {
-      ...saved,
+      proxyUrl: current.proxyUrl,
+      strictSSL: current.strictSSL,
+      noProxy: current.bypassList.join(','),
       hasStoredCredentials: await this.keychainService.hasCredentials()
     };
   }
 
   // Reads settings and globalState only, never SecretStorage, so activation can call it.
   isConfigurationApplied(): boolean {
-    const saved = this.savedConfiguration();
-    if (!saved) {
-      return false;
-    }
-
-    return settingsMatch(this.httpSettings.read(), settingValues(saved));
+    const current = this.getState().currentProfile;
+    return (
+      current !== undefined &&
+      settingsMatch(this.httpSettings.read(), profileSettingValues(current))
+    );
   }
 
   enableProxy(): Promise<void> {
@@ -133,14 +155,11 @@ export class ProxyManager {
   }
 
   getState(): ToggleState {
-    const stored = this.globalState.get<ToggleState>(STORAGE_KEYS.toggleState);
-    const hasConfiguration = Boolean(this.savedConfiguration());
-    if (!stored) {
-      return { isEnabled: false, hasConfiguration };
-    }
-
-    // Spread rather than pick, so fields written by other versions survive the next write.
-    return { ...stored, hasConfiguration };
+    const stored = this.storedRecord();
+    const profiles = readProfiles(this.profilesSetting.read());
+    const currentProfile = findCurrentProfile(profiles, stored?.currentProfile);
+    const state = { isEnabled: stored?.isEnabled ?? false, hasConfiguration: profiles.length > 0 };
+    return currentProfile ? { ...state, currentProfile } : state;
   }
 
   hasConfiguration(): boolean {
@@ -156,13 +175,14 @@ export class ProxyManager {
   }
 
   private async enable(): Promise<void> {
-    const configuration = this.savedConfiguration();
-    if (!configuration) {
+    const current = this.getState().currentProfile;
+    if (!current) {
       throw new Error('No proxy configuration found');
     }
 
-    await this.settingsWriter.apply(settingValues(configuration));
-    await this.writeState({ isEnabled: true });
+    await this.settingsWriter.apply(profileSettingValues(current));
+    // Turning on is a UI action, so it remembers the profile even when it was only the fallback.
+    await this.writeState({ isEnabled: true, currentProfile: current });
   }
 
   private async disable(): Promise<void> {
@@ -170,19 +190,24 @@ export class ProxyManager {
     await this.writeState({ isEnabled: false });
   }
 
-  private savedConfiguration(): ProxyConfiguration | undefined {
-    return this.globalState.get<ProxyConfiguration>(STORAGE_KEYS.proxyConfig);
+  private profileEntries(): readonly unknown[] {
+    const value = this.profilesSetting.read();
+    return Array.isArray(value) ? value : [];
   }
 
-  private async writeState(change: Partial<ToggleState>): Promise<void> {
-    await this.globalState.update(STORAGE_KEYS.toggleState, { ...this.getState(), ...change });
+  private storedRecord(): StoredRecord | undefined {
+    return this.globalState.get<StoredRecord>(STORAGE_KEYS.toggleState);
   }
-}
 
-function settingValues(configuration: ProxyConfiguration): ProxySettingValues {
-  return {
-    proxy: configuration.proxyUrl,
-    proxyStrictSSL: configuration.strictSSL,
-    noProxy: configuration.noProxy
-  };
+  // Writes the stored record, never the computed state, so a fallback current profile is never
+  // saved. Spread rather than pick, so fields written by other versions survive the write.
+  private async writeState(change: StoredRecord): Promise<void> {
+    const { isEnabled, hasConfiguration } = this.getState();
+    await this.globalState.update(STORAGE_KEYS.toggleState, {
+      ...this.storedRecord(),
+      isEnabled,
+      hasConfiguration,
+      ...change
+    });
+  }
 }

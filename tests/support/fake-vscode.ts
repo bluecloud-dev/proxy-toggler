@@ -1,4 +1,4 @@
-import type { QuickPickItem, StatusBarAlignment } from 'vscode';
+import type { ConfigurationChangeEvent, QuickPickItem, StatusBarAlignment } from 'vscode';
 
 import type { StatusBarItem, VscodeApi, WorkspaceConfiguration } from '../../src/vscode/api';
 
@@ -40,6 +40,8 @@ export type FakeVscode = VscodeApi & {
   statusBarItems: FakeStatusBarItem[];
   // Moves focus to or away from the window and tells the extension, as VS Code does.
   setFocused(focused: boolean): void;
+  // Changes settings from outside the extension, such as a hand edit, and tells the extension.
+  changeSettings(values: Record<string, unknown>): void;
 };
 
 export function createFakeVscode(options: FakeVscodeOptions = {}): FakeVscode {
@@ -53,6 +55,17 @@ export function createFakeVscode(options: FakeVscodeOptions = {}): FakeVscode {
   const logs: string[] = [];
   const inputs = [...(options.inputs ?? [])];
   let quickPickCalls = 0;
+  const configurationListeners: Array<(event: ConfigurationChangeEvent) => unknown> = [];
+  // VS Code fires the change event before the update that caused it resolves.
+  const fireConfigurationChange = (ids: readonly string[]): void => {
+    const event: ConfigurationChangeEvent = {
+      affectsConfiguration: (section) =>
+        ids.some((id) => id === section || id.startsWith(`${section}.`))
+    };
+    for (const listener of [...configurationListeners]) {
+      listener(event);
+    }
+  };
   const windowState = { focused: options.focused ?? true };
   const windowStateListeners: Array<(state: { focused: boolean; active: boolean }) => unknown> = [];
 
@@ -85,6 +98,7 @@ export function createFakeVscode(options: FakeVscodeOptions = {}): FakeVscode {
         } else {
           settings.set(id(key), value);
         }
+        fireConfigurationChange([id(key)]);
       }
     };
     // `get` is overloaded and `inspect` is generic in VS Code's typings; one implementation
@@ -100,6 +114,16 @@ export function createFakeVscode(options: FakeVscodeOptions = {}): FakeVscode {
     settings,
     settingUpdates,
     statusBarItems,
+    changeSettings: (values) => {
+      for (const [id, value] of Object.entries(values)) {
+        if (value === undefined) {
+          settings.delete(id);
+        } else {
+          settings.set(id, value);
+        }
+      }
+      fireConfigurationChange(Object.keys(values));
+    },
     setFocused: (focused) => {
       windowState.focused = focused;
       for (const listener of windowStateListeners) {
@@ -168,6 +192,16 @@ export function createFakeVscode(options: FakeVscodeOptions = {}): FakeVscode {
         };
       }
     },
-    workspace: { getConfiguration }
+    workspace: {
+      getConfiguration,
+      onDidChangeConfiguration: (listener) => {
+        configurationListeners.push(listener);
+        return {
+          dispose: () => {
+            configurationListeners.splice(configurationListeners.indexOf(listener), 1);
+          }
+        };
+      }
+    }
   };
 }

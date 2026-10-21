@@ -6,5 +6,10 @@
   "command.toggle.title": "Proxy Toggler: Toggle Proxy",
   "command.configure.title": "Proxy Toggler: Configure Proxy Settings",
   "configuration.title": "Proxy Toggler",
-  "configuration.confirmBeforeToggle.description": "Show a confirmation prompt before toggling the proxy on/off."
+  "configuration.confirmBeforeToggle.description": "Show a confirmation prompt before toggling the proxy on/off.",
+  "configuration.profiles.description": "Proxy profiles the status bar toggle switches between. Shared by every VS Code Profile and read only from user settings: edit them with **Preferences: Open Application Settings (JSON)**. Profiles hold no credentials; VS Code asks for a proxy sign-in itself.",
+  "configuration.profiles.name.description": "The profile name, unique ignoring letter case and at most 30 characters.",
+  "configuration.profiles.proxyUrl.description": "The proxy URL, such as http://proxy.example.com:8080, without a user name or password.",
+  "configuration.profiles.strictSSL.description": "The value for http.proxyStrictSSL. Only VS Code's command line and some built-in extensions honor it.",
+  "configuration.profiles.bypassList.description": "Hosts that VS Code reaches directly, written to http.noProxy: host names, IP addresses, or domains that start with a dot, such as .example.com."
 }

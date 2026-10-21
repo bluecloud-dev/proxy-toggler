@@ -31,6 +31,9 @@ export type VscodeApi = {
   };
   workspace: {
     getConfiguration(section: string): WorkspaceConfiguration;
+    onDidChangeConfiguration(
+      listener: (event: vscode.ConfigurationChangeEvent) => unknown
+    ): vscode.Disposable;
   };
 };
 

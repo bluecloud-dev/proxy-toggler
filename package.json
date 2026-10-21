@@ -75,6 +75,43 @@
           "type": "boolean",
           "default": false,
           "description": "%configuration.confirmBeforeToggle.description%"
+        },
+        "proxyToggler.profiles": {
+          "type": "array",
+          "scope": "application",
+          "default": [],
+          "markdownDescription": "%configuration.profiles.description%",
+          "items": {
+            "type": "object",
+            "required": [
+              "name",
+              "proxyUrl"
+            ],
+            "properties": {
+              "name": {
+                "type": "string",
+                "maxLength": 30,
+                "description": "%configuration.profiles.name.description%"
+              },
+              "proxyUrl": {
+                "type": "string",
+                "description": "%configuration.profiles.proxyUrl.description%"
+              },
+              "strictSSL": {
+                "type": "boolean",
+                "default": true,
+                "description": "%configuration.profiles.strictSSL.description%"
+              },
+              "bypassList": {
+                "type": "array",
+                "items": {
+                  "type": "string"
+                },
+                "default": [],
+                "description": "%configuration.profiles.bypassList.description%"
+              }
+            }
+          }
         }
       }
     }

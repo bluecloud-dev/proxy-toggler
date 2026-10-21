@@ -11,13 +11,14 @@ src/
   extension.ts      VS Code entry point. The only module that loads `vscode` at runtime.
   proxy-toggler.ts  Composition root: creates every object, registers commands, starts activation checks.
   core/             Domain logic: configuration types, validation, bypass-list rules, the Match
-                    rule (when VS Code's settings carry a configuration's values), ProxyManager
-                    (saved configuration, toggle state), ProxySettingsWriter (writing and
-                    clearing the http.* settings), KeychainService (credentials).
+                    rule (when VS Code's settings carry a profile's values), profiles (reading
+                    the setting, the current profile), ProxyManager (the record, the toggle),
+                    ProxySettingsWriter (writing and clearing the http.* settings),
+                    KeychainService (credentials).
   commands/         One file per command (configure, enable, disable, toggle), the activation-time
                     drift check, and the feedback shared by the state commands.
-  vscode/           Adapters over the VS Code API: the API surface type, the http.* settings adapter,
-                    notifications, the status bar item, and error reporting.
+  vscode/           Adapters over the VS Code API: the API surface type, the http.* and profiles
+                    setting adapters, notifications, the status bar item, and error reporting.
 ```
 
 Two dependency rules are enforced by ESLint (`eslint.config.mjs`):
@@ -41,7 +42,9 @@ flowchart LR
   manager --> validation["core/validation, core/no-proxy"]
   manager --> writer["core/ProxySettingsWriter"]
   manager --> httpSettings["vscode/http-settings"]
+  manager --> profilesSetting["vscode/profiles-setting"]
   writer --> httpSettings
+  profilesSetting --> profiles[("User settings: proxyToggler.profiles")]
   keychain --> secrets[("SecretStorage")]
   manager --> state[("globalState")]
   httpSettings --> settings[("User settings: http.*")]
@@ -56,9 +59,10 @@ flowchart LR
 2. The registrar in `vscode/error-reporting.ts` calls the command. Commands show the errors they
    can explain; any other error is logged to the **Proxy Toggler** output channel and shown with
    the command's failure message.
-3. Commands call `ProxyManager`, which validates input, persists the configuration in
-   `globalState`, stores credentials through `KeychainService`, and writes or clears the three
-   `http.*` user settings through `ProxySettingsWriter` and the settings adapter.
+3. Commands call `ProxyManager`, which validates input, saves profiles in the
+   `proxyToggler.profiles` setting, keeps the record in `globalState`, stores credentials through
+   `KeychainService`, and writes or clears the three `http.*` user settings through
+   `ProxySettingsWriter` and the settings adapter.
 4. `refreshUi` updates the status bar and the `setContext` keys that decide which commands the
    Command Palette shows.
 
@@ -76,6 +80,7 @@ Core classes depend on small structural types rather than on VS Code objects:
 | `ProxyManager`        | `Memento`         | `readYourWrites(context.globalState)`            |
 | `ProxyManager`        | `CredentialStore` | `KeychainService`                                |
 | `ProxyManager`        | `HttpSettings`    | `createHttpSettings(vscode)`, read only          |
+| `ProxyManager`        | `ProfilesSetting` | `createProfilesSetting(vscode)`                  |
 | `ProxySettingsWriter` | `HttpSettings`    | `createHttpSettings(vscode)`                     |
 | `KeychainService`     | `SecretStorage`   | `context.secrets`                                |
 | Commands, UI          | `VscodeApi` slice | the `vscode` module, passed in by `extension.ts` |
@@ -89,14 +94,15 @@ without a cast, the compiler checks that the declared slice matches VS Code.
 These keys and shapes are a compatibility contract with installed copies of the extension. Unit
 tests pin them.
 
-| Store           | Key                                                                      | Shape                                                                                              |
-| --------------- | ------------------------------------------------------------------------ | -------------------------------------------------------------------------------------------------- |
-| `globalState`   | `proxyToggler.savedProxy`                                                | `{ proxyUrl, strictSSL, noProxy }`; `noProxy` is a comma-separated string                          |
-| `globalState`   | `proxyToggler.state`                                                     | `{ isEnabled, hasConfiguration }`; `hasConfiguration` is recomputed on read, other fields are kept |
-| `SecretStorage` | `proxyToggler.credentials.username`, `proxyToggler.credentials.password` | trimmed strings; no version applied them, and every activation deletes them (ADR 0003)             |
-| `globalState`   | `proxyToggler.credentialsNoticePending`                                  | `true` from a removal that found a secret until the notice shows                                   |
-| User settings   | `http.proxy`, `http.proxyStrictSSL`, `http.noProxy` (array)              | written on enable, removed on disable                                                              |
-| Context keys    | `proxyToggler.hasConfiguration`, `proxyToggler.isEnabled`                | booleans used by `contributes.menus.commandPalette`                                                |
+| Store           | Key                                                                      | Shape                                                                                      |
+| --------------- | ------------------------------------------------------------------------ | ------------------------------------------------------------------------------------------ |
+| User settings   | `proxyToggler.profiles` (application scope)                              | `[{ name, proxyUrl, strictSSL, bypassList }]`; saves keep other entries and unknown fields |
+| `globalState`   | `proxyToggler.savedProxy`                                                | 0.1.x's `{ proxyUrl, strictSSL, noProxy }`; v0.2.0 never writes it (ADR 0001)              |
+| `globalState`   | `proxyToggler.state`                                                     | the record: `{ isEnabled, hasConfiguration, currentProfile }`; other fields are kept       |
+| `SecretStorage` | `proxyToggler.credentials.username`, `proxyToggler.credentials.password` | trimmed strings; no version applied them, and every activation deletes them (ADR 0003)     |
+| `globalState`   | `proxyToggler.credentialsNoticePending`                                  | `true` from a removal that found a secret until the notice shows                           |
+| User settings   | `http.proxy`, `http.proxyStrictSSL`, `http.noProxy` (array)              | written on enable, removed on disable                                                      |
+| Context keys    | `proxyToggler.hasConfiguration`, `proxyToggler.isEnabled`                | booleans used by `contributes.menus.commandPalette`                                        |
 
 Credentials never go to `globalState`, settings, logs, or messages.
 

@@ -4,7 +4,7 @@ import type { ProxyCredentials } from '../../src/core/proxy-configuration';
 import { ProxyManager } from '../../src/core/proxy-manager';
 import { ConfigurationError } from '../../src/core/proxy-settings-writer';
 import { ValidationError } from '../../src/core/validation';
-import { createHttpSettings, createMemento } from '../support/fakes';
+import { createHttpSettings, createMemento, createProfilesSetting } from '../support/fakes';
 
 const CONFIGURATION = {
   proxyUrl: 'http://proxy.example.com:8080',
@@ -33,33 +33,195 @@ function createKeychainStub(hasCredentials = false) {
   };
 }
 
+// The profile that saving CONFIGURATION adds when no profile exists.
+const SAVED_PROFILE = {
+  name: 'proxy.example.com',
+  proxyUrl: 'http://proxy.example.com:8080',
+  strictSSL: true,
+  bypassList: ['localhost']
+};
+
+const WORK = {
+  name: 'Work',
+  proxyUrl: 'http://proxy.example.com:8080',
+  strictSSL: true,
+  bypassList: ['localhost']
+};
+
+const HOME = {
+  name: 'Home',
+  proxyUrl: 'http://home.example:3128',
+  strictSSL: false,
+  bypassList: []
+};
+
 function setup(
-  options: { hasCredentials?: boolean; http?: Parameters<typeof createHttpSettings>[0] } = {}
+  options: {
+    hasCredentials?: boolean;
+    http?: Parameters<typeof createHttpSettings>[0];
+    profiles?: unknown;
+    record?: unknown;
+  } = {}
 ) {
-  const globalState = createMemento();
+  const globalState = createMemento(
+    new Map(options.record === undefined ? [] : [['proxyToggler.state', options.record]])
+  );
   const keychain = createKeychainStub(options.hasCredentials);
   const httpSettings = createHttpSettings(options.http);
-  const proxyManager = new ProxyManager(globalState, keychain, httpSettings);
-  return { globalState, keychain, httpSettings, proxyManager };
+  const profilesSetting = createProfilesSetting(options.profiles);
+  const proxyManager = new ProxyManager(globalState, keychain, httpSettings, profilesSetting);
+  return { globalState, keychain, httpSettings, profilesSetting, proxyManager };
 }
 
 describe('ProxyManager', () => {
-  it('persists a trimmed configuration with the default bypass list and stores credentials', async () => {
-    const { globalState, keychain, proxyManager } = setup();
+  describe('with profiles', () => {
+    it('is configured once a profile exists, with a current profile', () => {
+      const { proxyManager } = setup({ profiles: [WORK] });
+
+      assert.deepEqual(proxyManager.getState(), {
+        isEnabled: false,
+        hasConfiguration: true,
+        currentProfile: WORK
+      });
+    });
+
+    it('is not configured without profiles and refuses to turn on', async () => {
+      const { proxyManager } = setup({ profiles: [] });
+
+      assert.deepEqual(proxyManager.getState(), { isEnabled: false, hasConfiguration: false });
+      await assert.rejects(() => proxyManager.toggleProxy(), /No proxy configuration found/);
+    });
+
+    it('keeps the current profile across a reload', () => {
+      const record = { isEnabled: false, currentProfile: WORK };
+      const { proxyManager } = setup({ profiles: [HOME, WORK], record });
+
+      assert.deepEqual(proxyManager.getState().currentProfile, WORK);
+    });
+
+    it('turns the current profile on, writing its values, and remembers it', async () => {
+      const { globalState, httpSettings, proxyManager } = setup({ profiles: [HOME, WORK] });
+
+      await proxyManager.enableProxy();
+
+      assert.deepEqual(httpSettings.current, {
+        proxy: HOME.proxyUrl,
+        proxyStrictSSL: HOME.strictSSL,
+        noProxy: HOME.bypassList
+      });
+      assert.deepEqual(globalState.store.get('proxyToggler.state'), {
+        isEnabled: true,
+        hasConfiguration: true,
+        currentProfile: HOME
+      });
+    });
+
+    it('turns off by clearing the settings, keeping the current profile', async () => {
+      const record = { isEnabled: true, currentProfile: WORK };
+      const { httpSettings, proxyManager } = setup({
+        profiles: [HOME, WORK],
+        record,
+        http: { current: { proxy: WORK.proxyUrl, proxyStrictSSL: true, noProxy: ['localhost'] } }
+      });
+
+      assert.equal(await proxyManager.toggleProxy(), false);
+
+      assert.deepEqual(httpSettings.current, {
+        proxy: undefined,
+        proxyStrictSSL: undefined,
+        noProxy: undefined
+      });
+      assert.deepEqual(proxyManager.getState().currentProfile, WORK);
+    });
+
+    it('computes a fallback current profile without ever saving it', async () => {
+      const gone = { ...WORK, name: 'Gone', proxyUrl: 'http://gone.example:8080' };
+      const { globalState, proxyManager } = setup({
+        profiles: [WORK, HOME],
+        record: { isEnabled: true, currentProfile: gone }
+      });
+
+      const fallback = proxyManager.getState().currentProfile;
+      await proxyManager.disableProxy();
+
+      assert.deepEqual(fallback, HOME);
+      assert.deepEqual(globalState.store.get('proxyToggler.state'), {
+        isEnabled: false,
+        hasConfiguration: true,
+        currentProfile: gone
+      });
+    });
+
+    it('saves the first configuration as a profile named after its host, and makes it current', async () => {
+      const { globalState, profilesSetting, proxyManager } = setup({ profiles: [] });
+
+      await proxyManager.saveConfiguration(
+        { proxyUrl: 'http://proxy.example.com:8080', strictSSL: true, noProxy: 'localhost' },
+        { mode: 'keep' }
+      );
+
+      const saved = {
+        name: 'proxy.example.com',
+        proxyUrl: 'http://proxy.example.com:8080',
+        strictSSL: true,
+        bypassList: ['localhost']
+      };
+      assert.deepEqual(profilesSetting.value, [saved]);
+      assert.deepEqual(proxyManager.getState().currentProfile, saved);
+      // 0.1.x keeps its own configuration, so a downgrade still finds it (ADR 0001).
+      assert.equal(globalState.store.has('proxyToggler.savedProxy'), false);
+    });
+
+    it('saves into the current profile, keeping other entries and unknown fields', async () => {
+      const { profilesSetting, proxyManager } = setup({
+        profiles: ['not a profile', { ...WORK, color: 'blue' }, HOME],
+        record: { isEnabled: false, currentProfile: WORK }
+      });
+
+      await proxyManager.saveConfiguration(
+        { proxyUrl: 'http://new.example.com:3128', strictSSL: false, noProxy: '.corp' },
+        { mode: 'keep' }
+      );
+
+      assert.deepEqual(profilesSetting.value, [
+        'not a profile',
+        {
+          name: 'Work',
+          proxyUrl: 'http://new.example.com:3128',
+          strictSSL: false,
+          bypassList: ['.corp'],
+          color: 'blue'
+        },
+        HOME
+      ]);
+    });
+
+    it('loads the current profile for editing, with credential presence', async () => {
+      const { proxyManager } = setup({ profiles: [WORK], hasCredentials: true });
+
+      assert.deepEqual(await proxyManager.loadConfiguration(), {
+        proxyUrl: WORK.proxyUrl,
+        strictSSL: WORK.strictSSL,
+        noProxy: 'localhost',
+        hasStoredCredentials: true
+      });
+    });
+  });
+
+  it('saves a trimmed configuration with the default bypass list and stores credentials', async () => {
+    const { globalState, keychain, profilesSetting, proxyManager } = setup();
 
     await proxyManager.saveConfiguration(
       { proxyUrl: ' http://proxy.example.com:8080 ', strictSSL: true, noProxy: '' },
       { mode: 'set', credentials: { username: 'alice', password: 'secret' } }
     );
 
-    assert.deepEqual(globalState.store.get('proxyToggler.savedProxy'), {
-      proxyUrl: 'http://proxy.example.com:8080',
-      strictSSL: true,
-      noProxy: 'localhost,127.0.0.1'
-    });
+    const saved = { ...SAVED_PROFILE, bypassList: ['localhost', '127.0.0.1'] };
+    assert.deepEqual(profilesSetting.value, [saved]);
     assert.deepEqual(globalState.store.get('proxyToggler.state'), {
       isEnabled: false,
-      hasConfiguration: true
+      hasConfiguration: true,
+      currentProfile: saved
     });
     assert.deepEqual(keychain.calls, {
       store: [{ username: 'alice', password: 'secret' }],
@@ -83,7 +245,7 @@ describe('ProxyManager', () => {
     assert.deepEqual(keychain.calls, { store: [], clear: 1 });
   });
 
-  it('loads the configuration with credential presence but never the credentials', async () => {
+  it('loads the saved configuration with credential presence but never the credentials', async () => {
     const { proxyManager } = setup({ hasCredentials: true });
     await proxyManager.saveConfiguration(CONFIGURATION, { mode: 'keep' });
 
@@ -93,18 +255,22 @@ describe('ProxyManager', () => {
     });
   });
 
-  it('derives hasConfiguration from the saved configuration', async () => {
+  it('is configured once a configuration is saved', async () => {
     const { proxyManager } = setup();
     assert.deepEqual(proxyManager.getState(), { isEnabled: false, hasConfiguration: false });
 
     await proxyManager.saveConfiguration(CONFIGURATION, { mode: 'keep' });
 
-    assert.deepEqual(proxyManager.getState(), { isEnabled: false, hasConfiguration: true });
+    assert.deepEqual(proxyManager.getState(), {
+      isEnabled: false,
+      hasConfiguration: true,
+      currentProfile: SAVED_PROFILE
+    });
     assert.equal(proxyManager.hasConfiguration(), true);
   });
 
   it('validates before persisting anything', async () => {
-    const { globalState, proxyManager } = setup();
+    const { globalState, profilesSetting, proxyManager } = setup();
 
     await assert.rejects(
       () =>
@@ -115,6 +281,7 @@ describe('ProxyManager', () => {
       ValidationError
     );
     assert.deepEqual(globalState.updates, []);
+    assert.deepEqual(profilesSetting.writes, []);
   });
 
   it('enables by writing the http settings in order, then the state', async () => {
@@ -126,9 +293,13 @@ describe('ProxyManager', () => {
     assert.deepEqual(httpSettings.updates, [
       { key: 'proxy', value: 'http://proxy.example.com:8080' },
       { key: 'proxyStrictSSL', value: true },
-      { key: 'noProxy', value: 'localhost' }
+      { key: 'noProxy', value: ['localhost'] }
     ]);
-    assert.deepEqual(proxyManager.getState(), { isEnabled: true, hasConfiguration: true });
+    assert.deepEqual(proxyManager.getState(), {
+      isEnabled: true,
+      hasConfiguration: true,
+      currentProfile: SAVED_PROFILE
+    });
   });
 
   it('reports which setting failed as a ConfigurationError', async () => {
@@ -158,7 +329,7 @@ describe('ProxyManager', () => {
     await assert.rejects(() => proxyManager.enableProxy(), ConfigurationError);
 
     assert.deepEqual(httpSettings.current, PREVIOUS_SETTINGS);
-    assert.deepEqual(proxyManager.getState(), { isEnabled: false, hasConfiguration: true });
+    assert.equal(proxyManager.getState().isEnabled, false);
   });
 
   it('keeps restoring after a restore fails and names the settings it could not restore', async () => {
@@ -289,7 +460,7 @@ describe('ProxyManager', () => {
       httpSettings.updates.map((update) => update.key),
       ['proxy', 'proxyStrictSSL', 'noProxy', 'proxy', 'proxyStrictSSL', 'noProxy']
     );
-    assert.deepEqual(proxyManager.getState(), { isEnabled: false, hasConfiguration: true });
+    assert.equal(proxyManager.getState().isEnabled, false);
   });
 
   it('finishes each kind of change before the next starts, even when the first is slow', async () => {
@@ -299,7 +470,12 @@ describe('ProxyManager', () => {
         await new Promise((resolve) => setImmediate(resolve));
       }
     };
-    const proxyManager = new ProxyManager(createMemento(), slowKeychain, createHttpSettings());
+    const proxyManager = new ProxyManager(
+      createMemento(),
+      slowKeychain,
+      createHttpSettings(),
+      createProfilesSetting()
+    );
     const finished: string[] = [];
     const record = (name: string) => (): void => {
       finished.push(name);
@@ -321,7 +497,7 @@ describe('ProxyManager', () => {
   });
 
   it('runs a queued state change after the one before it fails', async () => {
-    const { globalState, proxyManager } = setup({ http: { failKey: 'noProxy' } });
+    const { proxyManager } = setup({ http: { failKey: 'noProxy' } });
     await proxyManager.saveConfiguration(CONFIGURATION, { mode: 'keep' });
     const otherConfiguration = { ...CONFIGURATION, proxyUrl: 'http://other.example.com:3128' };
 
@@ -332,22 +508,24 @@ describe('ProxyManager', () => {
 
     assert.equal(enable.status, 'rejected');
     assert.equal(save.status, 'fulfilled');
-    assert.deepEqual(globalState.store.get('proxyToggler.savedProxy'), otherConfiguration);
+    assert.equal(proxyManager.getState().currentProfile?.proxyUrl, otherConfiguration.proxyUrl);
   });
 
   it('records that the settings are applied, without touching them or the configuration', async () => {
-    const { globalState, httpSettings, proxyManager } = setup({
+    const { httpSettings, profilesSetting, proxyManager } = setup({
       http: {
         current: { proxy: CONFIGURATION.proxyUrl, proxyStrictSSL: true, noProxy: ['localhost'] }
       }
     });
     await proxyManager.saveConfiguration(CONFIGURATION, { mode: 'keep' });
 
+    const profileWrites = profilesSetting.writes.length;
+
     await proxyManager.syncToggleState();
 
-    assert.deepEqual(proxyManager.getState(), { isEnabled: true, hasConfiguration: true });
+    assert.equal(proxyManager.getState().isEnabled, true);
     assert.deepEqual(httpSettings.updates, []);
-    assert.deepEqual(globalState.store.get('proxyToggler.savedProxy'), CONFIGURATION);
+    assert.equal(profilesSetting.writes.length, profileWrites);
   });
 
   it('does not rewrite the state when it already matches the settings', async () => {

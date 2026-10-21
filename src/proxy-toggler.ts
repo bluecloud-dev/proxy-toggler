@@ -12,6 +12,7 @@ import type { ExtensionContext, VscodeApi } from './vscode/api';
 import { createCommandRegistrar, runInBackground } from './vscode/error-reporting';
 import { createHttpSettings } from './vscode/http-settings';
 import { NotificationService } from './vscode/notification-service';
+import { createProfilesSetting } from './vscode/profiles-setting';
 import { readYourWrites } from './vscode/read-your-writes-memento';
 import { StatusBarController } from './vscode/status-bar-controller';
 
@@ -33,7 +34,8 @@ export function createProxyToggler(
   const proxyManager = new ProxyManager(
     globalState,
     keychainService,
-    createHttpSettings(vscodeApi)
+    createHttpSettings(vscodeApi),
+    createProfilesSetting(vscodeApi)
   );
   const notificationService = new NotificationService(vscodeApi);
   const statusBarController = new StatusBarController(vscodeApi, COMMANDS.toggle);
@@ -52,6 +54,14 @@ export function createProxyToggler(
   };
 
   runInBackground(logger, 'Status bar refresh', refreshUi);
+  // Hand edits and Settings Sync can add or remove profiles at any time.
+  context.subscriptions.push(
+    vscodeApi.workspace.onDidChangeConfiguration((event) => {
+      if (event.affectsConfiguration('proxyToggler.profiles')) {
+        runInBackground(logger, 'Status bar refresh', refreshUi);
+      }
+    })
+  );
   // One-time notices appear in a focused window, so the user sees them (ADR 0004).
   const announceIfFocused = async (): Promise<void> => {
     if (vscodeApi.window.state.focused) {
