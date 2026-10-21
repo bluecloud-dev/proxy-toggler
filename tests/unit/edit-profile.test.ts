@@ -141,19 +141,19 @@ describe('Edit Profile', () => {
   });
 
   it('says so, and saves nothing, when the profile is gone before the edit is saved', async () => {
-    let vscode: ReturnType<typeof createFakeVscode> | undefined;
-    ({ vscode } = activate(
+    // The input box answers after activation, so the window exists by then.
+    const { vscode } = activate(
       script(
         [choose('Proxy URL')],
         [
           (box) => {
             // Another window, or Settings Sync, removes the profile meanwhile.
-            vscode?.changeSettings({ 'proxyToggler.profiles': [HOME] });
+            vscode.changeSettings({ 'proxyToggler.profiles': [HOME] });
             box.submit('http://new.example.com:3128');
           }
         ]
       )
-    ));
+    );
 
     await vscode.commandHandlers.get(COMMANDS.configure)?.();
 
