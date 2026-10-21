@@ -17,7 +17,7 @@ async function main() {
     bundle: true,
     format: 'cjs',
     platform: 'node',
-    // VS Code 1.91, the engines.vscode minimum, runs extensions on Node 20.9.
+    // VS Code 1.97, the engines.vscode minimum, runs extensions on Node 20.18.
     target: 'node20',
     external: ['vscode'],
     minify: production,

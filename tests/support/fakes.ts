@@ -1,5 +1,10 @@
+import * as os from 'node:os';
+import * as path from 'node:path';
+
 import type { SecretStorage } from '../../src/core/keychain-service';
-import type { HttpSettingKey, HttpSettings, Memento } from '../../src/core/proxy-manager';
+import type { ProfilesSetting } from '../../src/core/profiles';
+import type { Memento } from '../../src/core/proxy-manager';
+import type { HttpSettingKey, HttpSettings } from '../../src/core/proxy-settings-writer';
 import type { ExtensionContext } from '../../src/vscode/api';
 import type { NotificationAction } from '../../src/vscode/notification-service';
 
@@ -24,7 +29,7 @@ export function createMemento(store = new Map<string, unknown>()): FakeMemento {
   };
 }
 
-export type SecretStorageFailures = { get?: Error; store?: Error; delete?: Error };
+export type SecretStorageFailures = { get?: Error; delete?: Error };
 
 export function createSecretStorage(
   values = new Map<string, string>(),
@@ -37,12 +42,6 @@ export function createSecretStorage(
         throw failures.get;
       }
       return values.get(key);
-    },
-    store: async (key, value) => {
-      if (failures.store) {
-        throw failures.store;
-      }
-      values.set(key, value);
     },
     delete: async (key) => {
       if (failures.delete) {
@@ -98,6 +97,24 @@ export function createHttpSettings(
   };
 }
 
+export type FakeProfilesSetting = ProfilesSetting & {
+  value: unknown;
+  writes: unknown[][];
+};
+
+export function createProfilesSetting(value?: unknown): FakeProfilesSetting {
+  const setting: FakeProfilesSetting = {
+    value,
+    writes: [],
+    read: () => setting.value,
+    write: async (entries) => {
+      setting.writes.push([...entries]);
+      setting.value = [...entries];
+    }
+  };
+  return setting;
+}
+
 export type RecordedNotification = {
   kind: 'success' | 'warning' | 'error';
   message: string;
@@ -112,6 +129,7 @@ export function createNotificationRecorder(
   showSuccess(message: string, ...actions: NotificationAction[]): Promise<string | undefined>;
   showWarning(message: string, ...actions: NotificationAction[]): Promise<string | undefined>;
   showError(message: string, ...actions: NotificationAction[]): Promise<string | undefined>;
+  inform(kind: RecordedNotification['kind'], message: string): void;
 } {
   const notifications: RecordedNotification[] = [];
   const record =
@@ -126,7 +144,10 @@ export function createNotificationRecorder(
     notifications,
     showSuccess: record('success'),
     showWarning: record('warning'),
-    showError: record('error')
+    showError: record('error'),
+    inform: (kind, message) => {
+      notifications.push({ kind, message, actions: [] });
+    }
   };
 }
 
@@ -135,12 +156,17 @@ export function createExtensionContext(
     state?: Map<string, unknown>;
     secrets?: Map<string, string>;
     secretFailures?: SecretStorageFailures;
+    // The extension's global storage folder; on the remote machine in a remote window.
+    globalStorage?: string;
   } = {}
 ): ExtensionContext & { globalState: FakeMemento } {
   return {
     subscriptions: [],
     globalState: createMemento(stores.state),
-    secrets: createSecretStorage(stores.secrets, stores.secretFailures)
+    secrets: createSecretStorage(stores.secrets, stores.secretFailures),
+    globalStorageUri: {
+      fsPath: stores.globalStorage ?? path.join(os.tmpdir(), 'proxy-toggler-unused-global-storage')
+    }
   };
 }
 

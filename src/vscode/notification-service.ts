@@ -1,4 +1,5 @@
-import type { VscodeApi } from './api';
+import type { Logger, VscodeApi } from './api';
+import { runInBackground } from './error-reporting';
 
 export type NotificationAction = {
   id: string;
@@ -8,8 +9,25 @@ export type NotificationAction = {
 
 type MessageMethod = 'showInformationMessage' | 'showWarningMessage' | 'showErrorMessage';
 
+const MESSAGE_METHODS = {
+  success: 'showInformationMessage',
+  warning: 'showWarningMessage',
+  error: 'showErrorMessage'
+} as const satisfies Record<string, MessageMethod>;
+
 export class NotificationService {
-  constructor(private readonly vscodeApi: Pick<VscodeApi, 'l10n' | 'window'>) {}
+  constructor(
+    private readonly vscodeApi: Pick<VscodeApi, 'l10n' | 'window'>,
+    // Where a message that could not be shown is logged.
+    private readonly logger: Logger
+  ) {}
+
+  // Shows a message without waiting for the user to close it, so the caller goes on at once.
+  inform(kind: keyof typeof MESSAGE_METHODS, message: string): void {
+    runInBackground(this.logger, 'Notification', async () => {
+      await this.show(MESSAGE_METHODS[kind], message, []);
+    });
+  }
 
   showSuccess(message: string, ...actions: NotificationAction[]): Promise<string | undefined> {
     return this.show('showInformationMessage', message, actions);
@@ -36,4 +54,7 @@ export class NotificationService {
   }
 }
 
-export type Notifier = Pick<NotificationService, 'showSuccess' | 'showWarning' | 'showError'>;
+export type Notifier = Pick<
+  NotificationService,
+  'inform' | 'showSuccess' | 'showWarning' | 'showError'
+>;

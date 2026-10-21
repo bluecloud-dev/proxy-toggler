@@ -10,7 +10,7 @@ import * as vscode from 'vscode';
 
 import type { TestProxy } from '../support/test-proxy';
 import { PROXY_ANSWER, startTestProxy } from '../support/test-proxy';
-import { activateExtension, configureWithoutCredentials, dismissNotifications } from './support';
+import { activateExtension, dismissNotifications, useProfile } from './support';
 
 // .invalid names never resolve (RFC 6761): a request that skips the proxy fails, and only the
 // proxy can answer one. Loopback names would not do, because VS Code never proxies them.
@@ -97,7 +97,9 @@ describe('network routing through the proxy', function () {
   // Saves a configuration that points at the proxy and enables it, as a user would.
   const enableProxy = async (proxy: TestProxy, noProxy = ''): Promise<void> => {
     const proxyUrl = `http://127.0.0.1:${proxy.port}`;
-    await configureWithoutCredentials(sandbox, { proxyUrl, noProxy, strictSSL: true });
+    // An empty list stands for what 0.1.x saved by default, as these checks were written for it.
+    const bypassList = noProxy ? noProxy.split(',') : ['localhost', '127.0.0.1'];
+    await useProfile({ proxyUrl, bypassList, strictSSL: true });
     await vscode.commands.executeCommand('proxyToggler.enable');
     // Checked here so that a failed enable does not read as a routing failure.
     assert.equal(

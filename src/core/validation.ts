@@ -1,11 +1,19 @@
 import { isIP } from 'node:net';
 
-import { parseNoProxyList } from './no-proxy';
+const PROXY_URL_EXAMPLES = [
+  'http://proxy.example.com:8080',
+  'https://10.0.0.1:3128',
+  'socks5://proxy.example.com:1080'
+];
 
-const PROXY_URL_EXAMPLES = ['http://proxy.example.com:8080', 'https://10.0.0.1:3128'];
+const SUPPORTED_SCHEMES = ['http:', 'https:', 'socks:', 'socks5:'];
+
+// The VS Code window rejects socks4a and socks5h, and with socks4 the window and extensions
+// resolve host names in different places.
+const REFUSED_SOCKS_SCHEMES = ['socks4:', 'socks4a:', 'socks5h:'];
 const NO_PROXY_EXAMPLES = ['localhost', '127.0.0.1', '*.example.com', '.example.com'];
 
-export type ValidatedField = 'proxyUrl' | 'credentials' | 'noProxy';
+export type ValidatedField = 'proxyUrl' | 'noProxy' | 'name';
 
 export class ValidationError extends Error {
   constructor(
@@ -34,8 +42,14 @@ export function validateProxyUrl(url: string): void {
     throw invalidUrl('Invalid URL format');
   }
 
-  if (parsedUrl.protocol !== 'http:' && parsedUrl.protocol !== 'https:') {
-    throw invalidUrl('Scheme must be http or https');
+  if (REFUSED_SOCKS_SCHEMES.includes(parsedUrl.protocol)) {
+    throw invalidUrl(
+      'socks4, socks4a and socks5h proxies are not supported: the VS Code window rejects socks4a and socks5h, and with socks4 the window and extensions resolve host names in different places'
+    );
+  }
+
+  if (!SUPPORTED_SCHEMES.includes(parsedUrl.protocol)) {
+    throw invalidUrl('Scheme must be http, https, socks or socks5');
   }
 
   if (parsedUrl.username || parsedUrl.password) {
@@ -56,9 +70,10 @@ export function validateProxyUrl(url: string): void {
     throw invalidUrl('Port must be between 1 and 65535');
   }
 
+  // An http or https URL always has the path "/"; a socks URL has an empty one.
   if (
     trimmedUrl.endsWith('/') ||
-    parsedUrl.pathname !== '/' ||
+    !['', '/'].includes(parsedUrl.pathname) ||
     parsedUrl.search ||
     parsedUrl.hash
   ) {
@@ -67,34 +82,17 @@ export function validateProxyUrl(url: string): void {
 }
 
 // The URL parser drops a port equal to the scheme default; http and https differ only in that
-// default, so reparsing the text as the other scheme keeps the port the user typed.
+// default, so reparsing the text as the other scheme keeps the port the user typed. It keeps any
+// port of a socks URL, whose scheme it does not know.
 function explicitPort(url: string, parsedUrl: URL): string {
-  if (parsedUrl.port) {
+  if (parsedUrl.port || !['http:', 'https:'].includes(parsedUrl.protocol)) {
     return parsedUrl.port;
   }
   const otherScheme = parsedUrl.protocol === 'http:' ? 'https:' : 'http:';
   return new URL(url.replace(/^[^:]*:/, otherScheme)).port;
 }
 
-export function validateCredentials(username?: string, password?: string): void {
-  const hasUsername = typeof username === 'string' && username.trim().length > 0;
-  const hasPassword = typeof password === 'string' && password.trim().length > 0;
-
-  if (hasUsername !== hasPassword) {
-    throw new ValidationError(
-      'credentials',
-      'Username and password must both be provided or both be omitted'
-    );
-  }
-}
-
-export function validateNoProxyList(noProxy?: string): void {
-  for (const entry of parseNoProxyList(noProxy)) {
-    validateNoProxyEntry(entry);
-  }
-}
-
-function validateNoProxyEntry(entry: string): void {
+export function validateBypassPattern(entry: string): void {
   const invalidEntry = (reason: string): ValidationError =>
     new ValidationError('noProxy', reason, NO_PROXY_EXAMPLES);
 
@@ -150,5 +148,19 @@ function isValidHostname(value: string): boolean {
     return url.hostname.length > 0 && url.port.length === 0;
   } catch {
     return false;
+  }
+}
+
+// The reason a validation fails, or undefined when it passes. Errors other than ValidationError
+// are not the input's fault, so they go on.
+export function problemWith(validate: () => void): string | undefined {
+  try {
+    validate();
+    return undefined;
+  } catch (error: unknown) {
+    if (error instanceof ValidationError) {
+      return error.reason;
+    }
+    throw error;
   }
 }

@@ -3,7 +3,7 @@ import { strict as assert } from 'node:assert';
 import * as sinon from 'sinon';
 import * as vscode from 'vscode';
 
-import { activateExtension, EXTENSION_ID } from './support';
+import { activateExtension, EXTENSION_ID, waitFor } from './support';
 
 type CommandPaletteItem = {
   command: string;
@@ -15,22 +15,14 @@ type ExtensionManifest = {
 };
 
 describe('command palette contributions', () => {
-  // Runs first: proves that contributed commands activate the extension without explicit
-  // onCommand activation events.
-  it('activates when one of its commands runs', async () => {
+  // Runs first, before any test runs a command or activates the extension itself: the status bar
+  // and reconciliation must not wait for a command (onStartupFinished).
+  it('activates once VS Code has started, without any command', async function () {
+    this.timeout(20_000);
     const extension = vscode.extensions.getExtension(EXTENSION_ID);
     assert.ok(extension, 'Expected extension to be available in VS Code test host');
-    assert.equal(extension.isActive, false);
 
-    const sandbox = sinon.createSandbox();
-    sandbox.stub(vscode.window, 'showWarningMessage').resolves(undefined);
-    try {
-      await vscode.commands.executeCommand('proxyToggler.toggle');
-    } finally {
-      sandbox.restore();
-    }
-
-    assert.equal(extension.isActive, true);
+    await waitFor(() => extension.isActive, 15_000, 'the extension to activate');
   });
 
   it('registers proxy toggler commands', async () => {
@@ -41,6 +33,7 @@ describe('command palette contributions', () => {
     assert.ok(commands.includes('proxyToggler.enable'));
     assert.ok(commands.includes('proxyToggler.disable'));
     assert.ok(commands.includes('proxyToggler.toggle'));
+    assert.ok(commands.includes('proxyToggler.switchProfile'));
   });
 
   it('warns when enabling without saved configuration', async () => {
@@ -78,6 +71,9 @@ describe('command palette contributions', () => {
     const disable = commandPalette.find((item) => item.command === 'proxyToggler.disable');
 
     assert.equal(enable?.when, 'proxyToggler.hasConfiguration && !proxyToggler.isEnabled');
-    assert.equal(disable?.when, 'proxyToggler.hasConfiguration && proxyToggler.isEnabled');
+    assert.equal(
+      disable?.when,
+      'proxyToggler.hasConfiguration && (proxyToggler.isEnabled || proxyToggler.hasDrift)'
+    );
   });
 });

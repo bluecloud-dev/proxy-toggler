@@ -20,7 +20,10 @@ describe('NotificationService', () => {
         answer: (message) => message.items[1]
       });
 
-      const selected = await new NotificationService(vscode)[method]('Hello', ACTION_A, ACTION_B);
+      const selected = await new NotificationService(
+        vscode,
+        vscode.window.createOutputChannel('test', { log: true })
+      )[method]('Hello', ACTION_A, ACTION_B);
 
       assert.equal(selected, 'b');
       assert.deepEqual(vscode.messages, [
@@ -32,6 +35,12 @@ describe('NotificationService', () => {
   it('returns undefined when the notification is dismissed', async () => {
     const vscode = createFakeVscode();
 
-    assert.equal(await new NotificationService(vscode).showWarning('Hello', ACTION_A), undefined);
+    assert.equal(
+      await new NotificationService(
+        vscode,
+        vscode.window.createOutputChannel('test', { log: true })
+      ).showWarning('Hello', ACTION_A),
+      undefined
+    );
   });
 });

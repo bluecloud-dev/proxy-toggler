@@ -3,8 +3,7 @@ import { strict as assert } from 'node:assert';
 import { disableProxyCommand } from '../../src/commands/disable-proxy';
 import { enableProxyCommand } from '../../src/commands/enable-proxy';
 import { toggleProxyCommand } from '../../src/commands/toggle-proxy';
-import { KeychainError, KeychainErrorReason } from '../../src/core/keychain-service';
-import { ConfigurationError } from '../../src/core/proxy-manager';
+import { ConfigurationError } from '../../src/core/proxy-settings-writer';
 import { createFakeVscode } from '../support/fake-vscode';
 import { createNotificationRecorder, type RecordedNotification } from '../support/fakes';
 
@@ -26,9 +25,18 @@ function createProxyManagerStub(options: {
   return {
     calls,
     hasConfiguration: () => options.hasConfiguration,
+    // With no profile there is no current profile either.
     getState: () => ({
       isEnabled: options.isEnabled ?? false,
-      hasConfiguration: options.hasConfiguration
+      hasConfiguration: options.hasConfiguration,
+      ...(options.hasConfiguration && {
+        currentProfile: {
+          name: 'Work',
+          proxyUrl: 'http://proxy.example.com:8080',
+          strictSSL: true,
+          bypassList: []
+        }
+      })
     }),
     enableProxy: async (): Promise<void> => {
       calls.enable += 1;
@@ -51,6 +59,25 @@ function failWith(proxyManager: ProxyManagerStub, error: Error): ProxyManagerStu
 }
 
 describe('proxy state commands', () => {
+  it('disable says the proxy is off without naming a profile when none exists', async () => {
+    const vscode = createFakeVscode({
+      settings: { 'proxyToggler.showSwitchNotifications': true }
+    });
+    const notifications = createNotificationRecorder();
+
+    await disableProxyCommand(
+      vscode,
+      createProxyManagerStub({ hasConfiguration: false }),
+      notifications,
+      noRefresh
+    );
+
+    assert.deepEqual(
+      notifications.notifications.map(({ message }) => message),
+      ['Proxy Toggler turned the proxy off.']
+    );
+  });
+
   it('enable offers to configure when nothing is saved', async () => {
     const vscode = createFakeVscode();
     const notifications = createNotificationRecorder(answer('warning', 'configure'));
@@ -69,7 +96,7 @@ describe('proxy state commands', () => {
     );
   });
 
-  it('enable applies the proxy, refreshes the UI, and reports success', async () => {
+  it('enable turns the proxy on and refreshes the UI, saying nothing', async () => {
     const proxyManager = createProxyManagerStub({ hasConfiguration: true });
     const notifications = createNotificationRecorder();
     let refreshes = 0;
@@ -78,15 +105,12 @@ describe('proxy state commands', () => {
       refreshes += 1;
     });
 
-    assert.deepEqual(
-      notifications.notifications.map((notification) => notification.message),
-      ['Proxy enabled']
-    );
+    assert.deepEqual(notifications.notifications, []);
     assert.equal(proxyManager.calls.enable, 1);
     assert.equal(refreshes, 1);
   });
 
-  it('disable clears the proxy, refreshes the UI, and reports success', async () => {
+  it('disable turns the proxy off and refreshes the UI, saying nothing', async () => {
     const proxyManager = createProxyManagerStub({ hasConfiguration: false });
     const notifications = createNotificationRecorder();
     let refreshes = 0;
@@ -96,12 +120,31 @@ describe('proxy state commands', () => {
     });
 
     assert.equal(proxyManager.calls.disable, 1);
-    assert.deepEqual(
-      notifications.notifications.map((notification) => notification.message),
-      ['Proxy disabled']
-    );
+    assert.deepEqual(notifications.notifications, []);
     assert.equal(refreshes, 1);
   });
+
+  for (const [name, run, toggleResult, message] of [
+    ['enable', enableProxyCommand, true, 'Proxy Toggler turned on Work.'],
+    ['disable', disableProxyCommand, false, 'Proxy Toggler turned off Work.'],
+    ['toggle', toggleProxyCommand, true, 'Proxy Toggler turned on Work.']
+  ] as const) {
+    it(`${name} names the profile in a toast without buttons when showSwitchNotifications is on`, async () => {
+      const vscode = createFakeVscode({
+        settings: { 'proxyToggler.showSwitchNotifications': true }
+      });
+      const notifications = createNotificationRecorder();
+
+      await run(
+        vscode,
+        createProxyManagerStub({ hasConfiguration: true, toggleResult }),
+        notifications,
+        noRefresh
+      );
+
+      assert.deepEqual(notifications.notifications, [{ kind: 'success', message, actions: [] }]);
+    });
+  }
 
   it('toggle asks for confirmation when enabled and stops on cancel', async () => {
     const vscode = createFakeVscode({ settings: { 'proxyToggler.confirmBeforeToggle': true } });
@@ -128,10 +171,13 @@ describe('proxy state commands', () => {
 
     await toggleProxyCommand(vscode, proxyManager, notifications, noRefresh);
 
-    assert.equal(proxyManager.calls.toggle, 1);
+    assert.equal(proxyManager.calls.enable, 1);
     assert.deepEqual(
-      notifications.notifications.map((notification) => notification.message),
-      ['Enable proxy?', 'Proxy enabled']
+      notifications.notifications.map(({ message, actions }) => [
+        message,
+        actions.map((action) => action.title)
+      ]),
+      [['Turn proxy on?', ['Turn On', 'Cancel']]]
     );
   });
 
@@ -149,19 +195,6 @@ describe('proxy state commands', () => {
       vscode.executedCommands.map((call) => call.command),
       ['proxyToggler.configure']
     );
-  });
-
-  it('shows the keychain message when the keychain fails', async () => {
-    const notifications = createNotificationRecorder();
-    const proxyManager = failWith(
-      createProxyManagerStub({ hasConfiguration: true }),
-      new KeychainError('retrieve', KeychainErrorReason.LOCKED)
-    );
-
-    await enableProxyCommand(createFakeVscode(), proxyManager, notifications, noRefresh);
-
-    assert.equal(notifications.notifications.length, 1);
-    assert.match(notifications.notifications[0]?.message ?? '', /locked/i);
   });
 
   const settingFailures = [
@@ -190,28 +223,6 @@ describe('proxy state commands', () => {
       assert.deepEqual(vscode.executedCommands, [
         { command: 'workbench.action.openSettings', args: [error.getSettingId()] }
       ]);
-    });
-  }
-
-  for (const [name, run] of [
-    ['enable', enableProxyCommand],
-    ['toggle', toggleProxyCommand]
-  ] as const) {
-    it(`${name} offers "Disable Proxy" after enabling`, async () => {
-      const vscode = createFakeVscode();
-      const proxyManager = createProxyManagerStub({
-        hasConfiguration: true,
-        isEnabled: false,
-        toggleResult: true
-      });
-      const notifications = createNotificationRecorder(answer('success', 'disableProxy'));
-
-      await run(vscode, proxyManager, notifications, noRefresh);
-
-      assert.deepEqual(
-        vscode.executedCommands.map((call) => call.command),
-        ['proxyToggler.disable']
-      );
     });
   }
 
