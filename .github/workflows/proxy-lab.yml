@@ -38,7 +38,7 @@ jobs:
       - name: Start the proxy lab
         run: npm run proxy-lab:up
 
-      - name: Probe VS Code through the lab (minimum engine and stable)
+      - name: Probe VS Code through the lab (minimum engine, 1.97.0 for remote windows, stable)
         run: xvfb-run -a npm run proxy-lab:probe
 
       - name: Proxy logs
