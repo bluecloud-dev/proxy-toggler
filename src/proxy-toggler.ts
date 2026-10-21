@@ -3,6 +3,7 @@ import { COMMANDS, CONTEXT_KEYS } from './commands/command-ids';
 import { configureProxyCommand } from './commands/configure-proxy';
 import { disableProxyCommand } from './commands/disable-proxy';
 import { enableProxyCommand } from './commands/enable-proxy';
+import { announceRemovedCredentials, removeStoredCredentials } from './commands/stored-credentials';
 import { toggleProxyCommand } from './commands/toggle-proxy';
 import { KeychainService } from './core/keychain-service';
 import type { ToggleState } from './core/proxy-configuration';
@@ -27,9 +28,11 @@ export function createProxyToggler(
   context: ExtensionContext
 ): ProxyTogglerApi {
   const logger = vscodeApi.window.createOutputChannel('Proxy Toggler', { log: true });
+  const globalState = readYourWrites(context.globalState);
+  const keychainService = new KeychainService(context.secrets);
   const proxyManager = new ProxyManager(
-    readYourWrites(context.globalState),
-    new KeychainService(context.secrets),
+    globalState,
+    keychainService,
     createHttpSettings(vscodeApi)
   );
   const notificationService = new NotificationService(vscodeApi);
@@ -49,6 +52,21 @@ export function createProxyToggler(
   };
 
   runInBackground(logger, 'Status bar refresh', refreshUi);
+  // One-time notices appear in a focused window, so the user sees them (ADR 0004).
+  const announceIfFocused = async (): Promise<void> => {
+    if (vscodeApi.window.state.focused) {
+      await announceRemovedCredentials(globalState, notificationService);
+    }
+  };
+  context.subscriptions.push(
+    vscodeApi.window.onDidChangeWindowState(() => {
+      runInBackground(logger, 'Removed credentials notice', announceIfFocused);
+    })
+  );
+  runInBackground(logger, 'Stored credentials removal', async () => {
+    await removeStoredCredentials(keychainService, globalState);
+    await announceIfFocused();
+  });
   runInBackground(logger, 'Settings drift check', () =>
     checkSettingsDrift(proxyManager, notificationService, refreshUi)
   );

@@ -25,6 +25,8 @@ export type FakeVscodeOptions = {
   settings?: Record<string, unknown>;
   // Registered defaults by full setting id; `get` falls back to them, as VS Code does.
   defaults?: Record<string, unknown>;
+  // Whether the window has focus at activation; it does unless a test says otherwise.
+  focused?: boolean;
 };
 
 export type FakeVscode = VscodeApi & {
@@ -36,6 +38,8 @@ export type FakeVscode = VscodeApi & {
   settings: Map<string, unknown>;
   settingUpdates: Array<{ id: string; value: unknown; target: unknown }>;
   statusBarItems: FakeStatusBarItem[];
+  // Moves focus to or away from the window and tells the extension, as VS Code does.
+  setFocused(focused: boolean): void;
 };
 
 export function createFakeVscode(options: FakeVscodeOptions = {}): FakeVscode {
@@ -49,6 +53,8 @@ export function createFakeVscode(options: FakeVscodeOptions = {}): FakeVscode {
   const logs: string[] = [];
   const inputs = [...(options.inputs ?? [])];
   let quickPickCalls = 0;
+  const windowState = { focused: options.focused ?? true };
+  const windowStateListeners: Array<(state: { focused: boolean; active: boolean }) => unknown> = [];
 
   const showMessage =
     (kind: MessageKind) =>
@@ -94,6 +100,12 @@ export function createFakeVscode(options: FakeVscodeOptions = {}): FakeVscode {
     settings,
     settingUpdates,
     statusBarItems,
+    setFocused: (focused) => {
+      windowState.focused = focused;
+      for (const listener of windowStateListeners) {
+        listener({ focused, active: focused });
+      }
+    },
     ConfigurationTarget: { Global: 1 },
     StatusBarAlignment: { Right: 2 },
     commands: {
@@ -145,7 +157,16 @@ export function createFakeVscode(options: FakeVscodeOptions = {}): FakeVscode {
         return value;
       },
       showQuickPick: async <T extends QuickPickItem>(items: readonly T[]) =>
-        options.pick?.(items, quickPickCalls++) as T | undefined
+        options.pick?.(items, quickPickCalls++) as T | undefined,
+      state: windowState,
+      onDidChangeWindowState: (listener) => {
+        windowStateListeners.push(listener);
+        return {
+          dispose: () => {
+            windowStateListeners.splice(windowStateListeners.indexOf(listener), 1);
+          }
+        };
+      }
     },
     workspace: { getConfiguration }
   };

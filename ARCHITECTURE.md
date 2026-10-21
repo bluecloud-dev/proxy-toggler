@@ -62,8 +62,10 @@ flowchart LR
 4. `refreshUi` updates the status bar and the `setContext` keys that decide which commands the
    Command Palette shows.
 
-At activation two background tasks run: a UI refresh and a drift check that offers to sync the
-stored toggle state when VS Code's `http.*` settings no longer match it. Their failures are logged.
+At activation three background tasks run: a UI refresh, the removal of the credentials 0.1.x
+stored, and a drift check that offers to sync the stored toggle state when VS Code's `http.*`
+settings no longer match it. Their failures are logged. When the removal found a secret, a
+one-time notice appears in the next focused window of that VS Code Profile.
 
 ## Ports
 
@@ -91,7 +93,8 @@ tests pin them.
 | --------------- | ------------------------------------------------------------------------ | -------------------------------------------------------------------------------------------------- |
 | `globalState`   | `proxyToggler.savedProxy`                                                | `{ proxyUrl, strictSSL, noProxy }`; `noProxy` is a comma-separated string                          |
 | `globalState`   | `proxyToggler.state`                                                     | `{ isEnabled, hasConfiguration }`; `hasConfiguration` is recomputed on read, other fields are kept |
-| `SecretStorage` | `proxyToggler.credentials.username`, `proxyToggler.credentials.password` | trimmed strings                                                                                    |
+| `SecretStorage` | `proxyToggler.credentials.username`, `proxyToggler.credentials.password` | trimmed strings; no version applied them, and every activation deletes them (ADR 0003)             |
+| `globalState`   | `proxyToggler.credentialsNoticePending`                                  | `true` from a removal that found a secret until the notice shows                                   |
 | User settings   | `http.proxy`, `http.proxyStrictSSL`, `http.noProxy` (array)              | written on enable, removed on disable                                                              |
 | Context keys    | `proxyToggler.hasConfiguration`, `proxyToggler.isEnabled`                | booleans used by `contributes.menus.commandPalette`                                                |
 

@@ -78,6 +78,24 @@ export class KeychainService {
     }
   }
 
+  // 0.1.x stored a username and password that no version applied, and profiles hold no
+  // credentials (ADR 0003). Deletes both and reports whether either was there.
+  async removeStoredCredentials(): Promise<boolean> {
+    let found: boolean;
+    try {
+      found =
+        (await this.secrets.get(USERNAME_SECRET_KEY)) !== undefined ||
+        (await this.secrets.get(PASSWORD_SECRET_KEY)) !== undefined;
+    } catch (error: unknown) {
+      throw new KeychainError('retrieve', inferKeychainReason(error), { cause: error });
+    }
+
+    if (found) {
+      await this.clearCredentials();
+    }
+    return found;
+  }
+
   async hasCredentials(): Promise<boolean> {
     try {
       const username = normalizeSecretValue(await this.secrets.get(USERNAME_SECRET_KEY));

@@ -32,7 +32,7 @@ describe('createProxyToggler', () => {
       [...vscode.commandHandlers.keys()],
       [COMMANDS.configure, COMMANDS.enable, COMMANDS.disable, COMMANDS.toggle]
     );
-    assert.equal(context.subscriptions.length, 6);
+    assert.equal(context.subscriptions.length, 7);
   });
 
   it('runs every command without a saved configuration', async () => {

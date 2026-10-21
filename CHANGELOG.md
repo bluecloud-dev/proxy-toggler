@@ -26,6 +26,12 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
   links redirect.
 - GitHub releases include a `SHA256SUMS` file for the VSIX.
 
+### Removed
+
+- Stored proxy credentials. 0.1.x saved a username and password in the system keychain but never
+  applied them. Proxy Toggler now deletes them and says so once; when a proxy asks for a sign-in,
+  VS Code shows its own login dialog.
+
 ### Fixed
 
 - Configure now shows the keychain message when the system keychain is locked or unavailable,

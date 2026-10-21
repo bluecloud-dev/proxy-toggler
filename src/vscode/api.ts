@@ -26,6 +26,8 @@ export type VscodeApi = {
       options: vscode.QuickPickOptions
     ): PromiseLike<T | undefined>;
     showWarningMessage(message: string, ...items: string[]): PromiseLike<string | undefined>;
+    readonly state: Pick<vscode.WindowState, 'focused'>;
+    onDidChangeWindowState(listener: (state: vscode.WindowState) => unknown): vscode.Disposable;
   };
   workspace: {
     getConfiguration(section: string): WorkspaceConfiguration;
