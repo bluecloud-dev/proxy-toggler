@@ -3,7 +3,15 @@ import type * as vscode from 'vscode';
 import type { ToggleState } from '../core/proxy-configuration';
 import type { StatusBarItem, VscodeApi } from './api';
 
-type StatusBarApi = Pick<VscodeApi, 'StatusBarAlignment' | 'l10n' | 'window'>;
+type StatusBarApi = Pick<VscodeApi, 'StatusBarAlignment' | 'ThemeColor' | 'l10n' | 'window'>;
+
+// What the toggle shows besides the record.
+export type StatusView = {
+  // The profile name shows in the text only when there are profiles to tell apart.
+  profileCount: number;
+  drift: boolean;
+  settingsHoldProxy: boolean;
+};
 
 type Presentation = { icon: string; text: string; tooltip: string; label: string };
 
@@ -30,12 +38,27 @@ export class StatusBarController implements vscode.Disposable {
     this.gear.show();
   }
 
-  // The name shows in the text only when there are profiles to tell apart.
-  updateState(state: ToggleState, profileCount: number): void {
-    const { icon, text, tooltip, label } = this.presentationFor(state, profileCount);
+  updateState(state: ToggleState, view: StatusView): void {
+    const { l10n, ThemeColor } = this.vscodeApi;
+    const presentation = this.presentationFor(state, view);
+    // Drift keeps the text, which shows the record, and changes the icon and background: the
+    // warning icon shows in every theme, High Contrast Dark included, which has no background.
+    const drift = view.drift && state.currentProfile !== undefined;
+    const warning = l10n.t('VS Code uses a proxy that matches no profile.');
+    const { icon, text, tooltip, label } = drift
+      ? {
+          ...presentation,
+          icon: 'warning',
+          tooltip: `${warning} ${presentation.tooltip}`,
+          label: `${presentation.label}. ${warning}`
+        }
+      : presentation;
     this.item.text = `$(${icon}) ${text}`;
     this.item.tooltip = tooltip;
     this.item.accessibilityInformation = { label, role: 'button' };
+    this.item.backgroundColor = drift
+      ? new ThemeColor('statusBarItem.warningBackground')
+      : undefined;
   }
 
   getText(): string {
@@ -52,17 +75,26 @@ export class StatusBarController implements vscode.Disposable {
   }
 
   // Literal l10n.t calls, rather than a lookup table, keep these strings extractable.
-  private presentationFor(state: ToggleState, profileCount: number): Presentation {
+  private presentationFor(state: ToggleState, view: StatusView): Presentation {
     const { l10n } = this.vscodeApi;
     const current = state.currentProfile;
+    const profileCount = view.profileCount;
 
+    // With no profiles there is no drift; a click starts setup from the proxy in use.
     if (!current) {
-      return {
-        icon: 'warning',
-        text: l10n.t('Proxy: Not Configured'),
-        tooltip: l10n.t('No proxy profile yet. Click to add one.'),
-        label: l10n.t('Proxy not configured')
-      };
+      return view.settingsHoldProxy
+        ? {
+            icon: 'warning',
+            text: l10n.t('Proxy: Not Configured'),
+            tooltip: l10n.t('VS Code already uses a proxy. Click to add a profile from it.'),
+            label: l10n.t('Proxy not configured; VS Code already uses a proxy')
+          }
+        : {
+            icon: 'warning',
+            text: l10n.t('Proxy: Not Configured'),
+            tooltip: l10n.t('No proxy profile yet. Click to add one.'),
+            label: l10n.t('Proxy not configured')
+          };
     }
 
     if (state.isEnabled) {

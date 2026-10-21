@@ -29,6 +29,11 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
   can pass a profile name to `proxyToggler.switchProfile`.
 - The README shows keybinding snippets that pass a profile name to `proxyToggler.switchProfile`;
   Proxy Toggler ships no default keybindings.
+- While VS Code's proxy settings carry a proxy that matches no profile, the toggle keeps its text
+  but shows a warning icon, with the warning background where the theme has one, and its tooltip
+  and screen-reader label say so. The switcher then offers **Save Current Settings as Profile…**,
+  plus **Re-apply** the current profile while on or **Turn Proxy Off** while off. With no profile
+  yet, the toggle says that VS Code already uses a proxy, and a click starts setup from it.
 - With two or more profiles, the status bar shows the profile in use; tooltips and screen-reader
   labels always name the current profile.
 - `proxyToggler.showSwitchNotifications` turns on a short notification that names the profile
@@ -66,6 +71,9 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 - GitHub releases include a `SHA256SUMS` file for the VSIX.
 
 ### Removed
+
+- The "VS Code proxy settings differ from Proxy Toggler state" notification: windows now keep in
+  step without asking, and the toggle alone shows drift.
 
 - The configure wizard's credentials, strict SSL and bypass-list steps: **Configure Proxy
   Settings** now adds the first profile in two steps.

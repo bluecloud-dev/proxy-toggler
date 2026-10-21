@@ -68,7 +68,7 @@
         },
         {
           "command": "proxyToggler.disable",
-          "when": "proxyToggler.hasConfiguration && proxyToggler.isEnabled"
+          "when": "proxyToggler.hasConfiguration && (proxyToggler.isEnabled || proxyToggler.hasDrift)"
         }
       ]
     },

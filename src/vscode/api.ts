@@ -8,6 +8,7 @@ import type { Memento } from '../core/proxy-manager';
 export type VscodeApi = {
   ConfigurationTarget: { Global: vscode.ConfigurationTarget };
   QuickInputButtons: { Back: vscode.QuickInputButton };
+  ThemeColor: new (id: string) => vscode.ThemeColor;
   QuickPickItemKind: { Separator: vscode.QuickPickItemKind };
   StatusBarAlignment: { Right: vscode.StatusBarAlignment };
   commands: {
@@ -45,7 +46,13 @@ export type Logger = Pick<vscode.LogOutputChannel, 'dispose' | 'error'>;
 
 export type StatusBarItem = Pick<
   vscode.StatusBarItem,
-  'accessibilityInformation' | 'command' | 'dispose' | 'show' | 'text' | 'tooltip'
+  | 'accessibilityInformation'
+  | 'backgroundColor'
+  | 'command'
+  | 'dispose'
+  | 'show'
+  | 'text'
+  | 'tooltip'
 >;
 
 export type InputBox = Pick<

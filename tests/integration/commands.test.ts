@@ -25,7 +25,8 @@ describe('command palette contributions', () => {
     const sandbox = sinon.createSandbox();
     sandbox.stub(vscode.window, 'showWarningMessage').resolves(undefined);
     try {
-      await vscode.commands.executeCommand('proxyToggler.toggle');
+      // Turn Proxy On only warns without a profile; the toggle would start setup and wait.
+      await vscode.commands.executeCommand('proxyToggler.enable');
     } finally {
       sandbox.restore();
     }
@@ -79,6 +80,9 @@ describe('command palette contributions', () => {
     const disable = commandPalette.find((item) => item.command === 'proxyToggler.disable');
 
     assert.equal(enable?.when, 'proxyToggler.hasConfiguration && !proxyToggler.isEnabled');
-    assert.equal(disable?.when, 'proxyToggler.hasConfiguration && proxyToggler.isEnabled');
+    assert.equal(
+      disable?.when,
+      'proxyToggler.hasConfiguration && (proxyToggler.isEnabled || proxyToggler.hasDrift)'
+    );
   });
 });

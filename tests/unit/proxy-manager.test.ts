@@ -819,12 +819,12 @@ describe('ProxyManager', () => {
 
       await Promise.all([
         proxyManager.addProfile(OFFICE).then(record('add')),
-        proxyManager.syncToggleState().then(record('sync')),
+        proxyManager.reconcile({ focused: true }).then(record('reconcile')),
         proxyManager.enableProxy().then(record('enable')),
         proxyManager.disableProxy().then(record('disable'))
       ]);
 
-      assert.deepEqual(finished, ['add', 'sync', 'enable', 'disable']);
+      assert.deepEqual(finished, ['add', 'reconcile', 'enable', 'disable']);
     });
 
     it('run a queued change after the one before it fails', async () => {
@@ -844,35 +844,14 @@ describe('ProxyManager', () => {
     });
   });
 
-  describe('syncToggleState', () => {
-    it('records that the settings are applied, without touching them or the profiles', async () => {
-      const { httpSettings, profilesSetting, proxyManager } = setup({
-        profiles: [WORK],
-        http: { current: { proxy: WORK.proxyUrl, proxyStrictSSL: true, noProxy: ['localhost'] } }
-      });
-
-      await proxyManager.syncToggleState();
-
-      assert.equal(proxyManager.getState().isEnabled, true);
-      assert.deepEqual(httpSettings.updates, []);
-      assert.deepEqual(profilesSetting.writes, []);
-    });
-
-    it('does not rewrite the record when it already matches the settings', async () => {
-      const { globalState, proxyManager } = setup({ profiles: [WORK] });
-
-      await proxyManager.syncToggleState();
-
-      assert.deepEqual(globalState.updates, []);
-    });
-
-    it('keeps record fields it does not manage, such as ones written by another version', async () => {
+  describe('the stored record', () => {
+    it('keeps fields it does not manage, such as ones written by another version', async () => {
       const { globalState, proxyManager } = setup({
         profiles: [WORK],
         record: { isEnabled: true, hasConfiguration: false, lastProfile: 'work' }
       });
 
-      await proxyManager.syncToggleState();
+      await proxyManager.reconcile({ focused: true });
 
       assert.deepEqual(globalState.store.get('proxyToggler.state'), {
         isEnabled: false,

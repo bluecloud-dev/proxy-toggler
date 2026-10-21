@@ -71,9 +71,8 @@ At activation these background tasks run, and their failures are logged:
 - a UI refresh;
 - the removal of the credentials 0.1.x stored. When it found a secret, a one-time notice appears
   in the next focused window of that VS Code Profile;
-- the migration of the 0.1.x configuration into a profile (ADR 0001), then reconciliation (below),
-  then a drift check that offers to sync the stored toggle state when VS Code's `http.*` settings
-  no longer match it;
+- the migration of the 0.1.x configuration into a profile (ADR 0001), then reconciliation
+  (below);
 - once `proxyToggler.profiles` has stayed unchanged for two seconds, a second migration pass. It
   records the copy when the list still shows it, or makes the copy again when a VS Code Profile
   migrating at the same time overwrote the list.
@@ -84,7 +83,8 @@ Every window keeps the record of the settings it manages in step with them: at a
 `http.*` or `proxyToggler.profiles` changes and the settings have then stayed unchanged for two
 seconds, and when the window gains focus. `ProxyManager.reconcile` turns the record off when the
 settings are cleared, and makes the profile they match current and on, the current profile
-winning a tie. A proxy that matches no profile is drift and leaves the record alone.
+winning a tie. A proxy that matches no profile is drift and leaves the record alone: the toggle shows it with a
+warning icon and background, and no notification appears.
 
 Only the focused window acts on an outside change: it re-applies an outside edit to the
 remembered current profile, while on and while the settings still hold its old values; a window
@@ -114,18 +114,18 @@ without a cast, the compiler checks that the declared slice matches VS Code.
 These keys and shapes are a compatibility contract with installed copies of the extension. Unit
 tests pin them.
 
-| Store           | Key                                                                      | Shape                                                                                            |
-| --------------- | ------------------------------------------------------------------------ | ------------------------------------------------------------------------------------------------ |
-| User settings   | `proxyToggler.profiles` (application scope)                              | `[{ name, proxyUrl, strictSSL, bypassList }]`; saves keep other entries and unknown fields       |
-| `globalState`   | `proxyToggler.savedProxy`                                                | 0.1.x's `{ proxyUrl, strictSSL, noProxy }`; v0.2.0 never writes it (ADR 0001)                    |
-| `globalState`   | `proxyToggler.migratedProxy`                                             | the `savedProxy` values whose copy a later read showed, as `{ proxyUrl, strictSSL, bypassList }` |
-| `globalState`   | `proxyToggler.state`                                                     | the record: `{ isEnabled, hasConfiguration, currentProfile }`; other fields are kept             |
-| `globalState`   | `proxyToggler.hiddenProfilesWarned`                                      | a SHA-256 hash of the hidden entries last warned about; never the entries themselves             |
-| `SecretStorage` | `proxyToggler.credentials.username`, `proxyToggler.credentials.password` | trimmed strings; no version applied them, and every activation deletes them (ADR 0003)           |
-| `globalState`   | `proxyToggler.credentialsNoticePending`                                  | `true` from a removal that found a secret until the notice shows                                 |
-| `globalState`   | `proxyToggler.credentialsRemovalNoticeShown`                             | `true` once the notice about removing the credentials in `http.proxy` has shown                  |
-| User settings   | `http.proxy`, `http.proxyStrictSSL`, `http.noProxy` (array)              | written on enable, removed on disable                                                            |
-| Context keys    | `proxyToggler.hasConfiguration`, `proxyToggler.isEnabled`                | booleans used by `contributes.menus.commandPalette`                                              |
+| Store           | Key                                                                                | Shape                                                                                            |
+| --------------- | ---------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------ |
+| User settings   | `proxyToggler.profiles` (application scope)                                        | `[{ name, proxyUrl, strictSSL, bypassList }]`; saves keep other entries and unknown fields       |
+| `globalState`   | `proxyToggler.savedProxy`                                                          | 0.1.x's `{ proxyUrl, strictSSL, noProxy }`; v0.2.0 never writes it (ADR 0001)                    |
+| `globalState`   | `proxyToggler.migratedProxy`                                                       | the `savedProxy` values whose copy a later read showed, as `{ proxyUrl, strictSSL, bypassList }` |
+| `globalState`   | `proxyToggler.state`                                                               | the record: `{ isEnabled, hasConfiguration, currentProfile }`; other fields are kept             |
+| `globalState`   | `proxyToggler.hiddenProfilesWarned`                                                | a SHA-256 hash of the hidden entries last warned about; never the entries themselves             |
+| `SecretStorage` | `proxyToggler.credentials.username`, `proxyToggler.credentials.password`           | trimmed strings; no version applied them, and every activation deletes them (ADR 0003)           |
+| `globalState`   | `proxyToggler.credentialsNoticePending`                                            | `true` from a removal that found a secret until the notice shows                                 |
+| `globalState`   | `proxyToggler.credentialsRemovalNoticeShown`                                       | `true` once the notice about removing the credentials in `http.proxy` has shown                  |
+| User settings   | `http.proxy`, `http.proxyStrictSSL`, `http.noProxy` (array)                        | written on enable, removed on disable                                                            |
+| Context keys    | `proxyToggler.hasConfiguration`, `proxyToggler.isEnabled`, `proxyToggler.hasDrift` | booleans used by `contributes.menus.commandPalette`                                              |
 
 Credentials never go to `globalState`, settings, logs, or messages.
 

@@ -1,5 +1,4 @@
 import { addProfileCommand } from './commands/add-profile';
-import { checkSettingsDrift } from './commands/check-settings-drift';
 import { COMMANDS, CONTEXT_KEYS } from './commands/command-ids';
 import { createCredentialsNotice } from './commands/credentials-notice';
 import { disableProxyCommand } from './commands/disable-proxy';
@@ -59,7 +58,13 @@ export function createProxyToggler(
 
   const refreshUi = async (): Promise<void> => {
     const state = proxyManager.getState();
-    statusBarController.updateState(state, proxyManager.getProfiles().length);
+    const drift = proxyManager.hasDrift();
+    statusBarController.updateState(state, {
+      profileCount: proxyManager.getProfiles().length,
+      drift,
+      settingsHoldProxy: proxyManager.settingsHoldProxy()
+    });
+    await vscodeApi.commands.executeCommand('setContext', CONTEXT_KEYS.hasDrift, drift);
     await vscodeApi.commands.executeCommand(
       'setContext',
       CONTEXT_KEYS.hasConfiguration,
@@ -132,12 +137,11 @@ export function createProxyToggler(
     await removeStoredCredentials(keychainService, globalState);
     await announceIfFocused();
   });
-  runInBackground(logger, 'Migration and drift check', async () => {
-    // Migration first, so that reconciliation and the drift check see the profile this VS Code
-    // Profile used in 0.1.x.
+  // Migration first, so that reconciliation sees the profile this VS Code Profile used in 0.1.x.
+  // Drift raises no notification; the toggle alone shows it.
+  runInBackground(logger, 'Migration and reconciliation', async () => {
     await proxyManager.migrateSavedProxy();
     await reconcile();
-    await checkSettingsDrift(proxyManager, notificationService, refreshUi);
   });
   // A later read, once writes from other windows have landed, records the copy or makes it again.
   runInBackground(logger, 'Migration check', async () => {
@@ -161,8 +165,11 @@ export function createProxyToggler(
     register(COMMANDS.disable, 'Failed to disable proxy.', () =>
       disableProxyCommand(vscodeApi, proxyManager, notificationService, refreshUi)
     ),
+    // With no profile, the toggle starts setup, from the proxy VS Code uses if any.
     register(COMMANDS.toggle, 'Failed to toggle proxy.', () =>
-      toggleProxyCommand(vscodeApi, proxyManager, notificationService, refreshUi)
+      proxyManager.hasConfiguration()
+        ? toggleProxyCommand(vscodeApi, proxyManager, notificationService, refreshUi)
+        : addProfileCommand(vscodeApi, proxyManager, notificationService, refreshUi)
     ),
     // Keybindings may pass a profile name.
     register(COMMANDS.switchProfile, 'Failed to switch the proxy profile.', (name?: unknown) =>

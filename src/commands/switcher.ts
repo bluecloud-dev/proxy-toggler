@@ -26,6 +26,7 @@ type SwitcherManager = Pick<
   | 'getProfiles'
   | 'getState'
   | 'hasConfiguration'
+  | 'hasDrift'
   | 'readProxySettings'
   | 'switchTo'
   | 'updateProfile'
@@ -33,7 +34,7 @@ type SwitcherManager = Pick<
 
 type SwitcherItem = vscode.QuickPickItem & {
   profile?: Profile;
-  action?: 'toggle' | 'add' | 'edit' | 'delete' | 'settings';
+  action?: 'toggle' | 'save' | 'reapply' | 'clear' | 'add' | 'edit' | 'delete' | 'settings';
 };
 
 // Opens the switcher, or switches straight to the profile a keybinding names.
@@ -69,7 +70,18 @@ async function showSwitcher(
     description: profile.proxyUrl,
     profile
   }));
+  // While drift lasts: save what VS Code uses, or put the record back into the settings.
+  const driftItems: SwitcherItem[] =
+    proxyManager.hasDrift() && currentProfile
+      ? [
+          { label: l10n.t('Save Current Settings as Profile…'), action: 'save' },
+          isEnabled
+            ? { label: l10n.t('Re-apply {0}', currentProfile.name), action: 'reapply' }
+            : { label: l10n.t('Turn Proxy Off'), action: 'clear' }
+        ]
+      : [];
   const actionItems: SwitcherItem[] = [
+    ...driftItems,
     ...(currentProfile
       ? [
           {
@@ -103,6 +115,12 @@ async function showSwitcher(
     }
   } else if (choice?.action === 'toggle') {
     await turnOnOrOff(vscodeApi, proxyManager, notificationService, refreshUi, !isEnabled);
+  } else if (choice?.action === 'reapply' || choice?.action === 'clear') {
+    await turnOnOrOff(vscodeApi, proxyManager, notificationService, refreshUi, isEnabled);
+  } else if (choice?.action === 'save') {
+    await addProfileCommand(vscodeApi, proxyManager, notificationService, refreshUi, {
+      fromCurrentSettings: true
+    });
   } else if (choice?.action === 'add') {
     await addProfileCommand(vscodeApi, proxyManager, notificationService, refreshUi);
   } else if (choice?.action === 'edit') {

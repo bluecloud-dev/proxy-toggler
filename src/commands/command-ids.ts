@@ -10,5 +10,7 @@ export const EXTENSION_ID = 'aymenhammouda.proxy-toggler';
 
 export const CONTEXT_KEYS = {
   hasConfiguration: 'proxyToggler.hasConfiguration',
-  isEnabled: 'proxyToggler.isEnabled'
+  isEnabled: 'proxyToggler.isEnabled',
+  // VS Code's settings carry a proxy that matches no profile.
+  hasDrift: 'proxyToggler.hasDrift'
 } as const;

@@ -27,9 +27,23 @@ export async function addProfileCommand(
   vscodeApi: AddApi,
   proxyManager: AddManager,
   notificationService: Notifier,
-  refreshUi: () => Promise<void>
+  refreshUi: () => Promise<void>,
+  options: { fromCurrentSettings?: boolean } = {}
 ): Promise<void> {
-  const start = startingValues(proxyManager);
+  const start = options.fromCurrentSettings
+    ? valuesFromSettings(proxyManager.readProxySettings())
+    : startingValues(proxyManager);
+  if (options.fromCurrentSettings && start.unheld.length > 0) {
+    // Saving the settings as a profile that does not match them would not end the drift.
+    const choice = await notificationService.showWarning(
+      `A profile cannot hold what VS Code's proxy settings hold: ${start.unheld.join(', ')}.`,
+      ACTION_OPEN_SETTINGS
+    );
+    if (choice === ACTION_OPEN_SETTINGS.id) {
+      await vscodeApi.commands.executeCommand('workbench.action.openApplicationSettingsJson');
+    }
+    return;
+  }
   if (start.unheld.length > 0) {
     const choice = await notificationService.showWarning(
       `VS Code's proxy settings hold what a profile cannot: ${start.unheld.join(', ')}.`,

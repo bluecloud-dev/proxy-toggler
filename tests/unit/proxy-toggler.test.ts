@@ -51,10 +51,11 @@ describe('createProxyToggler', () => {
       await vscode.commandHandlers.get(command)?.();
     }
 
-    // Enable and toggle offer to configure; success toasts are off by default.
+    // Turn Proxy On offers to configure, and the toggle starts setup; success toasts are off by
+    // default.
     assert.deepEqual(
       vscode.messages.map((message) => message.kind),
-      ['warning', 'warning']
+      ['warning']
     );
   });
 
@@ -67,28 +68,6 @@ describe('createProxyToggler', () => {
     await flushBackgroundTasks();
 
     assert.deepEqual(vscode.messages, []);
-    assert.equal(api.getState().isEnabled, true);
-  });
-
-  it('does not undo a change made while the drift prompt was open', async () => {
-    let acceptSync = (): void => undefined;
-    const syncAccepted = new Promise<string>((resolve) => {
-      acceptSync = () => resolve('Sync');
-    });
-    const { vscode, api } = activateWith(
-      // Only the drift warning waits for the user; the enable command's notification does not.
-      {
-        settings: PROFILES,
-        answer: (message) => (message.kind === 'warning' ? syncAccepted : undefined)
-      },
-      { 'proxyToggler.state': { isEnabled: true, hasConfiguration: true } }
-    );
-
-    await vscode.commandHandlers.get(COMMANDS.enable)?.();
-    acceptSync();
-    await flushBackgroundTasks();
-
-    assert.equal(vscode.settings.get('http.proxy'), PROFILE.proxyUrl);
     assert.equal(api.getState().isEnabled, true);
   });
 
@@ -157,7 +136,7 @@ describe('createProxyToggler', () => {
     });
   });
 
-  it('does not check drift without profiles', async () => {
+  it('says nothing at activation when VS Code uses a proxy and no profile exists', async () => {
     const { vscode } = activateWith({ settings: APPLIED_SETTINGS });
 
     await flushBackgroundTasks();
@@ -165,7 +144,7 @@ describe('createProxyToggler', () => {
     assert.deepEqual(vscode.messages, []);
   });
 
-  it('does not prompt when the stored state matches the settings', async () => {
+  it('says nothing at activation when the record matches the settings', async () => {
     const { vscode } = activateWith(
       { settings: { ...APPLIED_SETTINGS, ...PROFILES } },
       { 'proxyToggler.state': { isEnabled: true, hasConfiguration: true } }
@@ -176,7 +155,7 @@ describe('createProxyToggler', () => {
     assert.deepEqual(vscode.messages, []);
   });
 
-  it('does not prompt when http.noProxy holds the same bypass patterns as a list', async () => {
+  it('shows no drift when http.noProxy holds the same bypass patterns as a list', async () => {
     const { vscode } = activateWith(
       { settings: { ...APPLIED_SETTINGS, 'http.noProxy': ['localhost'], ...PROFILES } },
       { 'proxyToggler.state': { isEnabled: true, hasConfiguration: true } }
@@ -184,7 +163,8 @@ describe('createProxyToggler', () => {
 
     await flushBackgroundTasks();
 
-    assert.deepEqual(vscode.messages, []);
+    assert.equal(vscode.statusBarItems[0]?.text, '$(plug) Proxy: ON');
+    assert.equal(vscode.statusBarItems[0]?.backgroundColor, undefined);
   });
 
   it('writes http.noProxy as an array', async () => {

@@ -268,7 +268,7 @@ export class ProxyManager {
         }
       }
 
-      if (typeof settings.proxy !== 'string' || settings.proxy.trim().length === 0) {
+      if (!this.settingsHoldProxy()) {
         if (stored?.isEnabled) {
           await this.writeState({ isEnabled: false });
         }
@@ -291,15 +291,22 @@ export class ProxyManager {
     });
   }
 
-  // Records the state found in VS Code settings without writing those settings. It reads them
-  // itself, so a caller that waited on a prompt cannot record a stale state.
-  syncToggleState(): Promise<void> {
-    return this.serialize(async () => {
-      const isEnabled = this.isConfigurationApplied();
-      if (this.getState().isEnabled !== isEnabled) {
-        await this.writeState({ isEnabled });
-      }
-    });
+  // Whether VS Code's settings hold a proxy at all.
+  settingsHoldProxy(): boolean {
+    const { proxy } = this.httpSettings.read();
+    return typeof proxy === 'string' && proxy.trim().length > 0;
+  }
+
+  // Drift: while at least one profile exists, VS Code's settings carry a proxy that matches no
+  // profile. Drift never changes the record.
+  hasDrift(): boolean {
+    const profiles = this.getProfiles();
+    const settings = this.httpSettings.read();
+    return (
+      profiles.length > 0 &&
+      this.settingsHoldProxy() &&
+      !profiles.some((profile) => settingsMatch(settings, profileSettingValues(profile)))
+    );
   }
 
   getState(): ToggleState {

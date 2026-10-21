@@ -282,6 +282,9 @@ export function createFakeVscode(options: FakeVscodeOptions = {}): FakeVscode {
     },
     ConfigurationTarget: { Global: 1 },
     QuickInputButtons: { Back: backButton },
+    ThemeColor: class {
+      constructor(public readonly id: string) {}
+    },
     QuickPickItemKind: { Separator: -1 },
     StatusBarAlignment: { Right: 2 },
     commands: {
@@ -317,6 +320,7 @@ export function createFakeVscode(options: FakeVscodeOptions = {}): FakeVscode {
           priority,
           text: '',
           tooltip: undefined,
+          backgroundColor: undefined,
           command: undefined,
           accessibilityInformation: undefined,
           disposeCalls: 0,
