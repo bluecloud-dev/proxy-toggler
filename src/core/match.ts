@@ -1,7 +1,12 @@
 import { parseNoProxyList } from './no-proxy';
 import type { HttpSettingKey, ProxySettingValues } from './proxy-settings-writer';
 
-const DEFAULT_PORTS: Partial<Record<string, string>> = { 'http:': '80', 'https:': '443' };
+const DEFAULT_PORTS: Partial<Record<string, string>> = {
+  'http:': '80',
+  'https:': '443',
+  'socks:': '1080',
+  'socks5:': '1080'
+};
 
 // The port a proxy URL of this scheme uses when it names none, such as '80' for 'http:'.
 export function defaultPortOf(protocol: string): string | undefined {
@@ -59,5 +64,6 @@ function proxyAddress(value: unknown): string | undefined {
   }
 
   const port = url.port || defaultPortOf(url.protocol) || '';
-  return `${url.protocol}//${url.hostname}:${port}`;
+  // The URL parser lowercases the host of http and https URLs only.
+  return `${url.protocol}//${url.hostname.toLowerCase()}:${port}`;
 }

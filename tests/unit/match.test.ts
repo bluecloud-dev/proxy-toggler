@@ -27,6 +27,13 @@ describe('settingsMatch', () => {
     assert.equal(settingsMatch({ ...SETTINGS, proxy: 'https://proxy.example.com' }, https), true);
   });
 
+  it('counts 1080 as the default port of a socks proxy and ignores letter case in its host', () => {
+    const socks = { ...VALUES, proxy: 'socks5://proxy.example.com:1080' };
+
+    assert.equal(settingsMatch({ ...SETTINGS, proxy: 'socks5://Proxy.Example.COM' }, socks), true);
+    assert.equal(settingsMatch({ ...SETTINGS, proxy: 'socks://proxy.example.com' }, socks), false);
+  });
+
   it('ignores credentials in the proxy URL', () => {
     const settings = { ...SETTINGS, proxy: 'http://alice:secret@proxy.example.com:8080' };
 

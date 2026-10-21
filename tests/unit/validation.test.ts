@@ -61,6 +61,33 @@ describe('validation', () => {
       assert.match(error.reason, /scheme/i);
     });
 
+    it('accepts socks and socks5 URLs with ports', () => {
+      assert.doesNotThrow(() => validateProxyUrl('socks://proxy.example.com:1080'));
+      assert.doesNotThrow(() => validateProxyUrl('socks5://Proxy.Example.com:1080'));
+      assert.doesNotThrow(() => validateProxyUrl('socks5://10.0.0.1:9050'));
+    });
+
+    it('refuses socks4, socks4a and socks5h, naming them and saying why', () => {
+      for (const scheme of ['socks4', 'socks4a', 'socks5h']) {
+        const error = captureValidationError(() =>
+          validateProxyUrl(`${scheme}://proxy.example.com:1080`)
+        );
+        assert.match(error.reason, /socks4, socks4a and socks5h/, scheme);
+        assert.match(error.reason, /host names/, scheme);
+      }
+    });
+
+    it('checks a socks URL like any other: port, credentials, path', () => {
+      for (const url of [
+        'socks5://proxy.example.com',
+        'socks5://alice:secret@proxy.example.com:1080',
+        'socks5://proxy.example.com:1080/path',
+        'socks5://proxy.example.com:1080/'
+      ]) {
+        assert.throws(() => validateProxyUrl(url), ValidationError, url);
+      }
+    });
+
     it('rejects missing port numbers and invalid port ranges', () => {
       const missingPortError = captureValidationError(() =>
         validateProxyUrl('http://proxy.example.com')

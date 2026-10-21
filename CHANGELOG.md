@@ -33,6 +33,9 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
   labels always name the current profile.
 - `proxyToggler.showSwitchNotifications` turns on a short notification that names the profile
   when the proxy turns on or off or switches profiles.
+- SOCKS profiles: a proxy URL may use `socks://` or `socks5://`. `socks4`, `socks4a` and `socks5h`
+  are refused with the reason: the VS Code window rejects the last two, and with `socks4` the
+  window and extensions resolve host names in different places.
 - An `http.proxy` that holds `user:pass@` matches the profile with the same URL, and the
   credentials never show anywhere Proxy Toggler shows or remembers a URL. Before Proxy Toggler
   first overwrites or clears such a value, a one-time notice says the credentials will be removed

@@ -148,6 +148,16 @@ describe('ProxyManager', () => {
       });
     });
 
+    it('turns a socks5 profile on and finds the settings matching it', async () => {
+      const socks = { ...WORK, name: 'Tunnel', proxyUrl: 'socks5://tunnel.example.com:1080' };
+      const { httpSettings, proxyManager } = setup({ profiles: [socks] });
+
+      await proxyManager.enableProxy();
+
+      assert.equal(httpSettings.current.proxy, socks.proxyUrl);
+      assert.equal(proxyManager.isConfigurationApplied(), true);
+    });
+
     it('switches to a named profile, turning it on and making it current', async () => {
       const { httpSettings, proxyManager } = setup({
         profiles: [WORK, HOME],
