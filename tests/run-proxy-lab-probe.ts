@@ -352,6 +352,10 @@ async function main(): Promise<boolean> {
   }
   const filter = process.argv[2] ?? '';
   const checks = CHECKS.filter((check) => check.name.includes(filter));
+  // Running nothing would look like a pass.
+  if (checks.length === 0) {
+    throw new Error(`No check name contains "${filter}".`);
+  }
   await assertLabIsRunning(
     checks.some((check) => check.client === 'ssh') ? REQUIRED_SSH_SERVICES : REQUIRED_SERVICES
   );
