@@ -42,9 +42,30 @@ export function createFakeHost(settings: Record<string, unknown> = {}): FakeHost
   return { settings: new Map(Object.entries(settings)), windows: [] };
 }
 
+// A remote machine that remote windows connect to: its type, as vscode.env.remoteName gives it,
+// its own settings (Machine/settings.json), and the windows that watch them.
+export type FakeRemote = {
+  name: string;
+  settings: Map<string, unknown>;
+  windows: Array<(ids: readonly string[]) => void>;
+};
+
+export function createFakeRemote(name: string, settings: Record<string, unknown> = {}): FakeRemote {
+  return { name, settings: new Map(Object.entries(settings)), windows: [] };
+}
+
+// The remote sides that use this computer's proxy settings unless the remote machine's settings
+// say otherwise (http.useLocalProxyConfiguration).
+const USES_LOCAL_PROXY_BY_DEFAULT = new Set(['wsl', 'dev-container']);
+
 export type FakeVscodeOptions = {
   // Another window of the same VS Code; by default each fake is a VS Code of its own.
   host?: FakeHost;
+  // Makes this a remote window on that machine, with the extension on the remote side.
+  remote?: FakeRemote;
+  // Whether VS Code hands the remote side this computer's http.* values until they next change,
+  // while the remote machine's settings hold none (TESTING.md, "Remote windows", result 1).
+  remoteSeesLocalProxy?: boolean;
   // Answers for successive showInputBox calls. Each answer runs through validateInput, and one it
   // rejects throws: VS Code keeps the input box open, so that answer could never be submitted.
   inputs?: Array<string | undefined>;
@@ -81,6 +102,8 @@ export type FakeVscode = VscodeApi & {
   setFocused(focused: boolean): void;
   // Changes settings from outside the extension, such as a hand edit, and tells the extension.
   changeSettings(values: Record<string, unknown>): void;
+  // The same for the remote machine's settings of a remote window.
+  changeRemoteSettings(values: Record<string, unknown>): void;
 };
 
 export function createFakeVscode(options: FakeVscodeOptions = {}): FakeVscode {
@@ -102,7 +125,9 @@ export function createFakeVscode(options: FakeVscodeOptions = {}): FakeVscode {
   const inputs = [...(options.inputs ?? [])];
   let quickPickCalls = 0;
   const configurationListeners: Array<(event: ConfigurationChangeEvent) => unknown> = [];
-  host.windows.push((ids) => {
+  const remote = options.remote;
+  let remoteSeesLocalProxy = options.remoteSeesLocalProxy ?? false;
+  const notify = (ids: readonly string[]): void => {
     const event: ConfigurationChangeEvent = {
       affectsConfiguration: (section) =>
         ids.some((id) => id === section || id.startsWith(`${section}.`))
@@ -110,12 +135,51 @@ export function createFakeVscode(options: FakeVscodeOptions = {}): FakeVscode {
     for (const listener of [...configurationListeners]) {
       listener(event);
     }
+  };
+  // Every window watches this computer's settings; a change to http.* ends the start-up race.
+  host.windows.push((ids) => {
+    if (ids.some((id) => id.startsWith('http.'))) {
+      remoteSeesLocalProxy = false;
+    }
+    notify(ids);
   });
-  // VS Code fires the change event, in every window, before the update that caused it resolves.
-  const fireConfigurationChange = (ids: readonly string[]): void => {
-    for (const window of [...host.windows]) {
+  // A remote window also watches its remote machine's settings.
+  remote?.windows.push(notify);
+  // VS Code fires the change event, in every window that watches the changed file, before the
+  // update that caused it resolves.
+  const fireConfigurationChange = (
+    ids: readonly string[],
+    windows: ReadonlyArray<(ids: readonly string[]) => void>
+  ): void => {
+    for (const window of [...windows]) {
       window(ids);
     }
+  };
+  // In a remote window, http.* are machine-scoped, read from and written to the remote
+  // machine's settings, while its remote side keeps its own proxy settings. Every other setting,
+  // and http.* otherwise, belongs to this computer (docs/design/v0.2.0-research.md, 4.1 to 4.3).
+  const usesLocalProxy = (): boolean => {
+    const value = remote?.settings.get('http.useLocalProxyConfiguration');
+    return typeof value === 'boolean' ? value : USES_LOCAL_PROXY_BY_DEFAULT.has(remote?.name ?? '');
+  };
+  const isMachineScoped = (id: string): boolean =>
+    remote !== undefined &&
+    (id === 'http.useLocalProxyConfiguration' || (id.startsWith('http.') && !usesLocalProxy()));
+  const defaultOf = (id: string, fallback?: unknown): unknown => {
+    if (remote && id === 'http.useLocalProxyConfiguration') {
+      return USES_LOCAL_PROXY_BY_DEFAULT.has(remote.name);
+    }
+    return defaults.has(id) ? defaults.get(id) : fallback;
+  };
+  // The user-level value in effect, and whether the start-up race supplied it.
+  const userValue = (id: string): unknown => {
+    if (!remote || !isMachineScoped(id)) {
+      return settings.get(id);
+    }
+    if (remote.settings.has(id)) {
+      return remote.settings.get(id);
+    }
+    return remoteSeesLocalProxy ? settings.get(id) : undefined;
   };
   const windowState = { focused: options.focused ?? true };
   const windowStateListeners: Array<(state: { focused: boolean; active: boolean }) => unknown> = [];
@@ -132,24 +196,30 @@ export function createFakeVscode(options: FakeVscodeOptions = {}): FakeVscode {
     const id = (key: string): string => `${section}.${key}`;
     const configuration = {
       get: (key: string, defaultValue?: unknown) => {
-        if (settings.has(id(key))) {
-          return settings.get(id(key));
-        }
-        return defaults.has(id(key)) ? defaults.get(id(key)) : defaultValue;
+        const value = userValue(id(key));
+        return value === undefined ? defaultOf(id(key), defaultValue) : value;
       },
+      // globalLocalValue and globalRemoteValue are runtime fields that vscode.d.ts omits.
       inspect: (key: string) => ({
         key: id(key),
-        defaultValue: defaults.get(id(key)),
-        globalValue: settings.get(id(key))
+        defaultValue: defaultOf(id(key)),
+        globalLocalValue: settings.get(id(key)),
+        globalRemoteValue: isMachineScoped(id(key)) ? remote?.settings.get(id(key)) : undefined,
+        globalValue: userValue(id(key))
       }),
       update: async (key: string, value: unknown, target?: unknown) => {
         settingUpdates.push({ id: id(key), value, target });
+        // A key that the remote machine's settings already hold is written there even when it
+        // belongs to this computer, and then changes nothing (research 4.3, lab check 2).
+        const onRemote =
+          remote !== undefined && (isMachineScoped(id(key)) || remote.settings.has(id(key)));
+        const layer = onRemote && remote ? remote.settings : settings;
         if (value === undefined) {
-          settings.delete(id(key));
+          layer.delete(id(key));
         } else {
-          settings.set(id(key), value);
+          layer.set(id(key), value);
         }
-        fireConfigurationChange([id(key)]);
+        fireConfigurationChange([id(key)], onRemote && remote ? remote.windows : host.windows);
       }
     };
     // `get` is overloaded and `inspect` is generic in VS Code's typings; one implementation
@@ -272,7 +342,20 @@ export function createFakeVscode(options: FakeVscodeOptions = {}): FakeVscode {
           settings.set(id, value);
         }
       }
-      fireConfigurationChange(Object.keys(values));
+      fireConfigurationChange(Object.keys(values), host.windows);
+    },
+    changeRemoteSettings: (values) => {
+      if (!remote) {
+        throw new Error('Only a remote window has remote settings.');
+      }
+      for (const [id, value] of Object.entries(values)) {
+        if (value === undefined) {
+          remote.settings.delete(id);
+        } else {
+          remote.settings.set(id, value);
+        }
+      }
+      fireConfigurationChange(Object.keys(values), remote.windows);
     },
     setFocused: (focused) => {
       windowState.focused = focused;
@@ -281,6 +364,7 @@ export function createFakeVscode(options: FakeVscodeOptions = {}): FakeVscode {
       }
     },
     ConfigurationTarget: { Global: 1 },
+    env: { remoteName: remote?.name },
     ProgressLocation: { Notification: 15 },
     QuickInputButtons: { Back: backButton },
     ThemeColor: class {

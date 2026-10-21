@@ -20,7 +20,10 @@ export type RemoteStep =
   | { label: string; update: 'proxy' | 'useLocalProxyConfiguration'; value: string | boolean }
   // Creates the file `ready` in the folder, which tells the runner to change something from
   // outside this window, then waits for an http.proxy change event.
-  | { label: string; awaitOutsideChange: true };
+  | { label: string; awaitOutsideChange: true }
+  // Runs one of Proxy Toggler's commands, which the runner loads beside the probe, then waits for
+  // an http.proxy change event.
+  | { label: string; command: string; args?: string[] };
 
 export type RemotePlan = { steps: RemoteStep[] };
 
@@ -30,6 +33,9 @@ const REQUEST_URL = 'http://origin.lab.test:8088/remote-probe';
 
 // A settings write reaches the extension hosts within a second, so no event by then means none.
 const EVENT_WAIT_MS = 10000;
+// Proxy Toggler, when the runner loads it, and how long its start-up reconciliation may take.
+const PROXY_TOGGLER_ID = 'aymenhammouda.proxy-toggler';
+const ACTIVATION_WAIT_MS = 3000;
 // An outside change waits for the runner, which may first open a second window.
 const OUTSIDE_CHANGE_WAIT_MS = 60000;
 
@@ -44,12 +50,21 @@ export async function run(): Promise<void> {
 
   const results: Record<string, string> = { remoteName: String(vscode.env.remoteName) };
   try {
+    const proxyToggler = vscode.extensions.getExtension<ProxyTogglerApi>(PROXY_TOGGLER_ID);
+    if (proxyToggler) {
+      await proxyToggler.activate();
+      await new Promise((resolve) => setTimeout(resolve, ACTIVATION_WAIT_MS));
+    }
     for (const step of plan.steps) {
       if ('observe' in step) {
-        Object.assign(results, await observe(step.observe));
+        Object.assign(results, await observe(step.observe, proxyToggler?.exports));
       } else if ('update' in step) {
         const change = nextProxyChange(EVENT_WAIT_MS);
         results[`${step.label}: update`] = await update(step.update, step.value);
+        results[`${step.label}: event`] = await change;
+      } else if ('command' in step) {
+        const change = nextProxyChange(EVENT_WAIT_MS);
+        results[`${step.label}: command`] = await runCommand(step.command, step.args ?? []);
         results[`${step.label}: event`] = await change;
       } else {
         const change = nextProxyChange(OUTSIDE_CHANGE_WAIT_MS);
@@ -63,9 +78,16 @@ export async function run(): Promise<void> {
   await fs.writeFile(path.join(folder, 'results.json'), JSON.stringify(results));
 }
 
-async function observe(label: string): Promise<Record<string, string>> {
+// The part of Proxy Toggler's exports that the probe reads.
+type ProxyTogglerApi = { getStatusBarText(): string | undefined };
+
+async function observe(
+  label: string,
+  proxyToggler: ProxyTogglerApi | undefined
+): Promise<Record<string, string>> {
   const http = vscode.workspace.getConfiguration('http');
   return {
+    ...(proxyToggler && { [`${label}: toggle`]: String(proxyToggler.getStatusBarText()) }),
     [`${label}: http.proxy`]: describeValue(http.get('proxy')),
     // inspect() also returns globalLocalValue and globalRemoteValue, which vscode.d.ts omits.
     [`${label}: inspect`]: JSON.stringify(http.inspect('proxy'), (key, value: unknown) =>
@@ -74,6 +96,15 @@ async function observe(label: string): Promise<Record<string, string>> {
     [`${label}: useLocalProxyConfiguration`]: describeValue(http.get('useLocalProxyConfiguration')),
     [`${label}: request`]: await describeRequest(REQUEST_URL)
   };
+}
+
+async function runCommand(command: string, args: string[]): Promise<string> {
+  try {
+    await vscode.commands.executeCommand(command, ...args);
+    return 'ok';
+  } catch (error: unknown) {
+    return `error ${error instanceof Error ? error.message : String(error)}`;
+  }
 }
 
 async function update(key: string, value: unknown): Promise<string> {

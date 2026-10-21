@@ -10,7 +10,7 @@ import { testConnectionCommand } from './test-connection';
 
 type AddApi = Pick<
   VscodeApi,
-  'ProgressLocation' | 'QuickInputButtons' | 'commands' | 'l10n' | 'window' | 'workspace'
+  'ProgressLocation' | 'QuickInputButtons' | 'commands' | 'env' | 'l10n' | 'window' | 'workspace'
 >;
 
 type AddManager = Pick<

@@ -49,6 +49,8 @@
 - **Visual status indicator** showing on or off and the current profile
 - **Optional confirmation prompt** before toggling
 - **Strict SSL and no-proxy list** support
+- **Remote windows**: in SSH, Tunnels and remote container windows, the toggle manages the remote
+  machine's own proxy settings and leaves local windows alone
 - **Non-invasive** — leaves system proxy configuration untouched
 
 ## :clipboard: Requirements
@@ -194,6 +196,38 @@ The proxy lab measured this on VS Code 1.97 and the latest release; see
 This setting decides how extensions use proxies: `override` (the default) applies VS Code's proxy
 settings to them, and `off` leaves extensions without any proxy support, so they ignore VS Code's
 proxy settings and the system's. Test Connection notes when it is `off`.
+
+### Remote windows
+
+In a remote window, such as SSH, Tunnels, WSL or a Dev Container, Proxy Toggler runs on the remote
+side, so it must be installed there too. Click **Install in SSH: devbox**, or the button for your
+remote, on Proxy Toggler in the Extensions view. To install it on every remote, list
+`aymenhammouda.proxy-toggler` in `remote.defaultExtensionsIfInstalledLocally` (VS Code 1.99 and
+later), `remote.SSH.defaultExtensions` or `dev.containers.defaultExtensions`.
+
+The remote side of a window uses one of two sets of proxy settings. The remote machine's
+`http.useLocalProxyConfiguration` setting chooses which:
+
+| Remote                          | Proxy settings by default | What the toggle and switcher change                                                                                               |
+| ------------------------------- | ------------------------- | --------------------------------------------------------------------------------------------------------------------------------- |
+| SSH, Tunnels, remote containers | The remote machine's own  | The remote machine's settings, while local windows keep their proxy. The status bar names the host, as in `Proxy (devbox): Work`. |
+| WSL, local Dev Containers       | This computer's           | This computer's settings, as in a local window. The tooltip says so.                                                              |
+
+When the remote machine keeps its own settings:
+
+- Proxy Toggler remembers on or off and the current profile on that machine, for every window
+  connected to it. Local windows keep their own.
+- The status bar shows the host name, or the remote type for containers, whose host names are
+  generated.
+- Turning the proxy off writes an empty `http.proxy` to the remote machine's settings instead of
+  removing it. Without a value there, VS Code can hand the remote side this computer's proxy while
+  a window starts ([TESTING.md](TESTING.md#remote-windows), checks 1 and 6). For the same reason,
+  Proxy Toggler shows only what the remote machine's own settings hold.
+- The VS Code window itself, with its Marketplace searches, still uses this computer's proxy
+  settings.
+
+Test Connection runs on the remote side and says where it ran. Where the remote uses this
+computer's settings, the VS Code window connects from this computer, so the test does not cover it.
 
 ## :bulb: How It Works
 

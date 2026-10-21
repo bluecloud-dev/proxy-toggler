@@ -37,7 +37,12 @@ describe('StatusBarController', () => {
       { isEnabled: false, hasConfiguration: true, currentProfile: work },
       { isEnabled: true, hasConfiguration: true, currentProfile: work }
     ].map((state) => {
-      controller.updateState(state, { profileCount: 1, drift: false, settingsHoldProxy: false });
+      controller.updateState(state, {
+        profileCount: 1,
+        drift: false,
+        settingsHoldProxy: false,
+        side: { kind: 'local' }
+      });
       return [controller.getText(), controller.getAccessibilityLabel()];
     });
 

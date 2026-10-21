@@ -14,7 +14,7 @@ import { testConnectionCommand } from './test-connection';
 
 type EditApi = Pick<
   VscodeApi,
-  'ProgressLocation' | 'QuickInputButtons' | 'commands' | 'l10n' | 'window' | 'workspace'
+  'ProgressLocation' | 'QuickInputButtons' | 'commands' | 'env' | 'l10n' | 'window' | 'workspace'
 >;
 
 type EditManager = Pick<

@@ -44,6 +44,10 @@ const SSH_HOST = 'proxy-lab';
 const REMOTE_AUTHORITY = `ssh-remote+${SSH_HOST}`;
 const REMOTE_PROBE = '/home/lab/probe';
 const MACHINE_SETTINGS = '/home/lab/.vscode-server/data/Machine/settings.json';
+// Proxy Toggler as the runner copies it to the SSH host, and the record it keeps there.
+const REMOTE_PROXY_TOGGLER = '/home/lab/proxy-toggler';
+const REMOTE_RECORD_DIR =
+  '/home/lab/.vscode-server/data/User/globalStorage/aymenhammouda.proxy-toggler';
 
 const MARKETPLACE_TUNNEL = /TCP_TUNNEL\/200 \d+ CONNECT marketplace\.visualstudio\.com:443 /;
 const MARKETPLACE_DENIED = /TCP_DENIED\/407 \d+ CONNECT marketplace\.visualstudio\.com:443 /;
@@ -78,12 +82,13 @@ type HttpSettings = {
   'http.proxyStrictSSL'?: boolean;
   'http.noProxy'?: string[];
 };
+type LabProfile = { name: string; proxyUrl: string; strictSSL: boolean; bypassList: string[] };
 type MachineSettings = HttpSettings & { 'http.useLocalProxyConfiguration'?: boolean };
 
 type CheckBase = {
   name: string;
   // The local user settings.
-  settings: HttpSettings;
+  settings: HttpSettings & { 'proxyToggler.profiles'?: LabProfile[] };
   args?: string[];
   logs: LogLine[];
   absentLogs?: LogLine[];
@@ -114,6 +119,9 @@ type AppCheck = CheckBase & {
 // settings.json, and `secondWindow` opens another window on the same host, in its own profile.
 type SshCheck = CheckBase & {
   client: 'ssh';
+  // Loads Proxy Toggler on the SSH host beside the probe, whose plan can run its commands; the
+  // observations then include its record on that host.
+  withProxyToggler?: true;
   // The SSH host's Machine/settings.json when the window opens.
   machineSettings: MachineSettings;
   plan: RemotePlan;
@@ -326,6 +334,51 @@ const CHECKS: readonly Check[] = [
       'remote Machine/settings.json http.proxy': recorded('')
     },
     logs: []
+  },
+  {
+    // Proxy Toggler manages the SSH host's own settings and keeps its record there. It trusts only
+    // the host's own values, whatever VS Code hands the remote side at start-up (result 1), and
+    // turning the proxy off pins an empty http.proxy (result 6).
+    name: 'Proxy Toggler in an SSH window',
+    client: 'ssh',
+    since: REMOTE_SINCE,
+    withProxyToggler: true,
+    settings: {
+      'http.proxy': SQUID_OPEN,
+      'proxyToggler.profiles': [
+        { name: 'Lab remote', proxyUrl: REMOTE_SQUID_OPEN, strictSSL: true, bypassList: [] },
+        { name: 'Lab local', proxyUrl: SQUID_OPEN, strictSSL: true, bypassList: [] }
+      ]
+    },
+    machineSettings: {},
+    plan: {
+      steps: [
+        { observe: 'initial' },
+        { label: 'switch', command: 'proxyToggler.switchProfile', args: ['Lab remote'] },
+        { observe: 'after switch' },
+        { label: 'off', command: 'proxyToggler.disable' },
+        { observe: 'after off' }
+      ]
+    },
+    observations: {
+      remoteName: /^ssh-remote$/,
+      'initial: request': oneOf(LOCAL_PROXY_ON_REMOTE, DIRECT),
+      'initial: toggle': /^\$\(debug-disconnect\) Proxy \(.+\): OFF$/,
+      'switch: command': /^ok$/,
+      'switch: event': /^http\.proxy changed$/,
+      'after switch: http.proxy': recorded(REMOTE_SQUID_OPEN),
+      'after switch: request': ORIGIN_REPLY,
+      'after switch: toggle': /^\$\(plug\) Proxy \(.+\): Lab remote$/,
+      'off: command': /^ok$/,
+      'off: event': /^http\.proxy changed$/,
+      'after off: http.proxy': recorded(''),
+      'after off: request': DIRECT,
+      'after off: toggle': /^\$\(debug-disconnect\) Proxy \(.+\): OFF$/,
+      'local settings.json http.proxy': recorded(SQUID_OPEN),
+      'remote Machine/settings.json http.proxy': recorded(''),
+      'remote record': /"isEnabled":false,.*"currentProfile":\{"name":"Lab remote"/
+    },
+    logs: [{ service: 'squid-open', pattern: REMOTE_PROBE_REQUEST }]
   },
   {
     name: 'Two SSH windows, the second writes the remote http.proxy',
@@ -757,6 +810,12 @@ async function prepareSshLab(): Promise<SshLab> {
     };
     await sshHost(['rm', '-rf', REMOTE_PROBE]);
     await writeRemoteFile(`${REMOTE_PROBE}/package.json`, JSON.stringify(manifest, null, 2));
+    // Proxy Toggler's build, which npm run proxy-lab:probe makes first.
+    await sshHost(['rm', '-rf', REMOTE_PROXY_TOGGLER], 'root');
+    await sshHost(['mkdir', '-p', `${REMOTE_PROXY_TOGGLER}/dist`]);
+    for (const file of ['package.json', 'package.nls.json', 'dist/extension.js']) {
+      await compose(['cp', path.join(root, file), `ssh-host:${REMOTE_PROXY_TOGGLER}/${file}`]);
+    }
     for (const file of ['remote.js', 'requests.js']) {
       const compiled = await fs.readFile(
         path.join(root, 'out', 'tests', 'proxy-lab', file),
@@ -812,7 +871,7 @@ async function runInSshWindows(
 
   // Each check starts a new VS Code server, so nothing carries over from the check before.
   await sshHost(['pkill', '-KILL', '-u', 'lab'], 'root').catch(() => undefined);
-  await sshHost(['rm', '-rf', MACHINE_SETTINGS, first.folder, second.folder]);
+  await sshHost(['rm', '-rf', MACHINE_SETTINGS, REMOTE_RECORD_DIR, first.folder, second.folder]);
   if (Object.keys(check.machineSettings).length > 0) {
     await writeRemoteFile(MACHINE_SETTINGS, JSON.stringify(check.machineSettings, null, 2));
   }
@@ -824,14 +883,15 @@ async function runInSshWindows(
   }
 
   const problems: string[] = [];
-  const firstClosed = openSshWindow(version, first, extensionsDir);
+  const extensions = check.withProxyToggler ? [REMOTE_PROXY_TOGGLER] : [];
+  const firstClosed = openSshWindow(version, first, extensionsDir, extensions);
   if (check.localChange || check.secondWindow) {
     if (await waitForRemoteFile(`${first.folder}/ready`, firstClosed)) {
       if (check.localChange) {
         await writeUserSettings(first.userDataDir, { ...windowSettings, ...check.localChange });
       }
       if (check.secondWindow) {
-        problems.push(...(await openSshWindow(version, second, extensionsDir)));
+        problems.push(...(await openSshWindow(version, second, extensionsDir, extensions)));
       }
     } else {
       problems.push('the window never became ready for the outside change');
@@ -853,6 +913,16 @@ async function runInSshWindows(
     observations[`local settings.json ${key}`] = describeSetting(localSettings, key);
     observations[`remote Machine/settings.json ${key}`] = describeSetting(machineSettings, key);
   }
+  if (check.withProxyToggler) {
+    const record = await sshHost([
+      'sh',
+      '-c',
+      'cat "$1" 2>/dev/null || true',
+      'sh',
+      `${REMOTE_RECORD_DIR}/state.json`
+    ]);
+    observations['remote record'] = record.trim() === '' ? 'absent' : record.trim();
+  }
   return { observations, problems };
 }
 
@@ -865,12 +935,17 @@ function describeSetting(settings: object, key: string): string {
 async function openSshWindow(
   version: string,
   window: { folder: string; userDataDir: string },
-  extensionsDir: string
+  extensionsDir: string,
+  // Folders on the SSH host of more extensions to load beside the probe.
+  extensions: string[]
 ): Promise<string[]> {
   const probe = `vscode-remote://${REMOTE_AUTHORITY}${REMOTE_PROBE}`;
   const closed = runTests({
     version,
-    extensionDevelopmentPath: probe,
+    extensionDevelopmentPath: [
+      probe,
+      ...extensions.map((folder) => `vscode-remote://${REMOTE_AUTHORITY}${folder}`)
+    ],
     extensionTestsPath: `${probe}/remote.js`,
     launchArgs: [
       // A remote extensionDevelopmentPath alone opens a local window.

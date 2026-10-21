@@ -1,3 +1,5 @@
+import * as path from 'node:path';
+
 import { addProfileCommand } from './commands/add-profile';
 import { COMMANDS, CONTEXT_KEYS } from './commands/command-ids';
 import { createCredentialsNotice } from './commands/credentials-notice';
@@ -10,12 +12,14 @@ import { switchProfileCommand } from './commands/switcher';
 import { toggleProxyCommand } from './commands/toggle-proxy';
 import { KeychainService } from './core/keychain-service';
 import type { ToggleState } from './core/proxy-configuration';
-import { ProxyManager } from './core/proxy-manager';
+import { type Memento, ProxyManager } from './core/proxy-manager';
 import type { ExtensionContext, VscodeApi } from './vscode/api';
 import { createCommandRegistrar, runInBackground } from './vscode/error-reporting';
+import { fileMemento } from './vscode/file-memento';
 import { createHttpSettings } from './vscode/http-settings';
 import { NotificationService } from './vscode/notification-service';
 import { createProfilesSetting } from './vscode/profiles-setting';
+import { proxySide } from './vscode/proxy-side';
 import { readYourWrites } from './vscode/read-your-writes-memento';
 import { whenSettled } from './vscode/settle';
 import { StatusBarController } from './vscode/status-bar-controller';
@@ -32,7 +36,13 @@ export type ProxyTogglerApi = {
 // that other windows may make at the same time, such as at start-up.
 const SETTLE_MS = 2000;
 
-const PROXY_SETTINGS = ['http.proxy', 'http.proxyStrictSSL', 'http.noProxy'];
+// The settings a window manages, and the one that decides whose they are in a remote window.
+const PROXY_SETTINGS = [
+  'http.proxy',
+  'http.proxyStrictSSL',
+  'http.noProxy',
+  'http.useLocalProxyConfiguration'
+];
 
 export function createProxyToggler(
   vscodeApi: VscodeApi,
@@ -40,13 +50,28 @@ export function createProxyToggler(
 ): ProxyTogglerApi {
   const logger = vscodeApi.window.createOutputChannel('Proxy Toggler', { log: true });
   const globalState = readYourWrites(context.globalState);
+  // A remote machine's own settings keep their record on that machine; this computer's keep
+  // theirs in globalState. http.useLocalProxyConfiguration can change the side while the window
+  // is open.
+  const remoteRecords = fileMemento(path.join(context.globalStorageUri.fsPath, 'state.json'));
+  const records: Memento = {
+    get: (key: string, defaultValue?: unknown) =>
+      proxySide(vscodeApi).kind === 'remote'
+        ? remoteRecords.get(key, defaultValue)
+        : globalState.get(key, defaultValue),
+    update: (key, value) =>
+      proxySide(vscodeApi).kind === 'remote'
+        ? remoteRecords.update(key, value)
+        : globalState.update(key, value)
+  };
   const keychainService = new KeychainService(context.secrets);
   const notificationService = new NotificationService(vscodeApi);
   const proxyManager = new ProxyManager(
     globalState,
     createHttpSettings(vscodeApi),
     createProfilesSetting(vscodeApi),
-    createCredentialsNotice(globalState, notificationService)
+    createCredentialsNotice(globalState, notificationService),
+    records
   );
   const statusBarController = new StatusBarController(
     vscodeApi,
@@ -62,7 +87,8 @@ export function createProxyToggler(
     statusBarController.updateState(state, {
       profileCount: proxyManager.getProfiles().length,
       drift,
-      settingsHoldProxy: proxyManager.settingsHoldProxy()
+      settingsHoldProxy: proxyManager.settingsHoldProxy(),
+      side: proxySide(vscodeApi)
     });
     await vscodeApi.commands.executeCommand('setContext', CONTEXT_KEYS.hasDrift, drift);
     await vscodeApi.commands.executeCommand(

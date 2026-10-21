@@ -38,7 +38,8 @@ const STORAGE_KEYS = {
 
 export type Memento = Pick<vscode.Memento, 'get' | 'update'>;
 
-// The record of the local proxy settings (GLOSSARY.md), per VS Code Profile. 0.1.x wrote
+// The record of the proxy settings a window manages (GLOSSARY.md): per VS Code Profile for this
+// computer's settings, per machine for a remote machine's own (ADR 0005). 0.1.x wrote
 // isEnabled and hasConfiguration and keeps fields it does not know, such as currentProfile, which
 // remembers the current profile by name and values.
 type StoredRecord = {
@@ -65,7 +66,9 @@ export class ProxyManager {
     private readonly globalState: Memento,
     private readonly httpSettings: HttpSettings,
     private readonly profilesSetting: ProfilesSetting,
-    private readonly notices: ProxyNotices = { credentialsWillBeRemoved: () => Promise.resolve() }
+    private readonly notices: ProxyNotices = { credentialsWillBeRemoved: () => Promise.resolve() },
+    // Where the record of the settings this window manages lives (ADR 0005).
+    private readonly records: Memento = globalState
   ) {
     this.settingsWriter = new ProxySettingsWriter(httpSettings);
   }
@@ -399,14 +402,14 @@ export class ProxyManager {
   }
 
   private storedRecord(): StoredRecord | undefined {
-    return this.globalState.get<StoredRecord>(STORAGE_KEYS.toggleState);
+    return this.records.get<StoredRecord>(STORAGE_KEYS.toggleState);
   }
 
   // Writes the stored record, never the computed state, so a fallback current profile is never
   // saved. Spread rather than pick, so fields written by other versions survive the write.
   private async writeState(change: StoredRecord): Promise<void> {
     const { isEnabled, hasConfiguration } = this.getState();
-    await this.globalState.update(STORAGE_KEYS.toggleState, {
+    await this.records.update(STORAGE_KEYS.toggleState, {
       ...this.storedRecord(),
       isEnabled,
       hasConfiguration,

@@ -1,3 +1,6 @@
+import * as os from 'node:os';
+import * as path from 'node:path';
+
 import type { SecretStorage } from '../../src/core/keychain-service';
 import type { ProfilesSetting } from '../../src/core/profiles';
 import type { Memento } from '../../src/core/proxy-manager';
@@ -155,12 +158,17 @@ export function createExtensionContext(
     state?: Map<string, unknown>;
     secrets?: Map<string, string>;
     secretFailures?: SecretStorageFailures;
+    // The extension's global storage folder; on the remote machine in a remote window.
+    globalStorage?: string;
   } = {}
 ): ExtensionContext & { globalState: FakeMemento } {
   return {
     subscriptions: [],
     globalState: createMemento(stores.state),
-    secrets: createSecretStorage(stores.secrets, stores.secretFailures)
+    secrets: createSecretStorage(stores.secrets, stores.secretFailures),
+    globalStorageUri: {
+      fsPath: stores.globalStorage ?? path.join(os.tmpdir(), 'proxy-toggler-unused-global-storage')
+    }
   };
 }
 

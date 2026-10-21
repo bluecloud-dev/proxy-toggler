@@ -47,7 +47,7 @@ flowchart LR
   profilesSetting --> profiles[("User settings: proxyToggler.profiles")]
   root --> keychain["core/KeychainService"]
   keychain --> secrets[("SecretStorage")]
-  manager --> state[("globalState")]
+  manager --> state[("globalState, or state.json on a remote machine")]
   httpSettings --> settings[("User settings: http.*")]
   root --> statusBar["vscode/StatusBarController"]
   root --> logger[("Output: Proxy Toggler")]
@@ -61,9 +61,8 @@ flowchart LR
    can explain; any other error is logged to the **Proxy Toggler** output channel and shown with
    the command's failure message.
 3. Commands call `ProxyManager`, which validates input, saves profiles in the
-   `proxyToggler.profiles` setting, keeps the record in `globalState`, and writes or clears the
-   three `http.*` user settings through
-   `ProxySettingsWriter` and the settings adapter.
+   `proxyToggler.profiles` setting, keeps the record (below), and writes or clears the three
+   `http.*` user settings through `ProxySettingsWriter` and the settings adapter.
 4. `refreshUi` updates the status bar and the `setContext` keys that decide which commands the
    Command Palette shows.
 
@@ -87,6 +86,20 @@ settings are cleared, and makes the profile they match current and on, the curre
 winning a tie. A proxy that matches no profile is drift and leaves the record alone: the toggle shows it with a
 warning icon and background, and no notification appears.
 
+In a remote window, the extension runs on the remote side, and `vscode/proxy-side.ts` decides
+whose settings the window manages: this computer's when the window is local or the remote machine's
+`http.useLocalProxyConfiguration` is true, and the remote machine's own otherwise (ADR 0005). The
+side is read again on every use, so a change of that setting applies at once. For a remote
+machine's own settings:
+
+- the record is `state.json` in the extension's `globalStorageUri`, which VS Code places on that
+  machine, so every window connected to it shares the record and local windows keep theirs;
+- the settings adapter reads only the remote machine's values, which VS Code 1.97.0 and later
+  report as `inspect().globalRemoteValue`, a field `vscode.d.ts` omits. At start-up, VS Code can
+  hand the remote side this computer's `http.*` values while the remote machine's settings hold
+  none (TESTING.md, "Remote windows", check 1);
+- clearing `http.proxy` writes `""` instead, which keeps this computer's value out (check 6).
+
 Only the focused window acts on an outside change: it re-applies an outside edit to the
 remembered current profile, while on and while the settings still hold its old values; a window
 without focus leaves that to the next window to gain it (ADR 0004). VS Code fires the change event
@@ -97,14 +110,15 @@ window treats the events they cause as done.
 
 Core classes depend on small structural types rather than on VS Code objects:
 
-| Consumer              | Port              | Real implementation                              |
-| --------------------- | ----------------- | ------------------------------------------------ |
-| `ProxyManager`        | `Memento`         | `readYourWrites(context.globalState)`            |
-| `ProxyManager`        | `HttpSettings`    | `createHttpSettings(vscode)`, read only          |
-| `ProxyManager`        | `ProfilesSetting` | `createProfilesSetting(vscode)`                  |
-| `ProxySettingsWriter` | `HttpSettings`    | `createHttpSettings(vscode)`                     |
-| `KeychainService`     | `SecretStorage`   | `context.secrets`                                |
-| Commands, UI          | `VscodeApi` slice | the `vscode` module, passed in by `extension.ts` |
+| Consumer              | Port               | Real implementation                                 |
+| --------------------- | ------------------ | --------------------------------------------------- |
+| `ProxyManager`        | `Memento`          | `readYourWrites(context.globalState)`               |
+| `ProxyManager`        | `Memento` (record) | `globalState`, or `fileMemento` on a remote machine |
+| `ProxyManager`        | `HttpSettings`     | `createHttpSettings(vscode)`, read only             |
+| `ProxyManager`        | `ProfilesSetting`  | `createProfilesSetting(vscode)`                     |
+| `ProxySettingsWriter` | `HttpSettings`     | `createHttpSettings(vscode)`                        |
+| `KeychainService`     | `SecretStorage`    | `context.secrets`                                   |
+| Commands, UI          | `VscodeApi` slice  | the `vscode` module, passed in by `extension.ts`    |
 
 `VscodeApi` (`src/vscode/api.ts`) is declared once and typed against `@types/vscode`, which is
 pinned to the minimum supported VS Code release. Because `extension.ts` passes the real module
@@ -115,18 +129,19 @@ without a cast, the compiler checks that the declared slice matches VS Code.
 These keys and shapes are a compatibility contract with installed copies of the extension. Unit
 tests pin them.
 
-| Store           | Key                                                                                | Shape                                                                                            |
-| --------------- | ---------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------ |
-| User settings   | `proxyToggler.profiles` (application scope)                                        | `[{ name, proxyUrl, strictSSL, bypassList }]`; saves keep other entries and unknown fields       |
-| `globalState`   | `proxyToggler.savedProxy`                                                          | 0.1.x's `{ proxyUrl, strictSSL, noProxy }`; v0.2.0 never writes it (ADR 0001)                    |
-| `globalState`   | `proxyToggler.migratedProxy`                                                       | the `savedProxy` values whose copy a later read showed, as `{ proxyUrl, strictSSL, bypassList }` |
-| `globalState`   | `proxyToggler.state`                                                               | the record: `{ isEnabled, hasConfiguration, currentProfile }`; other fields are kept             |
-| `globalState`   | `proxyToggler.hiddenProfilesWarned`                                                | a SHA-256 hash of the hidden entries last warned about; never the entries themselves             |
-| `SecretStorage` | `proxyToggler.credentials.username`, `proxyToggler.credentials.password`           | trimmed strings; no version applied them, and every activation deletes them (ADR 0003)           |
-| `globalState`   | `proxyToggler.credentialsNoticePending`                                            | `true` from a removal that found a secret until the notice shows                                 |
-| `globalState`   | `proxyToggler.credentialsRemovalNoticeShown`                                       | `true` once the notice about removing the credentials in `http.proxy` has shown                  |
-| User settings   | `http.proxy`, `http.proxyStrictSSL`, `http.noProxy` (array)                        | written on enable, removed on disable                                                            |
-| Context keys    | `proxyToggler.hasConfiguration`, `proxyToggler.isEnabled`, `proxyToggler.hasDrift` | booleans used by `contributes.menus.commandPalette`                                              |
+| Store                              | Key                                                                                | Shape                                                                                                        |
+| ---------------------------------- | ---------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------ |
+| User settings                      | `proxyToggler.profiles` (application scope)                                        | `[{ name, proxyUrl, strictSSL, bypassList }]`; saves keep other entries and unknown fields                   |
+| `globalState`                      | `proxyToggler.savedProxy`                                                          | 0.1.x's `{ proxyUrl, strictSSL, noProxy }`; v0.2.0 never writes it (ADR 0001)                                |
+| `globalState`                      | `proxyToggler.migratedProxy`                                                       | the `savedProxy` values whose copy a later read showed, as `{ proxyUrl, strictSSL, bypassList }`             |
+| `globalState`                      | `proxyToggler.state`                                                               | the record: `{ isEnabled, hasConfiguration, currentProfile }`; other fields are kept                         |
+| `state.json` in `globalStorageUri` | `proxyToggler.state`                                                               | a remote machine's record, in the same shape, when the window manages that machine's own settings (ADR 0005) |
+| `globalState`                      | `proxyToggler.hiddenProfilesWarned`                                                | a SHA-256 hash of the hidden entries last warned about; never the entries themselves                         |
+| `SecretStorage`                    | `proxyToggler.credentials.username`, `proxyToggler.credentials.password`           | trimmed strings; no version applied them, and every activation deletes them (ADR 0003)                       |
+| `globalState`                      | `proxyToggler.credentialsNoticePending`                                            | `true` from a removal that found a secret until the notice shows                                             |
+| `globalState`                      | `proxyToggler.credentialsRemovalNoticeShown`                                       | `true` once the notice about removing the credentials in `http.proxy` has shown                              |
+| User settings                      | `http.proxy`, `http.proxyStrictSSL`, `http.noProxy` (array)                        | written on enable, removed on disable; a remote machine's own settings keep `http.proxy: ""`                 |
+| Context keys                       | `proxyToggler.hasConfiguration`, `proxyToggler.isEnabled`, `proxyToggler.hasDrift` | booleans used by `contributes.menus.commandPalette`                                                          |
 
 Credentials never go to `globalState`, settings, logs, or messages.
 
@@ -170,7 +185,8 @@ Errors carry the original failure as the standard ES2022 `cause`.
   [the v0.2.0 research](docs/design/v0.2.0-research.md), findings A3 and B3 and the remote-window
   section.
 - **Supported in Restricted Mode and virtual workspaces.** The extension reads no workspace files
-  and writes only user settings, `globalState`, and SecretStorage, so the manifest declares
+  and writes only user settings, `globalState`, its global storage and SecretStorage, so the
+  manifest declares
   `untrustedWorkspaces.supported: true` and `virtualWorkspaces: true`. In Restricted Mode VS Code
   ignores workspace values of the `http.*` settings, which it marks restricted, so a workspace can
   change only `proxyToggler.confirmBeforeToggle`, which adds or removes a confirmation prompt.

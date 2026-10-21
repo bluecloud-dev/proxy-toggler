@@ -1,10 +1,12 @@
 import { strict as assert } from 'node:assert';
+import * as os from 'node:os';
 
 import type { QuickPickItem } from 'vscode';
 
 import { COMMANDS } from '../../src/commands/command-ids';
 import { createProxyToggler } from '../../src/proxy-toggler';
 import {
+  createFakeRemote,
   createFakeVscode,
   type FakeQuickPick,
   type FakeVscodeOptions
@@ -126,5 +128,32 @@ describe('Test Connection', () => {
 
     assert.equal(vscode.inputBoxes.length, 0);
     assert.match(vscode.messages[0]?.message ?? '', /only HTTP and HTTPS proxies/);
+  });
+
+  it('says where it ran in an SSH window, where the VS Code window does not use the profile', async () => {
+    const { vscode } = await testFromEdit('http://api.example.com/', {
+      remote: createFakeRemote('ssh-remote'),
+      settings: { 'proxyToggler.profiles': [profile({ bypassList: ['*.example.com'] })] }
+    });
+
+    assert.deepEqual(
+      vscode.messages.map(({ message }) => message),
+      [
+        `Work: The proxy fetched http://api.example.com/, which answered 200. Tested from ${os.hostname()}.`
+      ]
+    );
+  });
+
+  it("says that the VS Code window was not tested where a remote uses this computer's settings", async () => {
+    const { vscode } = await testFromEdit('http://origin.test/', {
+      remote: createFakeRemote('wsl')
+    });
+
+    assert.deepEqual(
+      vscode.messages.map(({ message }) => message),
+      [
+        "Work: The proxy fetched http://origin.test/, which answered 200. Tested from WSL. VS Code's window connects from this computer and was not tested."
+      ]
+    );
   });
 });

@@ -17,6 +17,7 @@ type SwitcherApi = Pick<
   | 'QuickInputButtons'
   | 'QuickPickItemKind'
   | 'commands'
+  | 'env'
   | 'l10n'
   | 'window'
   | 'workspace'

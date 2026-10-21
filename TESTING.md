@@ -242,6 +242,7 @@ name contains the text.
 | SSH window, `http.useLocalProxyConfiguration` changed while open          | Check 3 in [Remote windows](#remote-windows).                                                                                                                  |
 | Two SSH windows, the second writes the remote `http.proxy`                | Check 4 in [Remote windows](#remote-windows).                                                                                                                  |
 | SSH window whose remote settings pin an empty `http.proxy`                | Check 6 in [Remote windows](#remote-windows).                                                                                                                  |
+| Proxy Toggler in an SSH window                                            | See [Proxy Toggler in an SSH window](#proxy-toggler-in-an-ssh-window).                                                                                         |
 | App, Off: settings removed while running, with `--proxy-pac-url`          | Before Off, both go through `squid-open`. After, the extension host cannot resolve `origin.lab.test` (direct), and `squid-auth` sees no Marketplace request.   |
 | App, Off: settings removed while running, with `HTTP(S)_PROXY`            | After Off, the extension host gets `407` from `squid-auth`, the proxy the variables name, and so does the Marketplace search.                                  |
 | App, Off: Direct candidate at start-up                                    | With `--proxy-pac-url`, the extension host goes direct and `squid-auth` sees no Marketplace request.                                                           |
@@ -256,8 +257,8 @@ cannot run Linux containers.
 
 ### Remote windows
 
-These checks show how VS Code applies the proxy settings in a remote window, before Proxy Toggler
-supports remote windows. Each SSH check starts a new VS Code server on the lab's `ssh-host`, opens
+These checks show how VS Code applies the proxy settings in a remote window, and the last one how
+Proxy Toggler manages them there. Each SSH check starts a new VS Code server on the lab's `ssh-host`, opens
 a Remote-SSH window on the folder `/home/lab/window-1`, and runs `tests/proxy-lab/remote.ts` in the
 window's remote extension host. The runner copies that probe to the SSH host with a manifest of
 Proxy Toggler's extension kind, `workspace`. The probe follows the folder's `plan.json`: it reads
@@ -298,6 +299,26 @@ host, in October 2026:
 - Result 1 does not decide checks 2 to 4. Where they expect the remote value, the SSH host's file
   holds one, and it takes precedence over the local value, which `inspect()` still shows as
   `globalLocalValue` in check 3.
+
+#### Proxy Toggler in an SSH window
+
+The check "Proxy Toggler in an SSH window" copies Proxy Toggler's build to the SSH host and loads it
+beside the probe. The local settings hold `http.proxy: http://127.0.0.1:3128` and two profiles,
+"Lab remote" (`http://squid-open:3128`) and "Lab local" (the local proxy), and the SSH host's
+settings hold no proxy. The plan switches to "Lab remote" with `proxyToggler.switchProfile`, then
+turns the proxy off with `proxyToggler.disable`, and the probe reads the toggle's text through the
+extension's exports.
+
+Measured in October 2026, on VS Code 1.97.0 and 1.143.0:
+
+- At start-up, the toggle showed `Proxy (<host>): OFF`. On 1.97.0, VS Code handed the remote side
+  the local proxy, as in check 1, and the toggle still showed off, because Proxy Toggler trusts
+  only the SSH host's own settings.
+- Switching wrote the profile to the SSH host's `Machine/settings.json` only, the local
+  `settings.json` kept `http://127.0.0.1:3128`, and the request went through `squid-open`.
+- Turning the proxy off wrote `http.proxy: ""` there, and the request went direct.
+- The record, off with "Lab remote" current, was in `state.json` in the extension's global storage
+  on the SSH host.
 
 #### WSL (by hand, on Windows)
 

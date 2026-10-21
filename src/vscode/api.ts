@@ -7,6 +7,7 @@ import type { Memento } from '../core/proxy-manager';
 // which must satisfy these signatures without a cast; unit tests pass small fakes.
 export type VscodeApi = {
   ConfigurationTarget: { Global: vscode.ConfigurationTarget };
+  env: Pick<typeof vscode.env, 'remoteName'>;
   ProgressLocation: { Notification: vscode.ProgressLocation };
   QuickInputButtons: { Back: vscode.QuickInputButton };
   ThemeColor: new (id: string) => vscode.ThemeColor;
@@ -100,4 +101,5 @@ export type WorkspaceConfiguration = Pick<
 export type ExtensionContext = Pick<vscode.ExtensionContext, 'subscriptions'> & {
   globalState: Memento;
   secrets: SecretStorage;
+  globalStorageUri: Pick<vscode.Uri, 'fsPath'>;
 };

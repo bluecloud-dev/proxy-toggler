@@ -8,6 +8,13 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ### Added
 
+- Remote windows: in SSH, Tunnels and remote container windows, the toggle and switcher manage the
+  remote machine's own proxy settings and leave local windows alone. That machine keeps its own
+  record, shared by every window connected to it, and the status bar names the host, or the
+  remote type for containers. Turning the proxy off there writes an empty `http.proxy`, which keeps
+  VS Code from handing the remote side this computer's proxy at start-up. In WSL and local
+  container windows, the toggle manages this computer's settings, and its tooltip says so. Test
+  Connection says where it ran.
 - **Add Profile…** in two native steps with a Back button: the proxy URL, then the name, which
   defaults to the proxy host. When no profile exists and VS Code already uses a proxy, setup
   starts from those settings and names anything a profile cannot hold.

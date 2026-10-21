@@ -3,11 +3,12 @@ import type { Profile } from '../core/profiles';
 import { testConnection, type TestOptions } from '../core/test-connection';
 import type { VscodeApi } from '../vscode/api';
 import type { Notifier } from '../vscode/notification-service';
+import { proxySide } from '../vscode/proxy-side';
 import { askText } from '../vscode/quick-input';
 
 type TestApi = Pick<
   VscodeApi,
-  'ProgressLocation' | 'QuickInputButtons' | 'l10n' | 'window' | 'workspace'
+  'ProgressLocation' | 'QuickInputButtons' | 'env' | 'l10n' | 'window' | 'workspace'
 >;
 
 const DEFAULT_TARGET = 'https://marketplace.visualstudio.com';
@@ -45,11 +46,18 @@ export async function testConnectionCommand(
   const host = new URL(target.trim()).hostname;
   const proxySupportOff =
     vscodeApi.workspace.getConfiguration('http').get<string>('proxySupport') === 'off';
+  // The test runs where the extension host does: on the remote side of a remote window. The
+  // VS Code window always uses this computer's settings, so a remote machine's own settings
+  // apply to extensions alone.
+  const side = proxySide(vscodeApi);
+  const windowUsesProfile = side.kind === 'local';
   const windowDirect = windowSendsDirect(host, profile.bypassList);
   const extensionsDirect = proxySupportOff || extensionsSendDirect(host, profile.bypassList);
-  if (windowDirect && extensionsDirect) {
+  if (extensionsDirect && (windowDirect || !windowUsesProfile)) {
     void notificationService.showSuccess(
-      `${profile.name}: Both VS Code's window and extensions reach ${host} directly, so there is nothing to test through this proxy.`
+      windowUsesProfile
+        ? `${profile.name}: Both VS Code's window and extensions reach ${host} directly, so there is nothing to test through this proxy.`
+        : `${profile.name}: Extensions reach ${host} directly, so there is nothing to test through this proxy.`
     );
     return;
   }
@@ -63,7 +71,7 @@ export async function testConnectionCommand(
   );
 
   const notes = [
-    windowDirect
+    windowUsesProfile && windowDirect
       ? `VS Code's window reaches ${host} directly, so only extensions use this proxy for it.`
       : '',
     !windowDirect && extensionsDirect && !proxySupportOff
@@ -71,6 +79,10 @@ export async function testConnectionCommand(
       : '',
     proxySupportOff
       ? 'http.proxySupport is "off", so extensions ignore VS Code\'s proxy settings.'
+      : '',
+    side.remote === undefined ? '' : `Tested from ${side.remote}.`,
+    side.kind === 'local' && side.remote !== undefined
+      ? "VS Code's window connects from this computer and was not tested."
       : ''
   ].filter((note) => note.length > 0);
   const message = [`${profile.name}: ${verdict.message}`, ...notes].join(' ');
