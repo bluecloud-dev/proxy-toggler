@@ -1,7 +1,7 @@
 import type * as vscode from 'vscode';
 
 import { KeychainError } from '../core/keychain-service';
-import { ConfigurationError } from '../core/proxy-manager';
+import { ConfigurationError } from '../core/proxy-settings-writer';
 import type { Logger, VscodeApi } from './api';
 import type { Notifier } from './notification-service';
 

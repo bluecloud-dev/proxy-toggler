@@ -1,7 +1,8 @@
 import { strict as assert } from 'node:assert';
 
 import type { ProxyCredentials } from '../../src/core/proxy-configuration';
-import { ConfigurationError, ProxyManager } from '../../src/core/proxy-manager';
+import { ProxyManager } from '../../src/core/proxy-manager';
+import { ConfigurationError } from '../../src/core/proxy-settings-writer';
 import { ValidationError } from '../../src/core/validation';
 import { createHttpSettings, createMemento } from '../support/fakes';
 

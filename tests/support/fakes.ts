@@ -1,5 +1,6 @@
 import type { SecretStorage } from '../../src/core/keychain-service';
-import type { HttpSettingKey, HttpSettings, Memento } from '../../src/core/proxy-manager';
+import type { Memento } from '../../src/core/proxy-manager';
+import type { HttpSettingKey, HttpSettings } from '../../src/core/proxy-settings-writer';
 import type { ExtensionContext } from '../../src/vscode/api';
 import type { NotificationAction } from '../../src/vscode/notification-service';
 

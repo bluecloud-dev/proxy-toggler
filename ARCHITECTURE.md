@@ -11,7 +11,8 @@ src/
   extension.ts      VS Code entry point. The only module that loads `vscode` at runtime.
   proxy-toggler.ts  Composition root: creates every object, registers commands, starts activation checks.
   core/             Domain logic: configuration types, validation, bypass-list rules, ProxyManager
-                    (saved configuration, toggle state, applying settings), KeychainService (credentials).
+                    (saved configuration, toggle state), ProxySettingsWriter (writing and
+                    clearing the http.* settings), KeychainService (credentials).
   commands/         One file per command (configure, enable, disable, toggle), the activation-time
                     drift check, and the feedback shared by the state commands.
   vscode/           Adapters over the VS Code API: the API surface type, the http.* settings adapter,
@@ -37,7 +38,9 @@ flowchart LR
   commands --> notifications["vscode/NotificationService"]
   manager --> keychain["core/KeychainService"]
   manager --> validation["core/validation, core/no-proxy"]
+  manager --> writer["core/ProxySettingsWriter"]
   manager --> httpSettings["vscode/http-settings"]
+  writer --> httpSettings
   keychain --> secrets[("SecretStorage")]
   manager --> state[("globalState")]
   httpSettings --> settings[("User settings: http.*")]
@@ -54,7 +57,7 @@ flowchart LR
    the command's failure message.
 3. Commands call `ProxyManager`, which validates input, persists the configuration in
    `globalState`, stores credentials through `KeychainService`, and writes or clears the three
-   `http.*` user settings through the settings adapter.
+   `http.*` user settings through `ProxySettingsWriter` and the settings adapter.
 4. `refreshUi` updates the status bar and the `setContext` keys that decide which commands the
    Command Palette shows.
 
@@ -65,13 +68,14 @@ stored toggle state when VS Code's `http.*` settings no longer match it. Their f
 
 Core classes depend on small structural types rather than on VS Code objects:
 
-| Consumer          | Port              | Real implementation                              |
-| ----------------- | ----------------- | ------------------------------------------------ |
-| `ProxyManager`    | `Memento`         | `readYourWrites(context.globalState)`            |
-| `ProxyManager`    | `CredentialStore` | `KeychainService`                                |
-| `ProxyManager`    | `HttpSettings`    | `createHttpSettings(vscode)`                     |
-| `KeychainService` | `SecretStorage`   | `context.secrets`                                |
-| Commands, UI      | `VscodeApi` slice | the `vscode` module, passed in by `extension.ts` |
+| Consumer              | Port              | Real implementation                              |
+| --------------------- | ----------------- | ------------------------------------------------ |
+| `ProxyManager`        | `Memento`         | `readYourWrites(context.globalState)`            |
+| `ProxyManager`        | `CredentialStore` | `KeychainService`                                |
+| `ProxyManager`        | `HttpSettings`    | `createHttpSettings(vscode)`, read only          |
+| `ProxySettingsWriter` | `HttpSettings`    | `createHttpSettings(vscode)`                     |
+| `KeychainService`     | `SecretStorage`   | `context.secrets`                                |
+| Commands, UI          | `VscodeApi` slice | the `vscode` module, passed in by `extension.ts` |
 
 `VscodeApi` (`src/vscode/api.ts`) is declared once and typed against `@types/vscode`, which is
 pinned to the minimum supported VS Code release. Because `extension.ts` passes the real module
@@ -94,12 +98,12 @@ Credentials never go to `globalState`, settings, logs, or messages.
 
 ## Error model
 
-| Error                | Raised by                        | Shown as                                                    |
-| -------------------- | -------------------------------- | ----------------------------------------------------------- |
-| `ValidationError`    | `core/validation.ts`             | The reason and examples, in the input box or a notification |
-| `KeychainError`      | `KeychainService`                | `toUserMessage()`; the reason is inferred from the message  |
-| `ConfigurationError` | `ProxyManager` writing a setting | `toUserMessage()` with an **Open Settings** action          |
-| Anything else        | Anywhere                         | Logged with its stack; the command's failure message        |
+| Error                | Raised by                               | Shown as                                                    |
+| -------------------- | --------------------------------------- | ----------------------------------------------------------- |
+| `ValidationError`    | `core/validation.ts`                    | The reason and examples, in the input box or a notification |
+| `KeychainError`      | `KeychainService`                       | `toUserMessage()`; the reason is inferred from the message  |
+| `ConfigurationError` | `ProxySettingsWriter` writing a setting | `toUserMessage()` with an **Open Settings** action          |
+| Anything else        | Anywhere                                | Logged with its stack; the command's failure message        |
 
 Errors carry the original failure as the standard ES2022 `cause`.
 
@@ -107,14 +111,14 @@ Errors carry the original failure as the standard ES2022 `cause`.
 
 - Enabling writes `http.proxy`, `http.proxyStrictSSL`, and `http.noProxy` in that order, and
   records `isEnabled` only after all three succeed.
-- If a write fails, `ProxyManager` writes the earlier user-settings values back to the settings it
-  already changed, then throws the `ConfigurationError` for the setting that failed. It reads the
-  earlier values with `inspect().globalValue`, not `get()`: `get()` returns defaults and
+- If a write fails, `ProxySettingsWriter` writes the earlier user-settings values back to the
+  settings it already changed, then throws the `ConfigurationError` for the setting that failed. It
+  reads the earlier values with `inspect().globalValue`, not `get()`: `get()` returns defaults and
   workspace values, and writing those back would copy them into user settings.
-- If writing an earlier value back fails too, `ProxyManager` still restores the other settings and
-  still throws the same `ConfigurationError`, because the setting that failed first is the one the
-  user can act on. The error's `restoreErrors` holds each setting it could not restore, with the
-  error that write raised, and its message names those settings.
+- If writing an earlier value back fails too, `ProxySettingsWriter` still restores the other
+  settings and still throws the same `ConfigurationError`, because the setting that failed first is
+  the one the user can act on. The error's `restoreErrors` holds each setting it could not restore,
+  with the error that write raised, and its message names those settings.
 - Disabling has no rollback. It clears `http.proxy` first, so a partial disable leaves the proxy
   off while the stored state still says enabled; the drift check offers to sync at the next
   activation.

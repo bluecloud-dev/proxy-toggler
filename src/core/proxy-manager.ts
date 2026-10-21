@@ -3,19 +3,13 @@ import type * as vscode from 'vscode';
 import type { KeychainService } from './keychain-service';
 import { parseNoProxyList, withDefaultNoProxy } from './no-proxy';
 import type { ProxyConfiguration, ProxyCredentials, ToggleState } from './proxy-configuration';
+import { type HttpSettings, ProxySettingsWriter } from './proxy-settings-writer';
 import { validateCredentials, validateNoProxyList, validateProxyUrl } from './validation';
 
 const STORAGE_KEYS = {
   proxyConfig: 'proxyToggler.savedProxy',
   toggleState: 'proxyToggler.state'
 } as const;
-
-// Written in this order on enable and disable, and restored in this order after a failed enable.
-const HTTP_SETTING_KEYS = ['proxy', 'proxyStrictSSL', 'noProxy'] as const;
-
-export type HttpSettingKey = (typeof HTTP_SETTING_KEYS)[number];
-
-type HttpSettingValues = Record<HttpSettingKey, string | boolean | undefined>;
 
 export type Memento = Pick<vscode.Memento, 'get' | 'update'>;
 
@@ -24,14 +18,6 @@ export type CredentialStore = Pick<
   'storeCredentials' | 'clearCredentials' | 'hasCredentials'
 >;
 
-export type HttpSettings = {
-  // Effective values, defaults and workspace settings included.
-  read(): Record<HttpSettingKey, unknown>;
-  // Values in user settings, the target that update writes; undefined where there is none.
-  readUserSettings(): Record<HttpSettingKey, unknown>;
-  update(key: HttpSettingKey, value: unknown): Promise<void>;
-};
-
 export type LoadedProxyConfiguration = ProxyConfiguration & {
   hasStoredCredentials: boolean;
 };
@@ -39,48 +25,19 @@ export type LoadedProxyConfiguration = ProxyConfiguration & {
 export type CredentialsUpdate =
   { mode: 'keep' } | { mode: 'clear' } | { mode: 'set'; credentials: ProxyCredentials };
 
-export class ConfigurationError extends Error {
-  constructor(
-    public readonly operation: 'enable' | 'disable',
-    public readonly key: HttpSettingKey,
-    options?: ErrorOptions,
-    // Settings a failed enable could not restore, each with the error its restore raised.
-    public readonly restoreErrors: ReadonlyMap<HttpSettingKey, unknown> = new Map()
-  ) {
-    super(
-      `Failed to ${operation} proxy: unable to update VS Code setting "${formatHttpSettingKey(key)}".`,
-      options
-    );
-    this.name = 'ConfigurationError';
-  }
-
-  toUserMessage(): string {
-    const message = `Unable to ${this.operation} the proxy because VS Code setting "${this.getSettingId()}" could not be updated. Your settings may be managed by policy.`;
-    if (this.restoreErrors.size === 0) {
-      return message;
-    }
-
-    const unrestored = [...this.restoreErrors.keys()]
-      .map((key) => `"${formatHttpSettingKey(key)}"`)
-      .join(', ');
-    return `${message} Settings that could not be restored to their earlier values: ${unrestored}.`;
-  }
-
-  getSettingId(): string {
-    return formatHttpSettingKey(this.key);
-  }
-}
-
 // Credentials go through KeychainService only; never write them to settings or globalState.
 export class ProxyManager {
   // Settles once the most recent state change has settled; see serialize().
   private lastChange: Promise<unknown> = Promise.resolve();
+  private readonly settingsWriter: ProxySettingsWriter;
 
   constructor(
     private readonly globalState: Memento,
     private readonly keychainService: CredentialStore,
     private readonly httpSettings: HttpSettings
-  ) {}
+  ) {
+    this.settingsWriter = new ProxySettingsWriter(httpSettings);
+  }
 
   saveConfiguration(
     configuration: ProxyConfiguration,
@@ -204,24 +161,16 @@ export class ProxyManager {
       throw new Error('No proxy configuration found');
     }
 
-    await this.writeHttpSettings(
-      'enable',
-      {
-        proxy: configuration.proxyUrl,
-        proxyStrictSSL: configuration.strictSSL,
-        noProxy: configuration.noProxy
-      },
-      this.httpSettings.readUserSettings()
-    );
+    await this.settingsWriter.apply({
+      proxy: configuration.proxyUrl,
+      proxyStrictSSL: configuration.strictSSL,
+      noProxy: configuration.noProxy
+    });
     await this.writeState({ isEnabled: true });
   }
 
   private async disable(): Promise<void> {
-    await this.writeHttpSettings('disable', {
-      proxy: undefined,
-      proxyStrictSSL: undefined,
-      noProxy: undefined
-    });
+    await this.settingsWriter.clear();
     await this.writeState({ isEnabled: false });
   }
 
@@ -232,43 +181,4 @@ export class ProxyManager {
   private async writeState(change: Partial<ToggleState>): Promise<void> {
     await this.globalState.update(STORAGE_KEYS.toggleState, { ...this.getState(), ...change });
   }
-
-  // Given `previous`, a failed write first restores the settings already written, so enabling
-  // never leaves the proxy half applied. See ARCHITECTURE.md (Error model).
-  private async writeHttpSettings(
-    operation: ConfigurationError['operation'],
-    values: HttpSettingValues,
-    previous?: Record<HttpSettingKey, unknown>
-  ): Promise<void> {
-    for (const [index, key] of HTTP_SETTING_KEYS.entries()) {
-      try {
-        await this.httpSettings.update(key, values[key]);
-      } catch (error: unknown) {
-        const restoreErrors = previous
-          ? await this.restoreHttpSettings(HTTP_SETTING_KEYS.slice(0, index), previous)
-          : undefined;
-        throw new ConfigurationError(operation, key, { cause: error }, restoreErrors);
-      }
-    }
-  }
-
-  // Keeps going when a restore fails, so one failure does not leave the other settings changed.
-  private async restoreHttpSettings(
-    keys: readonly HttpSettingKey[],
-    previous: Record<HttpSettingKey, unknown>
-  ): Promise<Map<HttpSettingKey, unknown>> {
-    const restoreErrors = new Map<HttpSettingKey, unknown>();
-    for (const key of keys) {
-      try {
-        await this.httpSettings.update(key, previous[key]);
-      } catch (error: unknown) {
-        restoreErrors.set(key, error);
-      }
-    }
-    return restoreErrors;
-  }
-}
-
-function formatHttpSettingKey(key: HttpSettingKey): string {
-  return `http.${key}`;
 }

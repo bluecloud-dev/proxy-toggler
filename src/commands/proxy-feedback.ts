@@ -1,5 +1,5 @@
 import { KeychainError } from '../core/keychain-service';
-import { ConfigurationError } from '../core/proxy-manager';
+import { ConfigurationError } from '../core/proxy-settings-writer';
 import type { VscodeApi } from '../vscode/api';
 import type { NotificationAction, Notifier } from '../vscode/notification-service';
 import { COMMANDS } from './command-ids';

@@ -4,7 +4,7 @@ import { disableProxyCommand } from '../../src/commands/disable-proxy';
 import { enableProxyCommand } from '../../src/commands/enable-proxy';
 import { toggleProxyCommand } from '../../src/commands/toggle-proxy';
 import { KeychainError, KeychainErrorReason } from '../../src/core/keychain-service';
-import { ConfigurationError } from '../../src/core/proxy-manager';
+import { ConfigurationError } from '../../src/core/proxy-settings-writer';
 import { createFakeVscode } from '../support/fake-vscode';
 import { createNotificationRecorder, type RecordedNotification } from '../support/fakes';
 

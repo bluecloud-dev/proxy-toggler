@@ -1,5 +1,5 @@
 import { parseNoProxyList } from '../core/no-proxy';
-import type { HttpSettings } from '../core/proxy-manager';
+import type { HttpSettings } from '../core/proxy-settings-writer';
 import type { VscodeApi, WorkspaceConfiguration } from './api';
 
 export function createHttpSettings(
