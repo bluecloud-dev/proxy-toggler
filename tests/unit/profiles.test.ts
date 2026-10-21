@@ -5,7 +5,9 @@ import {
   defaultProfileName,
   findCurrentProfile,
   readProfiles,
-  validateProfileName
+  validateProfileName,
+  withoutProfile,
+  withProfile
 } from '../../src/core/profiles';
 
 const WORK = {
@@ -166,5 +168,30 @@ describe('validateProfileName', () => {
 
   it('refuses a name an entry holds, ignoring letter case and spaces', () => {
     assert.match(validateProfileName(' WORK ', ['Work']) ?? '', /already/);
+  });
+});
+
+describe('saving into the setting', () => {
+  const HOME = {
+    name: 'Home',
+    proxyUrl: 'http://home.example:3128',
+    strictSSL: true,
+    bypassList: []
+  };
+  const entries = ['not a profile', { ...WORK, color: 'blue' }, { name: 'work' }, HOME];
+
+  it('replaces the first entry with the name, keeping its unknown fields and every other entry', () => {
+    const edited = { ...WORK, name: 'Office', proxyUrl: 'http://office.example:3128' };
+
+    assert.deepEqual(withProfile(entries, edited, ' WORK '), [
+      'not a profile',
+      { ...edited, color: 'blue' },
+      { name: 'work' },
+      HOME
+    ]);
+  });
+
+  it('removes only the first entry with the name', () => {
+    assert.deepEqual(withoutProfile(entries, 'Work'), ['not a profile', { name: 'work' }, HOME]);
   });
 });

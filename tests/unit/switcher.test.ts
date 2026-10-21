@@ -64,6 +64,8 @@ describe('switcher', () => {
         ['', undefined],
         ['Turn Proxy On', undefined],
         ['Add Profile…', undefined],
+        ['Edit Profile…', undefined],
+        ['Delete Profile…', undefined],
         ['Extension Settings', undefined]
       ]
     );

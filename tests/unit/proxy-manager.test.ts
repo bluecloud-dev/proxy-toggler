@@ -215,6 +215,133 @@ describe('ProxyManager', () => {
     });
   });
 
+  describe('editing a profile', () => {
+    const APPLIED = { proxy: WORK.proxyUrl, proxyStrictSSL: true, noProxy: ['localhost'] };
+    const EDITED = { ...WORK, proxyUrl: 'http://new.example.com:3128' };
+
+    it('saves it over its own entry, keeping unknown fields and every other entry', async () => {
+      const { profilesSetting, proxyManager } = setup({
+        profiles: [{ ...WORK, color: 'blue' }, HOME]
+      });
+
+      await proxyManager.updateProfile('Work', EDITED);
+
+      assert.deepEqual(profilesSetting.value, [{ ...EDITED, color: 'blue' }, HOME]);
+    });
+
+    it('re-applies the current profile while on, and remembers the edit', async () => {
+      const { globalState, httpSettings, proxyManager } = setup({
+        profiles: [WORK, HOME],
+        record: { isEnabled: true, currentProfile: WORK },
+        http: { current: APPLIED }
+      });
+
+      await proxyManager.updateProfile('Work', EDITED);
+
+      assert.equal(httpSettings.current.proxy, EDITED.proxyUrl);
+      assert.deepEqual(
+        (globalState.store.get('proxyToggler.state') as { currentProfile: unknown }).currentProfile,
+        EDITED
+      );
+    });
+
+    it('follows a rename of the current profile without touching the settings while off', async () => {
+      const { httpSettings, proxyManager } = setup({
+        profiles: [WORK, HOME],
+        record: { isEnabled: false, currentProfile: WORK }
+      });
+
+      await proxyManager.updateProfile('Work', { ...WORK, name: 'Office' });
+
+      assert.equal(proxyManager.getState().currentProfile?.name, 'Office');
+      assert.deepEqual(httpSettings.updates, []);
+    });
+
+    it('leaves the settings and the record alone when the profile is not current', async () => {
+      const { globalState, httpSettings, proxyManager } = setup({
+        profiles: [WORK, HOME],
+        record: { isEnabled: true, currentProfile: WORK },
+        http: { current: APPLIED }
+      });
+
+      await proxyManager.updateProfile('Home', { ...HOME, strictSSL: true });
+
+      assert.deepEqual(httpSettings.updates, []);
+      assert.deepEqual(globalState.updates, []);
+    });
+
+    it('refuses a name another entry holds, but accepts its own in other letter case', async () => {
+      const { proxyManager } = setup({ profiles: [WORK, HOME] });
+
+      await assert.rejects(
+        () => proxyManager.updateProfile('Work', { ...WORK, name: 'home' }),
+        ValidationError
+      );
+      await proxyManager.updateProfile('Work', { ...WORK, name: 'WORK' });
+
+      assert.equal(proxyManager.getProfiles()[0]?.name, 'WORK');
+    });
+
+    it('refuses values the UI would refuse', async () => {
+      const { profilesSetting, proxyManager } = setup({ profiles: [WORK] });
+
+      for (const edited of [
+        { ...WORK, proxyUrl: 'proxy.example.com' },
+        { ...WORK, bypassList: ['*'] }
+      ]) {
+        await assert.rejects(() => proxyManager.updateProfile('Work', edited), ValidationError);
+      }
+      assert.deepEqual(profilesSetting.writes, []);
+    });
+  });
+
+  describe('deleting a profile', () => {
+    it('turns the proxy off first when the current profile is on, then makes the first remaining profile current', async () => {
+      const { httpSettings, profilesSetting, proxyManager } = setup({
+        profiles: [WORK, OFFICE, HOME],
+        record: { isEnabled: true, currentProfile: WORK },
+        http: { current: { proxy: WORK.proxyUrl, proxyStrictSSL: true, noProxy: ['localhost'] } }
+      });
+
+      await proxyManager.deleteProfile('Work');
+
+      assert.deepEqual(httpSettings.current, CLEARED);
+      assert.deepEqual(profilesSetting.value, [OFFICE, HOME]);
+      assert.deepEqual(proxyManager.getState(), {
+        isEnabled: false,
+        hasConfiguration: true,
+        currentProfile: HOME
+      });
+    });
+
+    it('returns to not configured when the last profile goes', async () => {
+      const { proxyManager } = setup({
+        profiles: [WORK],
+        record: { isEnabled: false, currentProfile: WORK }
+      });
+
+      await proxyManager.deleteProfile('Work');
+
+      assert.deepEqual(proxyManager.getState(), { isEnabled: false, hasConfiguration: false });
+    });
+
+    it('leaves the record and the settings alone when another profile goes', async () => {
+      const { httpSettings, proxyManager } = setup({
+        profiles: [WORK, HOME],
+        record: { isEnabled: true, currentProfile: WORK }
+      });
+
+      await proxyManager.deleteProfile('Home');
+
+      assert.deepEqual(httpSettings.updates, []);
+      assert.deepEqual(proxyManager.getState(), {
+        isEnabled: true,
+        hasConfiguration: true,
+        currentProfile: WORK
+      });
+    });
+  });
+
   describe('migrating the 0.1.x configuration', () => {
     const SAVED_PROXY = {
       proxyUrl: 'http://proxy.example.com:8080',

@@ -80,6 +80,33 @@ export function sortByName(profiles: readonly Profile[]): Profile[] {
   return [...profiles].sort((left, right) => left.name.localeCompare(right.name));
 }
 
+// The entries with a profile saved over the first entry named `replacing`, keeping that entry's
+// unknown fields. Every other entry, valid or not, stays as it was, so versions that share the
+// list through Settings Sync never strip each other's data (ADR 0002).
+export function withProfile(
+  entries: readonly unknown[],
+  profile: Profile,
+  replacing: string
+): unknown[] {
+  const index = indexOfName(entries, replacing);
+  return entries.map((entry, entryIndex) =>
+    entryIndex === index ? { ...(entry as object), ...profile } : entry
+  );
+}
+
+// The entries without the first one named `name`; every other entry stays.
+export function withoutProfile(entries: readonly unknown[], name: string): unknown[] {
+  const index = indexOfName(entries, name);
+  return entries.filter((_, entryIndex) => entryIndex !== index);
+}
+
+function indexOfName(entries: readonly unknown[], name: string): number {
+  return entries.findIndex((entry) => {
+    const entryNameValue = entryName(entry);
+    return entryNameValue !== undefined && sameName(entryNameValue, name.trim());
+  });
+}
+
 // Why a name cannot be used for a new or renamed profile, or undefined when it can. Names are
 // trimmed, at most MAX_NAME_LENGTH long, and unique ignoring case among every name an entry holds.
 export function validateProfileName(
@@ -130,7 +157,7 @@ export function sameValues(profile: Profile, other: Profile): boolean {
   return settingsMatch(profileSettingValues(other), profileSettingValues(profile));
 }
 
-function sameName(name: string, other: string): boolean {
+export function sameName(name: string, other: string): boolean {
   return name.toLowerCase() === other.toLowerCase();
 }
 

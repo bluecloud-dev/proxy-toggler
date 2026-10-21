@@ -7,6 +7,8 @@ import type { Notifier } from '../vscode/notification-service';
 import { pickOne } from '../vscode/quick-pick';
 import { addProfileCommand } from './add-profile';
 import { EXTENSION_ID } from './command-ids';
+import { deleteProfileCommand } from './delete-profile';
+import { editProfileCommand } from './edit-profile';
 import { announceSwitch, showKnownProxyError } from './proxy-feedback';
 
 type SwitcherApi = Pick<
@@ -17,6 +19,7 @@ type SwitcherApi = Pick<
 type SwitcherManager = Pick<
   ProxyManager,
   | 'addProfile'
+  | 'deleteProfile'
   | 'disableProxy'
   | 'enableProxy'
   | 'getEntryNames'
@@ -25,11 +28,12 @@ type SwitcherManager = Pick<
   | 'hasConfiguration'
   | 'readProxySettings'
   | 'switchTo'
+  | 'updateProfile'
 >;
 
 type SwitcherItem = vscode.QuickPickItem & {
   profile?: Profile;
-  action?: 'toggle' | 'add' | 'settings';
+  action?: 'toggle' | 'add' | 'edit' | 'delete' | 'settings';
 };
 
 // Opens the switcher, or switches straight to the profile a keybinding names.
@@ -75,6 +79,12 @@ async function showSwitcher(
         ]
       : []),
     { label: l10n.t('Add Profile…'), action: 'add' },
+    ...(profileItems.length > 0
+      ? [
+          { label: l10n.t('Edit Profile…'), action: 'edit' as const },
+          { label: l10n.t('Delete Profile…'), action: 'delete' as const }
+        ]
+      : []),
     { label: l10n.t('Extension Settings'), action: 'settings' }
   ];
   const separator: SwitcherItem[] =
@@ -95,6 +105,10 @@ async function showSwitcher(
     await turnOnOrOff(vscodeApi, proxyManager, notificationService, refreshUi, !isEnabled);
   } else if (choice?.action === 'add') {
     await addProfileCommand(vscodeApi, proxyManager, notificationService, refreshUi);
+  } else if (choice?.action === 'edit') {
+    await editProfileCommand(vscodeApi, proxyManager, notificationService, refreshUi);
+  } else if (choice?.action === 'delete') {
+    await deleteProfileCommand(vscodeApi, proxyManager, notificationService, refreshUi);
   } else if (choice?.action === 'settings') {
     await vscodeApi.commands.executeCommand(
       'workbench.action.openSettings',

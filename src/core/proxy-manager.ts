@@ -13,8 +13,12 @@ import {
   profileSettingValues,
   type ProfilesSetting,
   readProfiles,
+  sameName,
   sameValues,
-  validateProfileName
+  sortByName,
+  validateProfileName,
+  withoutProfile,
+  withProfile
 } from './profiles';
 import type { ToggleState } from './proxy-configuration';
 import {
@@ -22,7 +26,7 @@ import {
   type HttpSettings,
   ProxySettingsWriter
 } from './proxy-settings-writer';
-import { validateProxyUrl, ValidationError } from './validation';
+import { validateBypassPattern, validateProxyUrl, ValidationError } from './validation';
 
 const STORAGE_KEYS = {
   // 0.1.x's configuration, which v0.2.0 reads and never writes or deletes (ADR 0001).
@@ -84,6 +88,58 @@ export class ProxyManager {
         await this.writeState({ currentProfile: added });
       }
       return 'saved';
+    });
+  }
+
+  // Saves an edited profile over its entry. Saving the current profile keeps it current, under
+  // its new name if it has one, and re-applies it while the proxy is on.
+  updateProfile(originalName: string, profile: Profile): Promise<void> {
+    return this.serialize(async () => {
+      const entries = this.profileEntries();
+      const nameProblem = validateProfileName(
+        profile.name,
+        entryNames(withoutProfile(entries, originalName))
+      );
+      if (nameProblem) {
+        throw new ValidationError('name', nameProblem);
+      }
+      validateProxyUrl(profile.proxyUrl);
+      for (const pattern of profile.bypassList) {
+        validateBypassPattern(pattern);
+      }
+
+      const { isEnabled, currentProfile } = this.getState();
+      const isCurrent = currentProfile !== undefined && sameName(currentProfile.name, originalName);
+      const saved: Profile = {
+        ...profile,
+        name: profile.name.trim(),
+        proxyUrl: profile.proxyUrl.trim()
+      };
+      await this.profilesSetting.write(withProfile(entries, saved, originalName));
+      if (isCurrent) {
+        if (isEnabled) {
+          await this.settingsWriter.apply(profileSettingValues(saved));
+        }
+        await this.writeState({ currentProfile: saved });
+      }
+    });
+  }
+
+  // Deletes a profile. Deleting the current profile turns the proxy off first, and the first
+  // remaining profile becomes current; deleting the last one leaves nothing configured.
+  deleteProfile(name: string): Promise<void> {
+    return this.serialize(async () => {
+      const { isEnabled, currentProfile } = this.getState();
+      const isCurrent = currentProfile !== undefined && sameName(currentProfile.name, name);
+      if (isCurrent && isEnabled) {
+        await this.disable();
+      }
+
+      await this.profilesSetting.write(withoutProfile(this.profileEntries(), name));
+      if (isCurrent) {
+        const first = sortByName(this.getProfiles())[0];
+        await this.writeState({ isEnabled: false, currentProfile: first });
+      }
     });
   }
 

@@ -5,8 +5,9 @@ export const BACK = Symbol('back');
 
 export type TextStep = {
   title: string;
-  step: number;
-  totalSteps: number;
+  // For a step of a multi-step flow.
+  step?: number;
+  totalSteps?: number;
   prompt: string;
   value?: string;
   placeholder?: string;

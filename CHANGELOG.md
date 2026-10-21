@@ -11,6 +11,12 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 - **Add Profile…** in two native steps with a Back button: the proxy URL, then the name, which
   defaults to the proxy host. When no profile exists and VS Code already uses a proxy, setup
   starts from those settings and names anything a profile cannot hold.
+- **Edit Profile…** lists a profile's name, proxy URL, strict SSL choice and bypass list; each
+  pick changes and saves one field. Saving the current profile while the proxy is on re-applies
+  it, and a rename warns that keybindings using the old name stop working. **Configure Proxy
+  Settings** edits the current profile once one exists.
+- **Delete Profile…** asks for confirmation. Deleting the current profile turns the proxy off
+  first, and the first remaining profile becomes current.
 - Proxy profiles, kept in the `proxyToggler.profiles` setting: each has a name, a proxy URL, a
   strict SSL choice and a bypass list. The toggle turns the current profile on and off. The
   setting is shared by every VS Code Profile and read only from user settings.

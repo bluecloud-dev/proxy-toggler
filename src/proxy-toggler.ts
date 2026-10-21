@@ -2,6 +2,7 @@ import { addProfileCommand } from './commands/add-profile';
 import { checkSettingsDrift } from './commands/check-settings-drift';
 import { COMMANDS, CONTEXT_KEYS } from './commands/command-ids';
 import { disableProxyCommand } from './commands/disable-proxy';
+import { editProfileCommand } from './commands/edit-profile';
 import { enableProxyCommand } from './commands/enable-proxy';
 import { warnAboutHiddenProfiles } from './commands/profile-warning';
 import { announceRemovedCredentials, removeStoredCredentials } from './commands/stored-credentials';
@@ -112,12 +113,13 @@ export function createProxyToggler(
 
   const register = createCommandRegistrar(vscodeApi, logger, notificationService);
   context.subscriptions.push(
-    // Adds the first profile; with profiles, it opens the switcher, where they are managed.
-    register(COMMANDS.configure, 'Failed to configure proxy.', () =>
-      proxyManager.hasConfiguration()
-        ? switchProfileCommand(vscodeApi, proxyManager, notificationService, refreshUi)
-        : addProfileCommand(vscodeApi, proxyManager, notificationService, refreshUi)
-    ),
+    // Adds the first profile, or edits the current one.
+    register(COMMANDS.configure, 'Failed to configure proxy.', () => {
+      const current = proxyManager.getState().currentProfile;
+      return current
+        ? editProfileCommand(vscodeApi, proxyManager, notificationService, refreshUi, current.name)
+        : addProfileCommand(vscodeApi, proxyManager, notificationService, refreshUi);
+    }),
     register(COMMANDS.enable, 'Failed to enable proxy.', () =>
       enableProxyCommand(vscodeApi, proxyManager, notificationService, refreshUi)
     ),
