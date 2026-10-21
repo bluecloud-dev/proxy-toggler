@@ -7,6 +7,7 @@ import type { Memento } from '../core/proxy-manager';
 // which must satisfy these signatures without a cast; unit tests pass small fakes.
 export type VscodeApi = {
   ConfigurationTarget: { Global: vscode.ConfigurationTarget };
+  QuickInputButtons: { Back: vscode.QuickInputButton };
   QuickPickItemKind: { Separator: vscode.QuickPickItemKind };
   StatusBarAlignment: { Right: vscode.StatusBarAlignment };
   commands: {
@@ -18,6 +19,7 @@ export type VscodeApi = {
   };
   window: {
     createOutputChannel(name: string, options: { log: true }): Logger;
+    createInputBox(): InputBox;
     createQuickPick<T extends vscode.QuickPickItem>(): QuickPick<T>;
     createStatusBarItem(alignment: vscode.StatusBarAlignment, priority: number): StatusBarItem;
     showErrorMessage(message: string, ...items: string[]): PromiseLike<string | undefined>;
@@ -44,6 +46,26 @@ export type Logger = Pick<vscode.LogOutputChannel, 'dispose' | 'error'>;
 export type StatusBarItem = Pick<
   vscode.StatusBarItem,
   'accessibilityInformation' | 'command' | 'dispose' | 'show' | 'text' | 'tooltip'
+>;
+
+export type InputBox = Pick<
+  vscode.InputBox,
+  | 'buttons'
+  | 'dispose'
+  | 'hide'
+  | 'ignoreFocusOut'
+  | 'onDidAccept'
+  | 'onDidChangeValue'
+  | 'onDidHide'
+  | 'onDidTriggerButton'
+  | 'placeholder'
+  | 'prompt'
+  | 'show'
+  | 'step'
+  | 'title'
+  | 'totalSteps'
+  | 'validationMessage'
+  | 'value'
 >;
 
 export type QuickPick<T extends vscode.QuickPickItem> = Pick<

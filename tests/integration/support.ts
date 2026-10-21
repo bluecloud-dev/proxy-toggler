@@ -19,22 +19,13 @@ export function dismissNotifications(sandbox: sinon.SinonSandbox): void {
   sandbox.stub(vscode.window, 'showErrorMessage').resolves(undefined);
 }
 
-// Answers the configure wizard: proxy URL, an empty username (no credentials), the bypass list,
-// and the strict SSL choice.
-export async function configureWithoutCredentials(
-  sandbox: sinon.SinonSandbox,
-  options: { proxyUrl: string; noProxy: string; strictSSL: boolean }
-): Promise<void> {
-  const inputs = [options.proxyUrl, '', options.noProxy];
-  sandbox.stub(vscode.window, 'showInputBox').callsFake(async () => inputs.shift());
-  sandbox
-    .stub(vscode.window, 'showQuickPick')
-    .callsFake(
-      async (
-        items: readonly vscode.QuickPickItem[] | Thenable<readonly vscode.QuickPickItem[]>
-      ): Promise<vscode.QuickPickItem | undefined> =>
-        (await items).find((item) => (item as { value?: boolean }).value === options.strictSSL)
-    );
-
-  await vscode.commands.executeCommand('proxyToggler.configure');
+// Makes this the only profile, so that it is the current one, as a user would by hand.
+export async function useProfile(profile: {
+  proxyUrl: string;
+  bypassList: string[];
+  strictSSL: boolean;
+}): Promise<void> {
+  await vscode.workspace
+    .getConfiguration('proxyToggler')
+    .update('profiles', [{ name: 'Test', ...profile }], vscode.ConfigurationTarget.Global);
 }

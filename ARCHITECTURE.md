@@ -14,7 +14,7 @@ src/
                     rule (when VS Code's settings carry a profile's values), profiles (reading
                     the setting, the current profile), ProxyManager (the record, the toggle),
                     ProxySettingsWriter (writing and clearing the http.* settings),
-                    KeychainService (credentials).
+                    KeychainService (removing the credentials 0.1.x stored).
   commands/         One file per command (configure, enable, disable, toggle, the switcher), the
                     activation-time checks, and the feedback shared by the state commands.
   vscode/           Adapters over the VS Code API: the API surface type, the http.* and profiles
@@ -38,13 +38,13 @@ flowchart LR
   registrar --> commands["commands/*"]
   commands --> manager["core/ProxyManager"]
   commands --> notifications["vscode/NotificationService"]
-  manager --> keychain["core/KeychainService"]
   manager --> validation["core/validation, core/no-proxy"]
   manager --> writer["core/ProxySettingsWriter"]
   manager --> httpSettings["vscode/http-settings"]
   manager --> profilesSetting["vscode/profiles-setting"]
   writer --> httpSettings
   profilesSetting --> profiles[("User settings: proxyToggler.profiles")]
+  root --> keychain["core/KeychainService"]
   keychain --> secrets[("SecretStorage")]
   manager --> state[("globalState")]
   httpSettings --> settings[("User settings: http.*")]
@@ -60,8 +60,8 @@ flowchart LR
    can explain; any other error is logged to the **Proxy Toggler** output channel and shown with
    the command's failure message.
 3. Commands call `ProxyManager`, which validates input, saves profiles in the
-   `proxyToggler.profiles` setting, keeps the record in `globalState`, stores credentials through
-   `KeychainService`, and writes or clears the three `http.*` user settings through
+   `proxyToggler.profiles` setting, keeps the record in `globalState`, and writes or clears the
+   three `http.*` user settings through
    `ProxySettingsWriter` and the settings adapter.
 4. `refreshUi` updates the status bar and the `setContext` keys that decide which commands the
    Command Palette shows.
@@ -84,7 +84,6 @@ Core classes depend on small structural types rather than on VS Code objects:
 | Consumer              | Port              | Real implementation                              |
 | --------------------- | ----------------- | ------------------------------------------------ |
 | `ProxyManager`        | `Memento`         | `readYourWrites(context.globalState)`            |
-| `ProxyManager`        | `CredentialStore` | `KeychainService`                                |
 | `ProxyManager`        | `HttpSettings`    | `createHttpSettings(vscode)`, read only          |
 | `ProxyManager`        | `ProfilesSetting` | `createProfilesSetting(vscode)`                  |
 | `ProxySettingsWriter` | `HttpSettings`    | `createHttpSettings(vscode)`                     |
@@ -119,7 +118,7 @@ Credentials never go to `globalState`, settings, logs, or messages.
 | Error                | Raised by                               | Shown as                                                    |
 | -------------------- | --------------------------------------- | ----------------------------------------------------------- |
 | `ValidationError`    | `core/validation.ts`                    | The reason and examples, in the input box or a notification |
-| `KeychainError`      | `KeychainService`                       | `toUserMessage()`; the reason is inferred from the message  |
+| `KeychainError`      | `KeychainService` removing old secrets  | Logged; the removal is retried at the next activation       |
 | `ConfigurationError` | `ProxySettingsWriter` writing a setting | `toUserMessage()` with an **Open Settings** action          |
 | Anything else        | Anywhere                                | Logged with its stack; the command's failure message        |
 
@@ -162,13 +161,11 @@ Errors carry the original failure as the standard ES2022 `cause`.
 - **Bypass list stored as a string.** The stored shape predates VS Code's array setting and is kept
   for compatibility; it is converted to an array when written.
 - **State changes run one at a time.** VS Code runs commands concurrently, and a double click on
-  the status bar item starts two toggles. `ProxyManager` queues `saveConfiguration`,
-  `enableProxy`, `disableProxy`, `toggleProxy`, and `syncToggleState`: each starts after the
-  previous one settles, whether it succeeded or failed, and reads the state it left. Commands wait
-  for the user before or after calling `ProxyManager`, never inside a queued change, so the
-  extension's own prompts never hold up the queue. The one wait it does not control is SecretStorage
-  inside `saveConfiguration`: while the operating system's keychain prompt for storing credentials
-  is open, toggles wait behind it.
+  the status bar item starts two toggles. `ProxyManager` queues every change of the profiles, the
+  record and the `http.*` settings: each starts after the previous one settles, whether it
+  succeeded or failed, and reads the state it left. Commands wait for the user before or after
+  calling `ProxyManager`, never inside a queued change, so the extension's own prompts never hold
+  up the queue.
 - **Reads see the extension's own writes.** VS Code sends every change of an extension's
   `globalState` back to the extension host (`MainThreadStorage` calls `$acceptValue`), and the host
   replaces its in-memory value with it. The echo of an earlier write can arrive after a newer
@@ -180,7 +177,7 @@ Errors carry the original failure as the standard ES2022 `cause`.
   window is still seen.
 - **Lazy activation.** Only commands activate the extension, so the status bar item appears after
   the first command in a session.
-- **Credentials are stored but not applied.** The extension keeps credentials in the OS keychain
-  and offers to keep, replace, or remove them, but does not set `http.proxyAuthorization`.
+- **No stored credentials.** Profiles hold no credentials, and the extension never sets
+  `http.proxyAuthorization`; VS Code's login dialog answers a proxy's sign-in request (ADR 0003).
 - **Bundled output.** esbuild produces `dist/extension.js`, the only code that ships. `out/` holds
   the `tsc` output used to run the integration tests.

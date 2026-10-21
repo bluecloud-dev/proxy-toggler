@@ -1,11 +1,6 @@
 import { strict as assert } from 'node:assert';
 
-import {
-  validateCredentials,
-  validateNoProxyList,
-  validateProxyUrl,
-  ValidationError
-} from '../../src/core/validation';
+import { validateNoProxyList, validateProxyUrl, ValidationError } from '../../src/core/validation';
 
 function captureValidationError(operation: () => void): ValidationError {
   try {
@@ -143,30 +138,6 @@ describe('validation', () => {
         validateProxyUrl('https://proxy.example.com:443/proxy')
       );
       assert.match(pathError.reason, /path/i);
-    });
-  });
-
-  describe('validateCredentials', () => {
-    it('accepts both omitted and both provided', () => {
-      assert.doesNotThrow(() => validateCredentials(undefined, undefined));
-      assert.doesNotThrow(() => validateCredentials('alice', 'secret'));
-      assert.doesNotThrow(() => validateCredentials('', ''));
-      assert.doesNotThrow(() => validateCredentials('   ', '   '));
-    });
-
-    it('rejects mismatched username/password pairing', () => {
-      const usernameOnlyError = captureValidationError(() =>
-        validateCredentials('alice', undefined)
-      );
-      assert.equal(usernameOnlyError.field, 'credentials');
-
-      const passwordOnlyError = captureValidationError(() =>
-        validateCredentials(undefined, 'secret')
-      );
-      assert.equal(passwordOnlyError.field, 'credentials');
-
-      assert.throws(() => validateCredentials('alice', ''), ValidationError);
-      assert.throws(() => validateCredentials('', 'secret'), ValidationError);
     });
   });
 

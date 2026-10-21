@@ -5,7 +5,7 @@ import { parseNoProxyList } from './no-proxy';
 const PROXY_URL_EXAMPLES = ['http://proxy.example.com:8080', 'https://10.0.0.1:3128'];
 const NO_PROXY_EXAMPLES = ['localhost', '127.0.0.1', '*.example.com', '.example.com'];
 
-export type ValidatedField = 'proxyUrl' | 'credentials' | 'noProxy';
+export type ValidatedField = 'proxyUrl' | 'noProxy' | 'name';
 
 export class ValidationError extends Error {
   constructor(
@@ -74,18 +74,6 @@ function explicitPort(url: string, parsedUrl: URL): string {
   }
   const otherScheme = parsedUrl.protocol === 'http:' ? 'https:' : 'http:';
   return new URL(url.replace(/^[^:]*:/, otherScheme)).port;
-}
-
-export function validateCredentials(username?: string, password?: string): void {
-  const hasUsername = typeof username === 'string' && username.trim().length > 0;
-  const hasPassword = typeof password === 'string' && password.trim().length > 0;
-
-  if (hasUsername !== hasPassword) {
-    throw new ValidationError(
-      'credentials',
-      'Username and password must both be provided or both be omitted'
-    );
-  }
 }
 
 export function validateNoProxyList(noProxy?: string): void {

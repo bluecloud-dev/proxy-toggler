@@ -239,25 +239,9 @@ describe('createProxyToggler', () => {
     });
   });
 
-  it('shows the keychain message and logs when the keychain cannot be read', async () => {
-    const vscode = createFakeVscode({ settings: PROFILES });
-    const context = createExtensionContext({
-      secretFailures: { get: new Error('Keychain is locked') }
-    });
-    createProxyToggler(vscode, context);
-
-    await vscode.commandHandlers.get(COMMANDS.configure)?.();
-
-    assert.deepEqual(
-      vscode.messages.map((message) => [message.kind, message.message]),
-      [['error', 'Your system keychain appears to be locked. Unlock it and try again.']]
-    );
-    assert.match(vscode.logs.join('\n'), /proxyToggler\.configure failed/);
-  });
-
   it('logs an unexpected failure and shows the command failure message', async () => {
     const { vscode } = activateWith({});
-    vscode.window.showInputBox = async () => {
+    vscode.window.createInputBox = () => {
       throw new Error('input box failed');
     };
 

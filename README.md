@@ -17,7 +17,7 @@
 </p>
 
 <p align="center">
-  Lightweight on/off control for VS Code's HTTP proxy with credentials stored in your OS keychain.
+  Switch VS Code's HTTP proxy between proxy profiles and off, from the status bar.
 </p>
 
 <!-- Marketplace badges will go here once published -->
@@ -41,7 +41,7 @@
 
 - **Proxy profiles**: keep several proxies and switch between them from the status bar gear
 - **One-click toggle** from the Command Palette or status bar
-- **Secure credential storage** using VS Code SecretStorage (OS keychain) — never in settings, logs, or source control
+- **No stored credentials**: when a proxy asks for a sign-in, VS Code shows its own login dialog
 - **Visual status indicator** showing on or off and the current profile
 - **Optional confirmation prompt** before toggling
 - **Strict SSL and no-proxy list** support
@@ -65,7 +65,8 @@
    Proxy Toggler: Configure Proxy Settings
    ```
 
-3. Enter your proxy URL, port, strict SSL preference, no-proxy list, and optional credentials.
+3. Enter the proxy URL, then a name for the profile. When VS Code already uses a proxy, setup
+   starts from it.
 
 4. Toggle the proxy using any of these methods:
    - Click the status bar indicator
@@ -107,7 +108,6 @@ This extension manages the following VS Code settings:
 ```mermaid
 flowchart LR
     U["You trigger Enable/Disable/Toggle"] --> E["Proxy Toggler"]
-    E --> S["SecretStorage<br/>(proxy credentials)"]
     E --> C["Apply VS Code settings<br/>(http.proxy, http.proxyStrictSSL, http.noProxy)"]
     C --> VS["VS Code network layer"]
     VS --> Net["Outbound requests"]
@@ -116,10 +116,11 @@ flowchart LR
 
 ## :lock: Security
 
-- **Credentials are stored securely** in VS Code's SecretStorage, which uses your OS keychain
-- **No credentials in plain text** — never written to `settings.json`, `globalState`, logs, or URLs
+- **No stored credentials**: profiles hold no user name or password, and Proxy Toggler never
+  writes credentials to `settings.json`, `globalState`, logs, or messages. When a proxy asks for a
+  sign-in, VS Code's own login dialog asks you
 - **No `http.proxyAuthorization`** header is set by this extension
-- VS Code/Electron may still prompt for authentication depending on your proxy configuration
+- The username and password that 0.1.x stored in your OS keychain are deleted, with a one-time notice
 - **Works in Restricted Mode**: the extension reads no workspace files, so it stays available in folders you have not trusted
 - **Report vulnerabilities privately**; see [SECURITY.md](SECURITY.md)
 
@@ -131,8 +132,8 @@ Ensure user-level proxy settings aren't being overridden by workspace settings.
 **Connection still blocked after enabling?**
 Some environments require system-level proxy configuration. This extension only manages VS Code's internal HTTP proxy settings.
 
-**Stuck in credential prompt loop?**
-Clear saved credentials via `Proxy Toggler: Configure Proxy Settings` and re-enter them.
+**Asked to sign in to the proxy?**
+VS Code shows its own login dialog when the proxy asks for credentials; Proxy Toggler stores none.
 
 **Something failed and the notification did not say why?**
 Open **View → Output** and pick **Proxy Toggler** in the dropdown. Errors are logged there with details; credentials never are.

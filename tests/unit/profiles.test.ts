@@ -4,7 +4,8 @@ import {
   checkProfiles,
   defaultProfileName,
   findCurrentProfile,
-  readProfiles
+  readProfiles,
+  validateProfileName
 } from '../../src/core/profiles';
 
 const WORK = {
@@ -146,5 +147,24 @@ describe('checkProfiles', () => {
     ]);
 
     assert.deepEqual(profiles, [WORK]);
+  });
+});
+
+describe('validateProfileName', () => {
+  it('accepts a trimmed name of at most 30 characters that no entry holds', () => {
+    assert.equal(validateProfileName(' Office ', ['Work', 'Home']), undefined);
+    assert.equal(validateProfileName('x'.repeat(30), []), undefined);
+  });
+
+  it('refuses an empty name', () => {
+    assert.match(validateProfileName('  ', []) ?? '', /enter a name/i);
+  });
+
+  it('refuses a name longer than 30 characters', () => {
+    assert.match(validateProfileName('x'.repeat(31), []) ?? '', /30 characters/);
+  });
+
+  it('refuses a name an entry holds, ignoring letter case and spaces', () => {
+    assert.match(validateProfileName(' WORK ', ['Work']) ?? '', /already/);
   });
 });

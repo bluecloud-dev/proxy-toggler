@@ -5,7 +5,6 @@ import { promisify } from 'node:util';
 
 import { runTests, runVSCodeCommand, VSCodeCommandError } from '@vscode/test-electron';
 
-import { DEFAULT_NO_PROXY, parseNoProxyList } from '../src/core/no-proxy';
 import { makeTempDir, removeTempDir } from './temp-dir';
 import { versionsToTest } from './vscode-versions';
 
@@ -26,8 +25,8 @@ const SQUID_AUTH = 'http://127.0.0.1:3129';
 const MITMPROXY = 'http://127.0.0.1:8080';
 const PAC_ARGUMENT = '--proxy-pac-url=http://127.0.0.1:8000/proxy.pac';
 const ORIGIN = 'http://origin.lab.test:8088';
-// The bypass list Proxy Toggler writes when the user keeps the default.
-const DEFAULT_BYPASS = parseNoProxyList(DEFAULT_NO_PROXY);
+// The bypass list 0.1.x saved when the user kept the default.
+const DEFAULT_BYPASS = ['localhost', '127.0.0.1'];
 
 const MARKETPLACE_TUNNEL = /TCP_TUNNEL\/200 \d+ CONNECT marketplace\.visualstudio\.com:443 /;
 const MARKETPLACE_DENIED = /TCP_DENIED\/407 \d+ CONNECT marketplace\.visualstudio\.com:443 /;

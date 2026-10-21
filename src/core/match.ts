@@ -3,6 +3,11 @@ import type { HttpSettingKey, ProxySettingValues } from './proxy-settings-writer
 
 const DEFAULT_PORTS: Partial<Record<string, string>> = { 'http:': '80', 'https:': '443' };
 
+// The port a proxy URL of this scheme uses when it names none, such as '80' for 'http:'.
+export function defaultPortOf(protocol: string): string | undefined {
+  return DEFAULT_PORTS[protocol];
+}
+
 // Whether VS Code's proxy settings carry these values; see Match in GLOSSARY.md.
 export function settingsMatch(
   settings: Record<HttpSettingKey, unknown>,
@@ -40,6 +45,6 @@ function proxyAddress(value: unknown): string | undefined {
     return undefined;
   }
 
-  const port = url.port || DEFAULT_PORTS[url.protocol] || '';
+  const port = url.port || defaultPortOf(url.protocol) || '';
   return `${url.protocol}//${url.hostname}:${port}`;
 }

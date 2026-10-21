@@ -80,26 +80,23 @@ export function sortByName(profiles: readonly Profile[]): Profile[] {
   return [...profiles].sort((left, right) => left.name.localeCompare(right.name));
 }
 
-// The entries with a profile saved into them: it replaces the first entry named `replacing`,
-// keeping that entry's unknown fields, or is added at the end. Every other entry, valid or not,
-// stays as it was, so versions that share the list through Settings Sync never strip each other's
-// data (ADR 0002).
-export function withProfile(
-  entries: readonly unknown[],
-  profile: Profile,
-  replacing: string = profile.name
-): unknown[] {
-  const index = entries.findIndex((entry) => {
-    const name = entryName(entry);
-    return name !== undefined && sameName(name, replacing);
-  });
-  if (index === -1) {
-    return [...entries, profile];
+// Why a name cannot be used for a new or renamed profile, or undefined when it can. Names are
+// trimmed, at most MAX_NAME_LENGTH long, and unique ignoring case among every name an entry holds.
+export function validateProfileName(
+  name: string,
+  takenNames: readonly string[]
+): string | undefined {
+  const trimmed = name.trim();
+  if (trimmed.length === 0) {
+    return 'Enter a name.';
   }
-
-  return entries.map((entry, entryIndex) =>
-    entryIndex === index ? { ...(entry as object), ...profile } : entry
-  );
+  if (trimmed.length > MAX_NAME_LENGTH) {
+    return `Use at most ${MAX_NAME_LENGTH} characters.`;
+  }
+  if (takenNames.some((taken) => sameName(taken, trimmed))) {
+    return `"${trimmed}" is already used in proxyToggler.profiles.`;
+  }
+  return undefined;
 }
 
 // The name a new profile gets: its proxy host, with " (2)", " (3)"... while an entry holds that

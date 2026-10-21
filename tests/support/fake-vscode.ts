@@ -1,6 +1,7 @@
 import type { ConfigurationChangeEvent, QuickPickItem, StatusBarAlignment } from 'vscode';
 
 import type {
+  InputBox,
   QuickPick,
   StatusBarItem,
   VscodeApi,
@@ -10,6 +11,14 @@ import type {
 type MessageKind = 'info' | 'warning' | 'error';
 
 type RecordedMessage = { kind: MessageKind; message: string; items: string[] };
+
+// An InputBox that a test drives: submit() types a value and presses Enter, back() presses the
+// Back button, dismiss() is Escape.
+export type FakeInputBox = InputBox & {
+  submit(value?: string): void;
+  back(): void;
+  dismiss(): void;
+};
 
 // A QuickPick that a test drives: accept() is Enter, dismiss() is Escape.
 export type FakeQuickPick = QuickPick<QuickPickItem> & {
@@ -30,6 +39,8 @@ export type FakeVscodeOptions = {
   pick?: (items: readonly QuickPickItem[], callIndex: number) => QuickPickItem | undefined;
   // Drives each QuickPick once it shows; one left alone is dismissed.
   quickPick?: (quickPick: FakeQuickPick, callIndex: number) => void;
+  // Drives each InputBox once it shows; one left alone is dismissed.
+  inputBox?: (inputBox: FakeInputBox, callIndex: number) => void;
   // The button the user clicks for a notification; undefined means it was dismissed. A promise
   // keeps the notification open until it settles.
   answer?: (message: RecordedMessage) => string | undefined | Promise<string | undefined>;
@@ -44,8 +55,9 @@ export type FakeVscodeOptions = {
 
 export type FakeVscode = VscodeApi & {
   commandHandlers: Map<string, (...args: unknown[]) => unknown>;
-  // Every QuickPick shown, in order.
+  // Every QuickPick and InputBox shown, in order.
   quickPicks: FakeQuickPick[];
+  inputBoxes: FakeInputBox[];
   // Everything written to the extension's log channel, one string per call.
   logs: string[];
   executedCommands: Array<{ command: string; args: unknown[] }>;
@@ -62,6 +74,8 @@ export type FakeVscode = VscodeApi & {
 export function createFakeVscode(options: FakeVscodeOptions = {}): FakeVscode {
   const commandHandlers = new Map<string, (...args: unknown[]) => unknown>();
   const quickPicks: FakeQuickPick[] = [];
+  const inputBoxes: FakeInputBox[] = [];
+  const backButton = { iconPath: { id: 'arrow-left' } };
   const executedCommands: FakeVscode['executedCommands'] = [];
   const messages: RecordedMessage[] = [];
   const settings = new Map(Object.entries(options.settings ?? {}));
@@ -122,6 +136,60 @@ export function createFakeVscode(options: FakeVscodeOptions = {}): FakeVscode {
     return configuration as WorkspaceConfiguration;
   };
 
+  const createInputBox = (): FakeInputBox => {
+    const accepted = emitter<void>();
+    const hidden = emitter<void>();
+    const changed = emitter<string>();
+    const triggered = emitter<{ iconPath: unknown }>();
+    let open = false;
+    const close = (): void => {
+      if (open) {
+        open = false;
+        hidden.fire();
+      }
+    };
+    const inputBox: FakeInputBox = {
+      value: '',
+      title: undefined,
+      prompt: undefined,
+      placeholder: undefined,
+      step: undefined,
+      totalSteps: undefined,
+      buttons: [],
+      validationMessage: undefined,
+      ignoreFocusOut: false,
+      onDidAccept: accepted.event,
+      onDidHide: hidden.event,
+      onDidChangeValue: changed.event,
+      onDidTriggerButton: triggered.event as InputBox['onDidTriggerButton'],
+      show: () => {
+        open = true;
+        const index = inputBoxes.push(inputBox) - 1;
+        setImmediate(() => {
+          if (options.inputBox) {
+            options.inputBox(inputBox, index);
+          } else {
+            inputBox.dismiss();
+          }
+        });
+      },
+      hide: close,
+      dispose: close,
+      submit: (value) => {
+        if (value !== undefined) {
+          inputBox.value = value;
+          changed.fire(value);
+        }
+        accepted.fire();
+      },
+      back: () => {
+        triggered.fire(backButton);
+      },
+      dismiss: close
+    };
+    return inputBox;
+  };
+
   const createQuickPick = (): FakeQuickPick => {
     const accepted = emitter<void>();
     const hidden = emitter<void>();
@@ -168,6 +236,7 @@ export function createFakeVscode(options: FakeVscodeOptions = {}): FakeVscode {
   return {
     commandHandlers,
     quickPicks,
+    inputBoxes,
     logs,
     executedCommands,
     messages,
@@ -191,6 +260,7 @@ export function createFakeVscode(options: FakeVscodeOptions = {}): FakeVscode {
       }
     },
     ConfigurationTarget: { Global: 1 },
+    QuickInputButtons: { Back: backButton },
     QuickPickItemKind: { Separator: -1 },
     StatusBarAlignment: { Right: 2 },
     commands: {
@@ -218,6 +288,7 @@ export function createFakeVscode(options: FakeVscodeOptions = {}): FakeVscode {
         },
         dispose: () => undefined
       }),
+      createInputBox,
       createQuickPick: <T extends QuickPickItem>() => createQuickPick() as unknown as QuickPick<T>,
       createStatusBarItem: (alignment, priority) => {
         const item: FakeStatusBarItem = {

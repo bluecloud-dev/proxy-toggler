@@ -5,95 +5,53 @@ import {
   KeychainErrorReason,
   KeychainService
 } from '../../src/core/keychain-service';
-import { ValidationError } from '../../src/core/validation';
 import { createSecretStorage } from '../support/fakes';
 
+const USERNAME_KEY = 'proxyToggler.credentials.username';
+const PASSWORD_KEY = 'proxyToggler.credentials.password';
+
 describe('KeychainService', () => {
-  it('stores trimmed credentials under stable keys and clears them', async () => {
-    const secrets = createSecretStorage();
+  it('removes the credentials 0.1.x stored and reports whether either was there', async () => {
+    const secrets = createSecretStorage(
+      new Map([
+        [USERNAME_KEY, 'alice'],
+        [PASSWORD_KEY, 'secret']
+      ])
+    );
     const service = new KeychainService(secrets);
-    assert.equal(await service.hasCredentials(), false);
 
-    await service.storeCredentials(' alice ', ' secret ');
+    const foundFirst = await service.removeStoredCredentials();
+    const foundAgain = await service.removeStoredCredentials();
 
-    assert.equal(await service.hasCredentials(), true);
-    assert.deepEqual(Object.fromEntries(secrets.values), {
-      'proxyToggler.credentials.username': 'alice',
-      'proxyToggler.credentials.password': 'secret'
-    });
-
-    await service.clearCredentials();
-
-    assert.equal(await service.hasCredentials(), false);
+    assert.deepEqual([foundFirst, foundAgain], [true, false]);
     assert.equal(secrets.values.size, 0);
   });
 
-  it('rejects mismatched username/password', async () => {
-    const secrets = createSecretStorage();
-    const service = new KeychainService(secrets);
-
-    await assert.rejects(() => service.storeCredentials('alice', undefined), ValidationError);
-    await assert.rejects(() => service.storeCredentials(undefined, 'secret'), ValidationError);
-  });
-
   it('maps keychain errors by operation and reason', async () => {
-    const locked = createSecretStorage(new Map(), { store: new Error('Keychain is locked') });
+    const reasons: Array<[Error, 'get' | 'delete', string, KeychainErrorReason]> = [
+      [new Error('Keychain is locked'), 'get', 'retrieve', KeychainErrorReason.LOCKED],
+      [new Error('Permission denied'), 'delete', 'delete', KeychainErrorReason.PERMISSION_DENIED],
+      [new Error('Service not available'), 'get', 'retrieve', KeychainErrorReason.UNAVAILABLE],
+      [new Error('Something went wrong'), 'get', 'retrieve', KeychainErrorReason.UNKNOWN]
+    ];
 
-    const lockedService = new KeychainService(locked);
-    await assert.rejects(
-      () => lockedService.storeCredentials('alice', 'secret'),
-      (error: unknown) => {
-        assert.ok(error instanceof KeychainError);
-        assert.equal(error.operation, 'store');
-        assert.equal(error.reason, KeychainErrorReason.LOCKED);
-        assert.match(String(error.cause), /Keychain is locked/);
-        assert.match(error.toUserMessage(), /locked/i);
-        return true;
-      }
-    );
+    for (const [failure, method, operation, reason] of reasons) {
+      const secrets = createSecretStorage(new Map([[USERNAME_KEY, 'alice']]), {
+        [method]: failure
+      });
 
-    const denied = createSecretStorage(new Map(), { delete: new Error('Permission denied') });
-
-    const deniedService = new KeychainService(denied);
-    await deniedService.storeCredentials('alice', 'secret');
-
-    await assert.rejects(
-      () => deniedService.clearCredentials(),
-      (error: unknown) => {
-        assert.ok(error instanceof KeychainError);
-        assert.equal(error.operation, 'delete');
-        assert.equal(error.reason, KeychainErrorReason.PERMISSION_DENIED);
-        assert.match(error.toUserMessage(), /permission/i);
-        return true;
-      }
-    );
-
-    const unavailable = createSecretStorage(new Map(), { get: new Error('Service not available') });
-
-    const unavailableService = new KeychainService(unavailable);
-    await assert.rejects(
-      () => unavailableService.hasCredentials(),
-      (error: unknown) => {
-        assert.ok(error instanceof KeychainError);
-        assert.equal(error.operation, 'retrieve');
-        assert.equal(error.reason, KeychainErrorReason.UNAVAILABLE);
-        assert.match(error.toUserMessage(), /unavailable/i);
-        return true;
-      }
-    );
-
-    const unknown = createSecretStorage(new Map(), { get: new Error('Something went wrong') });
-
-    const unknownService = new KeychainService(unknown);
-    await assert.rejects(
-      () => unknownService.hasCredentials(),
-      (error: unknown) => {
-        assert.ok(error instanceof KeychainError);
-        assert.equal(error.operation, 'retrieve');
-        assert.equal(error.reason, KeychainErrorReason.UNKNOWN);
-        assert.match(error.toUserMessage(), /failed/i);
-        return true;
-      }
-    );
+      await assert.rejects(
+        () => new KeychainService(secrets).removeStoredCredentials(),
+        (error: unknown) => {
+          assert.ok(error instanceof KeychainError);
+          assert.equal(error.operation, operation);
+          assert.equal(error.reason, reason);
+          assert.equal(error.cause, failure);
+          assert.ok(error.toUserMessage().length > 0);
+          return true;
+        },
+        failure.message
+      );
+    }
   });
 });

@@ -8,6 +8,9 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ### Added
 
+- **Add Profile…** in two native steps with a Back button: the proxy URL, then the name, which
+  defaults to the proxy host. When no profile exists and VS Code already uses a proxy, setup
+  starts from those settings and names anything a profile cannot hold.
 - Proxy profiles, kept in the `proxyToggler.profiles` setting: each has a name, a proxy URL, a
   strict SSL choice and a bypass list. The toggle turns the current profile on and off. The
   setting is shared by every VS Code Profile and read only from user settings.
@@ -49,6 +52,8 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ### Removed
 
+- The configure wizard's credentials, strict SSL and bypass-list steps: **Configure Proxy
+  Settings** now adds the first profile in two steps.
 - Stored proxy credentials. 0.1.x saved a username and password in the system keychain but never
   applied them. Proxy Toggler now deletes them and says so once; when a proxy asks for a sign-in,
   VS Code shows its own login dialog.

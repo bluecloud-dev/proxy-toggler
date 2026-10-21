@@ -63,6 +63,7 @@ describe('switcher', () => {
         ['$(check) Work', WORK.proxyUrl],
         ['', undefined],
         ['Turn Proxy On', undefined],
+        ['Add Profile…', undefined],
         ['Extension Settings', undefined]
       ]
     );

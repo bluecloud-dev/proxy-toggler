@@ -1,8 +1,7 @@
 import type * as vscode from 'vscode';
 
-import type { KeychainService } from './keychain-service';
 import { settingsMatch } from './match';
-import { parseNoProxyList, withDefaultNoProxy } from './no-proxy';
+import { parseNoProxyList } from './no-proxy';
 import {
   checkProfiles,
   defaultProfileName,
@@ -15,11 +14,15 @@ import {
   type ProfilesSetting,
   readProfiles,
   sameValues,
-  withProfile
+  validateProfileName
 } from './profiles';
-import type { ProxyConfiguration, ProxyCredentials, ToggleState } from './proxy-configuration';
-import { type HttpSettings, ProxySettingsWriter } from './proxy-settings-writer';
-import { validateCredentials, validateNoProxyList, validateProxyUrl } from './validation';
+import type { ToggleState } from './proxy-configuration';
+import {
+  type HttpSettingKey,
+  type HttpSettings,
+  ProxySettingsWriter
+} from './proxy-settings-writer';
+import { validateProxyUrl, ValidationError } from './validation';
 
 const STORAGE_KEYS = {
   // 0.1.x's configuration, which v0.2.0 reads and never writes or deletes (ADR 0001).
@@ -31,18 +34,6 @@ const STORAGE_KEYS = {
 
 export type Memento = Pick<vscode.Memento, 'get' | 'update'>;
 
-export type CredentialStore = Pick<
-  KeychainService,
-  'storeCredentials' | 'clearCredentials' | 'hasCredentials'
->;
-
-export type LoadedProxyConfiguration = ProxyConfiguration & {
-  hasStoredCredentials: boolean;
-};
-
-export type CredentialsUpdate =
-  { mode: 'keep' } | { mode: 'clear' } | { mode: 'set'; credentials: ProxyCredentials };
-
 // The record of the local proxy settings (GLOSSARY.md), per VS Code Profile. 0.1.x wrote
 // isEnabled and hasConfiguration and keeps fields it does not know, such as currentProfile, which
 // remembers the current profile by name and values.
@@ -52,7 +43,7 @@ type StoredRecord = {
   currentProfile?: Profile;
 };
 
-// Credentials go through KeychainService only; never write them to settings or globalState.
+// Profiles hold no credentials, and none reach settings or globalState (ADR 0003).
 export class ProxyManager {
   // Settles once the most recent state change has settled; see serialize().
   private lastChange: Promise<unknown> = Promise.resolve();
@@ -60,51 +51,45 @@ export class ProxyManager {
 
   constructor(
     private readonly globalState: Memento,
-    private readonly keychainService: CredentialStore,
     private readonly httpSettings: HttpSettings,
     private readonly profilesSetting: ProfilesSetting
   ) {
     this.settingsWriter = new ProxySettingsWriter(httpSettings);
   }
 
-  saveConfiguration(
-    configuration: ProxyConfiguration,
-    credentialsUpdate: CredentialsUpdate
-  ): Promise<void> {
+  // Adds a profile at the end of the list, keeping every other entry. 'on' means it matched VS
+  // Code's settings while no profile did, so it became current and on; otherwise it becomes
+  // current only while no profile is remembered.
+  addProfile(profile: Profile): Promise<'on' | 'saved'> {
     return this.serialize(async () => {
-      const normalized: ProxyConfiguration = {
-        proxyUrl: configuration.proxyUrl.trim(),
-        strictSSL: configuration.strictSSL,
-        noProxy: withDefaultNoProxy(configuration.noProxy)
-      };
-
-      validateProxyUrl(normalized.proxyUrl);
-      validateNoProxyList(normalized.noProxy);
-      if (credentialsUpdate.mode === 'set') {
-        const { username, password } = credentialsUpdate.credentials;
-        validateCredentials(username, password);
-      }
-
-      // Configure edits the current profile, or adds the first one, named after its host.
-      const current = this.getState().currentProfile;
       const entries = this.profileEntries();
-      const profile: Profile = {
-        name: current?.name ?? defaultProfileName(hostOf(normalized.proxyUrl), entryNames(entries)),
-        proxyUrl: normalized.proxyUrl,
-        strictSSL: normalized.strictSSL,
-        bypassList: parseNoProxyList(normalized.noProxy)
-      };
-      await this.profilesSetting.write(withProfile(entries, profile, current?.name));
-
-      if (credentialsUpdate.mode === 'set') {
-        const { username, password } = credentialsUpdate.credentials;
-        await this.keychainService.storeCredentials(username, password);
-      } else if (credentialsUpdate.mode === 'clear') {
-        await this.keychainService.clearCredentials();
+      const nameProblem = validateProfileName(profile.name, entryNames(entries));
+      if (nameProblem) {
+        throw new ValidationError('name', nameProblem);
       }
+      validateProxyUrl(profile.proxyUrl);
 
-      await this.writeState({ currentProfile: profile });
+      const settings = this.httpSettings.read();
+      const matchedBefore = this.getProfiles().some((existing) =>
+        settingsMatch(settings, profileSettingValues(existing))
+      );
+      const added: Profile = { ...profile, name: profile.name.trim() };
+      await this.profilesSetting.write([...entries, added]);
+
+      if (!matchedBefore && settingsMatch(settings, profileSettingValues(added))) {
+        await this.writeState({ isEnabled: true, currentProfile: added });
+        return 'on';
+      }
+      if (!this.storedRecord()?.currentProfile) {
+        await this.writeState({ currentProfile: added });
+      }
+      return 'saved';
     });
+  }
+
+  // The values of VS Code's proxy settings, defaults included.
+  readProxySettings(): Record<HttpSettingKey, unknown> {
+    return this.httpSettings.read();
   }
 
   // Copies the 0.1.x configuration of this VS Code Profile into a profile (ADR 0001).
@@ -136,21 +121,7 @@ export class ProxyManager {
     });
   }
 
-  async loadConfiguration(): Promise<LoadedProxyConfiguration | undefined> {
-    const current = this.getState().currentProfile;
-    if (!current) {
-      return undefined;
-    }
-
-    return {
-      proxyUrl: current.proxyUrl,
-      strictSSL: current.strictSSL,
-      noProxy: current.bypassList.join(','),
-      hasStoredCredentials: await this.keychainService.hasCredentials()
-    };
-  }
-
-  // Reads settings and globalState only, never SecretStorage, so activation can call it.
+  // Whether VS Code's settings match the current profile.
   isConfigurationApplied(): boolean {
     const current = this.getState().currentProfile;
     return (
@@ -218,6 +189,11 @@ export class ProxyManager {
   // The profiles the switcher shows, in the order of the setting.
   getProfiles(): Profile[] {
     return readProfiles(this.profilesSetting.read());
+  }
+
+  // Every name an entry holds, valid or not; new names must avoid them all.
+  getEntryNames(): string[] {
+    return entryNames(this.profileEntries());
   }
 
   // The entries of proxyToggler.profiles that the switcher hides, and why.

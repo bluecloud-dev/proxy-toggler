@@ -5,20 +5,32 @@ import type { ProxyManager } from '../core/proxy-manager';
 import type { VscodeApi } from '../vscode/api';
 import type { Notifier } from '../vscode/notification-service';
 import { pickOne } from '../vscode/quick-pick';
+import { addProfileCommand } from './add-profile';
 import { EXTENSION_ID } from './command-ids';
 import { announceSwitch, showKnownProxyError } from './proxy-feedback';
 
 type SwitcherApi = Pick<
   VscodeApi,
-  'QuickPickItemKind' | 'commands' | 'l10n' | 'window' | 'workspace'
+  'QuickInputButtons' | 'QuickPickItemKind' | 'commands' | 'l10n' | 'window' | 'workspace'
 >;
 
 type SwitcherManager = Pick<
   ProxyManager,
-  'disableProxy' | 'enableProxy' | 'getProfiles' | 'getState' | 'switchTo'
+  | 'addProfile'
+  | 'disableProxy'
+  | 'enableProxy'
+  | 'getEntryNames'
+  | 'getProfiles'
+  | 'getState'
+  | 'hasConfiguration'
+  | 'readProxySettings'
+  | 'switchTo'
 >;
 
-type SwitcherItem = vscode.QuickPickItem & { profile?: Profile; action?: 'toggle' | 'settings' };
+type SwitcherItem = vscode.QuickPickItem & {
+  profile?: Profile;
+  action?: 'toggle' | 'add' | 'settings';
+};
 
 // Opens the switcher, or switches straight to the profile a keybinding names.
 export async function switchProfileCommand(
@@ -62,6 +74,7 @@ async function showSwitcher(
           }
         ]
       : []),
+    { label: l10n.t('Add Profile…'), action: 'add' },
     { label: l10n.t('Extension Settings'), action: 'settings' }
   ];
   const separator: SwitcherItem[] =
@@ -80,6 +93,8 @@ async function showSwitcher(
     }
   } else if (choice?.action === 'toggle') {
     await turnOnOrOff(vscodeApi, proxyManager, notificationService, refreshUi, !isEnabled);
+  } else if (choice?.action === 'add') {
+    await addProfileCommand(vscodeApi, proxyManager, notificationService, refreshUi);
   } else if (choice?.action === 'settings') {
     await vscodeApi.commands.executeCommand(
       'workbench.action.openSettings',
