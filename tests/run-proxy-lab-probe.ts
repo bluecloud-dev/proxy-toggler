@@ -91,9 +91,15 @@ type CheckBase = {
   since?: string;
 };
 // `code --install-extension`: VS Code's own requests, sent by its Node.js request service.
-type CliCheck = CheckBase & { client: 'cli'; installs: boolean };
-// The desktop app: requests from the extension host, keyed by URL, and a Marketplace search. With
-// `windowMarketplace`, Chromium's net log records how the window's Marketplace requests ended.
+// `onVersion` gives the outcome on releases that behave otherwise.
+type CliCheck = CheckBase & {
+  client: 'cli';
+  installs: boolean;
+  onVersion?: Record<string, { installs: boolean; logs: LogLine[] }>;
+};
+// The desktop app: requests from the extension host, keyed by URL, and a Marketplace search.
+// Chromium's net log records how the window's Marketplace requests ended, and `windowMarketplace`
+// is what they must show.
 // `update` writes settings while VS Code runs, as Proxy Toggler does, then sends its own requests
 // and searches again. `env` adds variables to VS Code's environment.
 type AppCheck = CheckBase & {
@@ -146,7 +152,14 @@ const CHECKS: readonly Check[] = [
     client: 'cli',
     settings: proxySettings(MITMPROXY, false),
     installs: true,
-    logs: [{ service: 'mitmproxy', pattern: MARKETPLACE_INTERCEPTED }]
+    logs: [{ service: 'mitmproxy', pattern: MARKETPLACE_INTERCEPTED }],
+    // VS Code 1.97.0's CLI checks the certificate whatever http.proxyStrictSSL says.
+    onVersion: {
+      '1.97.0': {
+        installs: false,
+        logs: [{ service: 'mitmproxy', pattern: MARKETPLACE_TLS_FAILED }]
+      }
+    }
   },
   {
     name: 'CLI with only --proxy-pac-url',
@@ -450,7 +463,10 @@ async function main(): Promise<boolean> {
 
   // A check with `since` runs on that release instead of an older engines.vscode minimum.
   const runs = (await versionsToTest()).flatMap((version) =>
-    checks.map((check) => ({ version: atLeast(version, check.since), check }))
+    checks.map((check) => {
+      const run = atLeast(version, check.since);
+      return { version: run, check: forVersion(check, run) };
+    })
   );
   let ssh: Promise<SshLab> | undefined;
   const sshLab = (): Promise<SshLab> => (ssh ??= prepareSshLab());
@@ -473,6 +489,15 @@ async function main(): Promise<boolean> {
     }
   }
   return passed;
+}
+
+// The check as it applies to that release.
+function forVersion(check: Check, version: string): Check {
+  if (check.client !== 'cli') {
+    return check;
+  }
+  const outcome = check.onVersion?.[version];
+  return outcome ? { ...check, ...outcome } : check;
 }
 
 function atLeast(version: string, since: string | undefined): string {
@@ -526,14 +551,10 @@ async function runCheck(
           problems.push(`expected ${url} to match ${String(expected)}`);
         }
       }
-      if (check.windowMarketplace) {
-        const actual = await windowRequests(path.join(temp, 'net-log.json'), MARKETPLACE);
-        evidence.push(`window ${MARKETPLACE}: ${actual}`);
-        if (!check.windowMarketplace.test(actual)) {
-          problems.push(
-            `expected the window's requests to match ${String(check.windowMarketplace)}`
-          );
-        }
+      const windowMarketplace = await windowRequests(path.join(temp, 'net-log.json'), MARKETPLACE);
+      evidence.push(`window ${MARKETPLACE}: ${windowMarketplace}`);
+      if (check.windowMarketplace && !check.windowMarketplace.test(windowMarketplace)) {
+        problems.push(`expected the window's requests to match ${String(check.windowMarketplace)}`);
       }
     } else {
       const observed = await runInSshWindows(version, check, await sshLab(), temp, settings);
@@ -622,9 +643,7 @@ async function runInVsCode(
 ): Promise<Record<string, string>> {
   const resultsFile = path.join(temp, 'results.json');
   // VS Code passes switches it does not know to Chromium, which then logs every request.
-  const netLog = check.windowMarketplace
-    ? [`--log-net-log=${path.join(temp, 'net-log.json')}`]
-    : [];
+  const netLog = [`--log-net-log=${path.join(temp, 'net-log.json')}`];
   // VS Code loads extension tests only in a development host; the packaged tests' empty
   // extension serves as one.
   await runTests({

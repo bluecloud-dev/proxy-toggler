@@ -172,15 +172,16 @@ makes VS Code send its own requests through the proxy.
 ### What `http.proxyStrictSSL` does
 
 Measured through `mitmproxy`, whose certificate authority no client trusts, with
-`npm run proxy-lab:probe` on VS Code 1.91.0 and 1.142.0 (macOS, October 2026):
+`npm run proxy-lab:probe` on VS Code 1.91.0, 1.97.0 and 1.142.0 (macOS, October 2026):
 
-| Client                                             | Strict SSL on                                                                            | Strict SSL off                                    |
-| -------------------------------------------------- | ---------------------------------------------------------------------------------------- | ------------------------------------------------- |
-| `code --install-extension`, VS Code's CLI          | Fails: "unable to verify the first certificate"                                          | Installs: the CLI accepts mitmproxy's certificate |
-| The Extensions view, in the desktop app            | Fails: Chromium rejects the certificate (`net_error -202`, `ERR_CERT_AUTHORITY_INVALID`) | Fails the same way                                |
-| `https.get` in an extension, in the extension host | Fails: `UNABLE_TO_VERIFY_LEAF_SIGNATURE`                                                 | Fails the same way                                |
+| Client                                             | Strict SSL on                                                                            | Strict SSL off                                                                                          |
+| -------------------------------------------------- | ---------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------- |
+| `code --install-extension`, VS Code's CLI          | Fails: "unable to verify the first certificate"                                          | Installs: the CLI accepts mitmproxy's certificate. Not on 1.97.0, whose CLI fails as with Strict SSL on |
+| The Extensions view, in the desktop app            | Fails: Chromium rejects the certificate (`net_error -202`, `ERR_CERT_AUTHORITY_INVALID`) | Fails the same way                                                                                      |
+| `https.get` in an extension, in the extension host | Fails: `UNABLE_TO_VERIFY_LEAF_SIGNATURE`                                                 | Fails the same way                                                                                      |
 
-So the setting changes only the requests of VS Code's Node.js request service, which the CLI uses.
+So the setting changes only the requests of VS Code's Node.js request service, which the CLI uses,
+and on 1.97.0 not even those.
 The desktop app ignores it, both for its own Marketplace requests and for requests from
 extensions. VS Code describes the setting as controlling "whether the proxy server certificate
 should be verified"; the lab has no HTTPS proxy, so that case is not measured.
@@ -214,10 +215,10 @@ start-up or while VS Code runs, even with `--proxy-pac-url`.
 ### The probe
 
 `npm run proxy-lab:probe` needs the lab running and internet access. For the `engines.vscode`
-minimum and stable, it runs each check below in a fresh profile whose `settings.json` holds the settings
-Proxy Toggler writes, and compares the outcome and the proxy logs with what this file records.
-The last five checks run on VS Code 1.97.0 instead of 1.91.0: it is the first release with
-`http.useLocalProxyConfiguration`, and the oldest that remote-window support will need. The CLI
+minimum, 1.97.0, and stable, it runs each check below in a fresh profile whose `settings.json` holds
+the settings Proxy Toggler writes, and compares the outcome and the proxy logs with what this file
+records. The app checks also record how the window's Marketplace requests ended, from Chromium's
+net log. The CLI
 checks run `code --install-extension` on a small Marketplace extension. The app checks start the
 desktop app with `tests/proxy-lab/index.ts`, which sends requests from the extension host and then
 searches the Marketplace. The SSH checks open Remote-SSH windows; see
@@ -229,7 +230,7 @@ name contains the text.
 | CLI through `squid-open`                                                  | Installs; `squid-open` logs the Marketplace tunnel.                                                                                                            |
 | CLI through `squid-auth`                                                  | Fails, with the misleading message "Extension '…' not found"; `squid-auth` logs `TCP_DENIED/407`.                                                              |
 | CLI through `mitmproxy`, Strict SSL on                                    | Fails; `mitmproxy` logs the failed TLS handshake.                                                                                                              |
-| CLI through `mitmproxy`, Strict SSL off                                   | Installs; `mitmproxy` logs the intercepted Marketplace query.                                                                                                  |
+| CLI through `mitmproxy`, Strict SSL off                                   | Installs; `mitmproxy` logs the intercepted Marketplace query. On 1.97.0, fails as with Strict SSL on.                                                          |
 | CLI with only `--proxy-pac-url`                                           | Installs without a proxy: the CLI never downloads the PAC file.                                                                                                |
 | App through `squid-open`, with a bypass entry                             | The extension host reaches `origin.lab.test` through `squid-open`, a host in `http.noProxy` goes direct, and the Marketplace search goes through `squid-open`. |
 | App through `mitmproxy`, Strict SSL on                                    | The extension host request and the Marketplace search fail on the certificate.                                                                                 |
@@ -240,6 +241,7 @@ name contains the text.
 | SSH window, Global write while the remote file holds a stale `http.proxy` | Check 2 in [Remote windows](#remote-windows).                                                                                                                  |
 | SSH window, `http.useLocalProxyConfiguration` changed while open          | Check 3 in [Remote windows](#remote-windows).                                                                                                                  |
 | Two SSH windows, the second writes the remote `http.proxy`                | Check 4 in [Remote windows](#remote-windows).                                                                                                                  |
+| SSH window whose remote settings pin an empty `http.proxy`                | Check 6 in [Remote windows](#remote-windows).                                                                                                                  |
 | App, Off: settings removed while running, with `--proxy-pac-url`          | Before Off, both go through `squid-open`. After, the extension host cannot resolve `origin.lab.test` (direct), and `squid-auth` sees no Marketplace request.   |
 | App, Off: settings removed while running, with `HTTP(S)_PROXY`            | After Off, the extension host gets `407` from `squid-auth`, the proxy the variables name, and so does the Marketplace search.                                  |
 | App, Off: Direct candidate at start-up                                    | With `--proxy-pac-url`, the extension host goes direct and `squid-auth` sees no Marketplace request.                                                           |
