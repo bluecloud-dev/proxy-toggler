@@ -27,6 +27,8 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
   Profile…** command, lists the profiles alphabetically with the current one checked, then the
   proxy actions. It opens on the current profile, and picking a profile turns it on. Keybindings
   can pass a profile name to `proxyToggler.switchProfile`.
+- The README shows keybinding snippets that pass a profile name to `proxyToggler.switchProfile`;
+  Proxy Toggler ships no default keybindings.
 - With two or more profiles, the status bar shows the profile in use; tooltips and screen-reader
   labels always name the current profile.
 - `proxyToggler.showSwitchNotifications` turns on a short notification that names the profile

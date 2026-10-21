@@ -30,6 +30,7 @@
 - [Requirements](#clipboard-requirements)
 - [Quick Start](#zap-quick-start)
 - [Commands](#keyboard-commands)
+- [Keybindings](#keyboard-keybindings)
 - [Settings](#gear-settings)
 - [How It Works](#bulb-how-it-works)
 - [Security](#lock-security)
@@ -86,6 +87,27 @@
 | `Proxy Toggler: Turn Proxy On`            | Turn the current profile on                                               |
 | `Proxy Toggler: Turn Proxy Off`           | Turn the proxy off                                                        |
 | `Proxy Toggler: Toggle Proxy`             | Turn the current profile on, or the proxy off                             |
+
+## :keyboard: Keybindings
+
+Proxy Toggler adds no keyboard shortcuts of its own. To add yours, run **Preferences: Open
+Keyboard Shortcuts (JSON)** and add entries like these:
+
+```json
+[
+  { "key": "ctrl+alt+p", "command": "proxyToggler.toggle" },
+  { "key": "ctrl+alt+w", "command": "proxyToggler.switchProfile", "args": "Work" },
+  { "key": "ctrl+alt+h", "command": "proxyToggler.switchProfile", "args": "Home" }
+]
+```
+
+- `args` names the profile to turn on, ignoring letter case. An unknown name shows an error and
+  opens the switcher; without `args`, the command opens the switcher.
+- Renaming a profile breaks the keybindings that use its old name. Proxy Toggler warns when you
+  rename one, so you can update them.
+- Pick keys that nothing else uses: in the Keyboard Shortcuts editor, right-click a binding and
+  choose **Show Same Keybindings** to see conflicts. Leave the Command Palette's own shortcut,
+  `Ctrl+Shift+P` (`Cmd+Shift+P` on macOS), and `F1` alone.
 
 ## :gear: Settings
 
