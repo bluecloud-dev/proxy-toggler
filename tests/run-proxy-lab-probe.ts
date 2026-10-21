@@ -1095,7 +1095,7 @@ async function runInSshWindows(
       '-c',
       'cat "$1" 2>/dev/null || true',
       'sh',
-      `${REMOTE_RECORD_DIR}/state.json`
+      `${REMOTE_RECORD_DIR}/proxyToggler.state.json`
     ]);
     observations['remote record'] = record.trim() === '' ? 'absent' : record.trim();
   }

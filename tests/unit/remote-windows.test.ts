@@ -113,10 +113,12 @@ describe('remote windows', () => {
     // The file and its shape are a contract with installed copies (ARCHITECTURE.md, "Persisted
     // data").
     const remoteRecord: unknown = JSON.parse(
-      await fs.readFile(path.join(storageRoot, 'ssh-remote', 'state.json'), 'utf8')
+      await fs.readFile(path.join(storageRoot, 'ssh-remote', 'proxyToggler.state.json'), 'utf8')
     );
     assert.deepEqual(remoteRecord, {
-      'proxyToggler.state': { isEnabled: true, hasConfiguration: true, currentProfile: WORK }
+      isEnabled: true,
+      hasConfiguration: true,
+      currentProfile: WORK
     });
     assert.equal(local.api.getState().currentProfile?.name, 'Home');
     assert.equal(local.api.getState().isEnabled, false);

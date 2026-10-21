@@ -351,7 +351,7 @@ Measured in October 2026, on VS Code 1.97.0 and 1.143.0:
 - Switching wrote the profile to the SSH host's `Machine/settings.json` only, the local
   `settings.json` kept `http://127.0.0.1:3128`, and the request went through `squid-open`.
 - Turning the proxy off wrote `http.proxy: ""` there, and the request went direct.
-- The record, off with "Lab remote" current, was in `state.json` in the extension's global storage
+- The record, off with "Lab remote" current, was in `proxyToggler.state.json` in the extension's global storage
   on the SSH host.
 
 #### WSL (by hand, on Windows)

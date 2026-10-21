@@ -1,5 +1,3 @@
-import * as path from 'node:path';
-
 import { addProfileCommand } from './commands/add-profile';
 import { COMMANDS, CONTEXT_KEYS } from './commands/command-ids';
 import { createCredentialsNotice } from './commands/credentials-notice';
@@ -53,7 +51,7 @@ export function createProxyToggler(
   // A remote machine's own settings keep their record on that machine; this computer's keep
   // theirs in globalState. http.useLocalProxyConfiguration can change the side while the window
   // is open.
-  const remoteRecords = fileMemento(path.join(context.globalStorageUri.fsPath, 'state.json'));
+  const remoteRecords = fileMemento(context.globalStorageUri.fsPath);
   const records: Memento = {
     get: (key: string, defaultValue?: unknown) =>
       proxySide(vscodeApi).kind === 'remote'

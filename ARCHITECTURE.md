@@ -47,7 +47,7 @@ flowchart LR
   profilesSetting --> profiles[("User settings: proxyToggler.profiles")]
   root --> keychain["core/KeychainService"]
   keychain --> secrets[("SecretStorage")]
-  manager --> state[("globalState, or state.json on a remote machine")]
+  manager --> state[("globalState, or global storage on a remote machine")]
   httpSettings --> settings[("User settings: http.*")]
   root --> statusBar["vscode/StatusBarController"]
   root --> logger[("Output: Proxy Toggler")]
@@ -92,8 +92,10 @@ whose settings the window manages: this computer's when the window is local or t
 side is read again on every use, so a change of that setting applies at once. For a remote
 machine's own settings:
 
-- the record is `state.json` in the extension's `globalStorageUri`, which VS Code places on that
-  machine, so every window connected to it shares the record and local windows keep theirs;
+- the record is `proxyToggler.state.json` in the extension's `globalStorageUri`, which VS Code
+  places on that machine, so every window connected to it shares the record and local windows keep
+  theirs. Each key has a file of its own, so a write never rewrites another key; for the record,
+  the last write wins, as in `globalState`;
 - the settings adapter reads only the remote machine's values, which VS Code 1.97.0 and later
   report as `inspect().globalRemoteValue`, a field `vscode.d.ts` omits. At start-up, VS Code can
   hand the remote side this computer's `http.*` values while the remote machine's settings hold
@@ -129,19 +131,19 @@ without a cast, the compiler checks that the declared slice matches VS Code.
 These keys and shapes are a compatibility contract with installed copies of the extension. Unit
 tests pin them.
 
-| Store                              | Key                                                                                | Shape                                                                                                        |
-| ---------------------------------- | ---------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------ |
-| User settings                      | `proxyToggler.profiles` (application scope)                                        | `[{ name, proxyUrl, strictSSL, bypassList }]`; saves keep other entries and unknown fields                   |
-| `globalState`                      | `proxyToggler.savedProxy`                                                          | 0.1.x's `{ proxyUrl, strictSSL, noProxy }`; v0.2.0 never writes it (ADR 0001)                                |
-| `globalState`                      | `proxyToggler.migratedProxy`                                                       | the `savedProxy` values whose copy a later read showed, as `{ proxyUrl, strictSSL, bypassList }`             |
-| `globalState`                      | `proxyToggler.state`                                                               | the record: `{ isEnabled, hasConfiguration, currentProfile }`; other fields are kept                         |
-| `state.json` in `globalStorageUri` | `proxyToggler.state`                                                               | a remote machine's record, in the same shape, when the window manages that machine's own settings (ADR 0005) |
-| `globalState`                      | `proxyToggler.hiddenProfilesWarned`                                                | a SHA-256 hash of the hidden entries last warned about; never the entries themselves                         |
-| `SecretStorage`                    | `proxyToggler.credentials.username`, `proxyToggler.credentials.password`           | trimmed strings; no version applied them, and every activation deletes them (ADR 0003)                       |
-| `globalState`                      | `proxyToggler.credentialsNoticePending`                                            | `true` from a removal that found a secret until the notice shows                                             |
-| `globalState`                      | `proxyToggler.credentialsRemovalNoticeShown`                                       | `true` once the notice about removing the credentials in `http.proxy` has shown                              |
-| User settings                      | `http.proxy`, `http.proxyStrictSSL`, `http.noProxy` (array)                        | written on enable, removed on disable; a remote machine's own settings keep `http.proxy: ""`                 |
-| Context keys                       | `proxyToggler.hasConfiguration`, `proxyToggler.isEnabled`, `proxyToggler.hasDrift` | booleans used by `contributes.menus.commandPalette`                                                          |
+| Store              | Key                                                                                | Shape                                                                                                                                        |
+| ------------------ | ---------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------- |
+| User settings      | `proxyToggler.profiles` (application scope)                                        | `[{ name, proxyUrl, strictSSL, bypassList }]`; saves keep other entries and unknown fields                                                   |
+| `globalState`      | `proxyToggler.savedProxy`                                                          | 0.1.x's `{ proxyUrl, strictSSL, noProxy }`; v0.2.0 never writes it (ADR 0001)                                                                |
+| `globalState`      | `proxyToggler.migratedProxy`                                                       | the `savedProxy` values whose copy a later read showed, as `{ proxyUrl, strictSSL, bypassList }`                                             |
+| `globalState`      | `proxyToggler.state`                                                               | the record: `{ isEnabled, hasConfiguration, currentProfile }`; other fields are kept                                                         |
+| `globalStorageUri` | `proxyToggler.state.json`                                                          | a remote machine's record, `{ isEnabled, hasConfiguration, currentProfile }`, when the window manages that machine's own settings (ADR 0005) |
+| `globalState`      | `proxyToggler.hiddenProfilesWarned`                                                | a SHA-256 hash of the hidden entries last warned about; never the entries themselves                                                         |
+| `SecretStorage`    | `proxyToggler.credentials.username`, `proxyToggler.credentials.password`           | trimmed strings; no version applied them, and every activation deletes them (ADR 0003)                                                       |
+| `globalState`      | `proxyToggler.credentialsNoticePending`                                            | `true` from a removal that found a secret until the notice shows                                                                             |
+| `globalState`      | `proxyToggler.credentialsRemovalNoticeShown`                                       | `true` once the notice about removing the credentials in `http.proxy` has shown                                                              |
+| User settings      | `http.proxy`, `http.proxyStrictSSL`, `http.noProxy` (array)                        | written on enable, removed on disable; a remote machine's own settings keep `http.proxy: ""`                                                 |
+| Context keys       | `proxyToggler.hasConfiguration`, `proxyToggler.isEnabled`, `proxyToggler.hasDrift` | booleans used by `contributes.menus.commandPalette`                                                                                          |
 
 Credentials never go to `globalState`, settings, logs, or messages.
 

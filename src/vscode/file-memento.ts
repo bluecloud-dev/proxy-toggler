@@ -4,29 +4,32 @@ import * as path from 'node:path';
 
 import type { Memento } from '../core/proxy-manager';
 
-// A Memento kept in a JSON file, for state that must stay on the machine whose settings it
+// A Memento kept in a folder, for state that must stay on the machine whose settings it
 // describes: a remote machine's record lives in the extension's global storage there, shared by
-// every window connected to it (ADR 0005). Each read goes to the file, so a write from another
-// window shows at once.
-export function fileMemento(file: string): Memento {
-  const read = (): Record<string, unknown> => {
+// every window connected to it (ADR 0005). Each key has a file of its own, so a window that
+// writes one key never rewrites another; for one key the last write wins, as in globalState, and
+// reconciliation brings the record back in step with the settings. Each read goes to the file,
+// so a write from another window shows at once.
+export function fileMemento(folder: string): Memento {
+  const fileOf = (key: string): string => path.join(folder, `${encodeURIComponent(key)}.json`);
+
+  const read = (key: string): unknown => {
     let text: string;
     try {
-      text = fs.readFileSync(file, 'utf8');
+      text = fs.readFileSync(fileOf(key), 'utf8');
     } catch (error: unknown) {
       // No file yet: nothing recorded.
       if ((error as NodeJS.ErrnoException).code === 'ENOENT') {
-        return {};
+        return undefined;
       }
       throw error;
     }
     try {
-      const value: unknown = JSON.parse(text);
-      return typeof value === 'object' && value !== null ? (value as Record<string, unknown>) : {};
+      return JSON.parse(text) as unknown;
     } catch (error: unknown) {
       // A file that is not JSON, such as one edited by hand, records nothing.
       if (error instanceof SyntaxError) {
-        return {};
+        return undefined;
       }
       throw error;
     }
@@ -34,7 +37,7 @@ export function fileMemento(file: string): Memento {
 
   return {
     get<T>(key: string, defaultValue?: T): T | undefined {
-      const value = read()[key] as T | undefined;
+      const value = read(key) as T | undefined;
       return value === undefined ? defaultValue : value;
     },
 
@@ -44,10 +47,14 @@ export function fileMemento(file: string): Memento {
     // only its owner can read it.
     update(key: string, value: unknown): Promise<void> {
       try {
-        const values = { ...read(), [key]: value };
-        fs.mkdirSync(path.dirname(file), { recursive: true, mode: 0o700 });
+        const file = fileOf(key);
+        if (value === undefined) {
+          fs.rmSync(file, { force: true });
+          return Promise.resolve();
+        }
+        fs.mkdirSync(folder, { recursive: true, mode: 0o700 });
         const temporary = `${file}.${randomUUID()}.tmp`;
-        fs.writeFileSync(temporary, JSON.stringify(values), { flag: 'wx', mode: 0o600 });
+        fs.writeFileSync(temporary, JSON.stringify(value), { flag: 'wx', mode: 0o600 });
         fs.renameSync(temporary, file);
         return Promise.resolve();
       } catch (error: unknown) {
