@@ -148,6 +148,19 @@ flowchart LR
 - **Works in Restricted Mode**: the extension reads no workspace files, so it stays available in folders you have not trusted
 - **Report vulnerabilities privately**; see [SECURITY.md](SECURITY.md)
 
+### Trusting a company's certificate authority
+
+Some companies inspect HTTPS traffic through a proxy that signs certificates with the company's own
+certificate authority.
+
+- The VS Code window, and extensions by default, trust the authorities in your operating system's
+  certificate store (`http.systemCertificates`, on by default). Install the company's authority
+  there.
+- VS Code's command line, such as `code --install-extension`, uses Node's built-in list instead.
+  Point the `NODE_EXTRA_CA_CERTS` environment variable at the authority's certificate, a PEM file.
+- Test Connection checks certificates against Node's built-in list only, so it warns about a
+  company authority even when VS Code trusts it, and names that authority.
+
 ## :wrench: Troubleshooting
 
 **Toggle not changing settings?**

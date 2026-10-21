@@ -43,6 +43,10 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
   `HEAD /` for an `https://` URL, a plain request for an `http://` one. It reports a pass, a
   warning (a sign-in request, or an `http://` status the proxy may have sent) or a failure with
   the reason, says which side of VS Code reaches the URL directly, and stores and logs nothing.
+- Test Connection checks certificates on both TLS connections against Node's built-in
+  authorities. An untrusted or self-signed issuer is a warning that names it and links to the new
+  README section on trusting a company's certificate authority; a name mismatch, or a certificate
+  outside its dates, fails.
 - SOCKS profiles: a proxy URL may use `socks://` or `socks5://`. `socks4`, `socks4a` and `socks5h`
   are refused with the reason: the VS Code window rejects the last two, and with `socks4` the
   window and extensions resolve host names in different places.

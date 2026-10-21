@@ -151,6 +151,83 @@ describe('testConnection', () => {
     assert.match(timedOut.message, /did not answer/);
   });
 
+  describe("certificates, checked against Node's built-in authorities only", () => {
+    const CA_SECTION =
+      'https://github.com/bluecloud-dev/proxy-toggler#trusting-a-companys-certificate-authority';
+    const DAY_MS = 24 * 60 * 60 * 1000;
+
+    async function verdictFor(certificate: Certificate) {
+      const proxy = await proxyWith({ tunnelTo: (await origin(certificate)).port });
+      return testConnection(proxyUrl(proxy), 'https://origin.test');
+    }
+
+    it('warn about an untrusted issuer, naming it and saying who accepts it', async () => {
+      const verdict = await verdictFor(ORIGIN);
+
+      assert.equal(verdict.outcome, 'warn', verdict.message);
+      assert.match(verdict.message, /answered 204/);
+      assert.match(verdict.message, /Proxy Toggler Test CA/);
+      assert.match(verdict.message, /VS Code's window and, by default, extensions accept it/);
+      assert.match(verdict.message, /command line does not/);
+      assert.ok(verdict.message.includes(CA_SECTION));
+      assert.doesNotMatch(verdict.message, /strict ?SSL/i);
+    });
+
+    it('warn about a self-signed certificate', async () => {
+      const selfSigned = createCertificate({
+        commonName: 'origin.test',
+        altNames: ['origin.test']
+      });
+
+      const verdict = await verdictFor(selfSigned);
+
+      assert.equal(verdict.outcome, 'warn', verdict.message);
+      assert.match(verdict.message, /self-signed/);
+    });
+
+    it('fail a certificate for another name, even from an untrusted issuer', async () => {
+      const misnamed = createCertificate({
+        commonName: 'other.test',
+        altNames: ['other.test'],
+        issuer: AUTHORITY
+      });
+
+      const verdict = await verdictFor(misnamed);
+
+      assert.equal(verdict.outcome, 'fail', verdict.message);
+      assert.match(verdict.message, /for other\.test, not origin\.test/);
+    });
+
+    it('fail a certificate outside its validity dates, even from an untrusted issuer', async () => {
+      const expired = createCertificate({
+        commonName: 'origin.test',
+        altNames: ['origin.test'],
+        issuer: AUTHORITY,
+        notBefore: new Date(Date.now() - 30 * DAY_MS),
+        notAfter: new Date(Date.now() - DAY_MS)
+      });
+
+      const verdict = await verdictFor(expired);
+
+      assert.equal(verdict.outcome, 'fail', verdict.message);
+      assert.match(verdict.message, /valid only from/);
+    });
+
+    it("check an https proxy's certificate the same way", async () => {
+      const misnamedProxy = createCertificate({
+        commonName: 'proxy.test',
+        altNames: ['proxy.test'],
+        issuer: AUTHORITY
+      });
+      const proxy = await proxyWith({ tunnelTo: (await origin()).port, tls: misnamedProxy });
+
+      const verdict = await testConnection(proxyUrl(proxy, 'https'), 'https://origin.test', TRUST);
+
+      assert.equal(verdict.outcome, 'fail', verdict.message);
+      assert.match(verdict.message, /proxy's certificate is for proxy\.test, not 127\.0\.0\.1/);
+    });
+  });
+
   it('says that it covers only HTTP and HTTPS proxies', async () => {
     const verdict = await testConnection('socks5://127.0.0.1:1080', 'https://origin.test');
 

@@ -1,3 +1,4 @@
+import type { X509Certificate } from 'node:crypto';
 import * as net from 'node:net';
 import type { Duplex } from 'node:stream';
 import * as tls from 'node:tls';
@@ -15,6 +16,11 @@ export type TestOptions = {
 };
 
 const DEFAULT_TIMEOUT_MS = 10_000;
+
+const CA_SECTION =
+  'https://github.com/bluecloud-dev/proxy-toggler#trusting-a-companys-certificate-authority';
+
+type Finding = { outcome: 'warn' | 'fail'; message: string };
 
 // Tests a proxy directly, not through VS Code's networking. An https:// target goes through a
 // CONNECT tunnel, with TLS to the proxy first when the proxy is https://, then TLS to the target
@@ -40,8 +46,9 @@ export async function testConnection(
   };
 
   let socket: net.Socket;
+  let proxyFinding: Finding | undefined;
   try {
-    socket = await connectToProxy(proxy, settings);
+    ({ socket, finding: proxyFinding } = await connectToProxy(proxy, settings));
   } catch (error: unknown) {
     return {
       outcome: 'fail',
@@ -50,9 +57,14 @@ export async function testConnection(
   }
 
   try {
-    return target.protocol === 'https:'
-      ? await throughTunnel(socket, target, settings)
-      : await throughProxy(socket, target, settings.timeoutMs);
+    if (proxyFinding?.outcome === 'fail') {
+      return proxyFinding;
+    }
+    const verdict =
+      target.protocol === 'https:'
+        ? await throughTunnel(socket, target, settings)
+        : await throughProxy(socket, target, settings.timeoutMs);
+    return withFindings(verdict, proxyFinding);
   } catch (error: unknown) {
     return { outcome: 'fail', message: `${reasonFor(error, settings.timeoutMs)}.` };
   } finally {
@@ -60,11 +72,83 @@ export async function testConnection(
   }
 }
 
+// The worse outcome wins, and every finding is said.
+function withFindings(verdict: TestVerdict, ...findings: Array<Finding | undefined>): TestVerdict {
+  const rank = { skip: 0, pass: 1, warn: 2, fail: 3 } as const;
+  return findings.reduce<TestVerdict>(
+    (result, finding) =>
+      finding
+        ? {
+            outcome:
+              rank[finding.outcome] > rank[result.outcome] ? finding.outcome : result.outcome,
+            message: `${result.message} ${finding.message}`
+          }
+        : result,
+    verdict
+  );
+}
+
+// The chain is checked against the trusted authorities only, so that an issuer the OS trusts but
+// Node does not shows as a warning. Node skips the name and date checks when the chain fails, so
+// the handshake completes on this diagnostic connection, which sends nothing but the request for
+// the test, and the checks run here.
+function checkCertificate(socket: tls.TLSSocket, host: string, whose: string): Finding | undefined {
+  const certificate = socket.getPeerX509Certificate();
+  if (!certificate) {
+    return { outcome: 'fail', message: `${whose} sent no certificate.` };
+  }
+
+  const names = net.isIP(host) === 0 ? certificate.checkHost(host) : certificate.checkIP(host);
+  if (names === undefined) {
+    return {
+      outcome: 'fail',
+      message: `${whose} certificate is for ${namesOf(certificate)}, not ${host}.`
+    };
+  }
+
+  const now = Date.now();
+  if (now < Date.parse(certificate.validFrom) || now > Date.parse(certificate.validTo)) {
+    return {
+      outcome: 'fail',
+      message: `${whose} certificate is valid only from ${certificate.validFrom} to ${certificate.validTo}.`
+    };
+  }
+
+  if (socket.authorized) {
+    return undefined;
+  }
+  const issuer = commonNameOf(certificate.issuer);
+  const origin =
+    certificate.issuer === certificate.subject
+      ? `is self-signed by ${issuer}`
+      : `comes from ${issuer}`;
+  return {
+    outcome: 'warn',
+    message: `${whose} certificate ${origin}, an authority that Node's built-in list does not include. VS Code's window and, by default, extensions accept it if your operating system trusts that authority; VS Code's command line does not. See ${CA_SECTION}.`
+  };
+}
+
+function namesOf(certificate: X509Certificate): string {
+  const altNames = (certificate.subjectAltName ?? '')
+    .split(', ')
+    .map((name) => name.replace(/^(DNS|IP Address):/, ''))
+    .filter((name) => name.length > 0);
+  return altNames.length > 0 ? altNames.join(', ') : commonNameOf(certificate.subject);
+}
+
+function commonNameOf(distinguishedName: string): string {
+  const line = distinguishedName.split('\n').find((part) => part.startsWith('CN='));
+  return line ? line.slice('CN='.length) : distinguishedName;
+}
+
 type Settings = { timeoutMs: number; ca: string[] };
 
 class TimeoutError extends Error {}
 
-function connectToProxy(proxy: URL, settings: Settings): Promise<net.Socket> {
+function connectToProxy(
+  proxy: URL,
+  settings: Settings
+): Promise<{ socket: net.Socket; finding?: Finding }> {
   // The URL keeps the brackets of an IPv6 host; sockets want the bare address.
   const host = proxy.hostname.replace(/^\[(.*)\]$/, '$1');
   const port = Number(proxy.port || defaultPortOf(proxy.protocol));
@@ -72,13 +156,22 @@ function connectToProxy(proxy: URL, settings: Settings): Promise<net.Socket> {
   return new Promise((resolve, reject) => {
     const secure = proxy.protocol === 'https:';
     const socket = secure
-      ? // No servername for an IP address, which TLS SNI does not allow.
-        tls.connect({ host, port, servername: net.isIP(host) ? undefined : host, ca: settings.ca })
+      ? tls.connect({
+          host,
+          port,
+          // No servername for an IP address, which TLS SNI does not allow.
+          servername: net.isIP(host) ? undefined : host,
+          ca: settings.ca,
+          rejectUnauthorized: false
+        })
       : net.connect({ host, port });
     socket.setTimeout(settings.timeoutMs, () => socket.destroy(new TimeoutError()));
     socket.once(secure ? 'secureConnect' : 'connect', () => {
       socket.setTimeout(0);
-      resolve(socket);
+      const finding = secure
+        ? checkCertificate(socket as tls.TLSSocket, host, "The proxy's")
+        : undefined;
+      resolve({ socket, finding });
     });
     socket.once('error', reject);
   });
@@ -107,7 +200,8 @@ async function throughTunnel(
     const connection = tls.connect({
       socket,
       servername: net.isIP(host) ? undefined : host,
-      ca: settings.ca
+      ca: settings.ca,
+      rejectUnauthorized: false
     });
     connection.once('secureConnect', () => resolve(connection));
     connection.once('error', (error: Error) =>
@@ -115,12 +209,19 @@ async function throughTunnel(
     );
   });
   try {
+    const finding = checkCertificate(secure, host, `${target.host}'s`);
+    if (finding?.outcome === 'fail') {
+      return finding;
+    }
     secure.write(`HEAD / HTTP/1.1\r\nHost: ${target.host}\r\nConnection: close\r\n\r\n`);
     const answer = await readHead(secure, settings.timeoutMs);
-    return {
-      outcome: 'pass',
-      message: `The proxy opened a tunnel to ${target.host}, which answered ${answer.status}.`
-    };
+    return withFindings(
+      {
+        outcome: 'pass',
+        message: `The proxy opened a tunnel to ${target.host}, which answered ${answer.status}.`
+      },
+      finding
+    );
   } finally {
     secure.destroy();
   }
