@@ -42,7 +42,7 @@ type ExplainedError = Error & { toUserMessage(): string };
 
 // An error that words its own message says what failed better than a command's fallback, so any
 // error with toUserMessage() is shown in its own words, without a list of error classes.
-function userMessageOf(error: unknown): string | undefined {
+export function userMessageOf(error: unknown): string | undefined {
   return isExplained(error) ? error.toUserMessage() : undefined;
 }
 
