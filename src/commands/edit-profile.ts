@@ -48,7 +48,9 @@ export async function editProfileCommand(
       return;
     }
 
-    const field = await pickField(vscodeApi, profile);
+    const state = proxyManager.getState();
+    const applies = state.isEnabled && sameName(state.currentProfile?.name ?? '', profile.name);
+    const field = await pickField(vscodeApi, profile, applies);
     if (!field) {
       return;
     }
@@ -84,7 +86,11 @@ export async function editProfileCommand(
   }
 }
 
-async function pickField(vscodeApi: EditApi, profile: Profile): Promise<Field | undefined> {
+async function pickField(
+  vscodeApi: EditApi,
+  profile: Profile,
+  applies: boolean
+): Promise<Field | undefined> {
   const { l10n } = vscodeApi;
   const items: Array<vscode.QuickPickItem & { field: Field }> = [
     { label: l10n.t('Name'), description: profile.name, field: 'name' },
@@ -104,7 +110,9 @@ async function pickField(vscodeApi: EditApi, profile: Profile): Promise<Field | 
   const choice = await pickOne(vscodeApi, {
     title: l10n.t('Edit {0}', profile.name),
     items,
-    placeholder: l10n.t('Pick a field to change; Escape when done')
+    placeholder: applies
+      ? l10n.t('Changes save and apply immediately; Escape when done')
+      : l10n.t('Changes save immediately; Escape when done')
   });
   return choice?.field;
 }

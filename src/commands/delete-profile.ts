@@ -24,7 +24,7 @@ export async function deleteProfileCommand(
   }
 
   const choice = await notificationService.showWarning(
-    `Delete the profile ${profile.name}?`,
+    `Delete the profile ${profile.name}? If it is on when deleted, the proxy turns off.`,
     ACTION_DELETE
   );
   if (choice !== ACTION_DELETE.id) {

@@ -60,7 +60,7 @@ describe('switcher', () => {
       quickPick?.items.map((item) => [item.label, item.description]),
       [
         ['Home', HOME.proxyUrl],
-        ['$(check) Work', WORK.proxyUrl],
+        ['$(check) Work', `${WORK.proxyUrl} — current, proxy off`],
         ['', undefined],
         ['Turn Proxy On', undefined],
         ['Add Profile…', undefined],

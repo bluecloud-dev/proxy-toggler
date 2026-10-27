@@ -120,6 +120,7 @@ describe('Edit Profile', () => {
     await vscode.commandHandlers.get(COMMANDS.configure)?.();
 
     assert.deepEqual(vscode.settings.get('http.noProxy'), ['localhost', '.corp.example.com']);
+    assert.match(vscode.quickPicks[0]?.placeholder ?? '', /save.*apply.*immediately/i);
   });
 
   it('reports a saved edit that could not be applied and refreshes drift before the error', async () => {
@@ -280,7 +281,7 @@ describe('Delete Profile', () => {
 
     assert.deepEqual(
       vscode.messages.map(({ message, items }) => [message, items]),
-      [['Delete the profile Home?', ['Delete']]]
+      [['Delete the profile Home? If it is on when deleted, the proxy turns off.', ['Delete']]]
     );
     assert.deepEqual(profiles(vscode), [WORK]);
   });
@@ -307,6 +308,7 @@ describe('Delete Profile', () => {
 
     assert.equal(vscode.settings.has('http.proxy'), false);
     assert.deepEqual(api.getState().currentProfile, HOME);
+    assert.match(vscode.messages[0]?.message ?? '', /proxy turns off/i);
     assert.equal(vscode.messages.at(-1)?.message, 'Proxy Toggler deleted Work.');
   });
 });

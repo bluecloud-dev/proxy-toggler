@@ -88,7 +88,10 @@ async function showSwitcher(
 
   const profileItems: SwitcherItem[] = sortByName(proxyManager.getProfiles()).map((profile) => ({
     label: isCurrent(profile) ? `$(check) ${profile.name}` : profile.name,
-    description: profile.proxyUrl,
+    description:
+      isCurrent(profile) && !isEnabled
+        ? l10n.t('{0} — current, proxy off', profile.proxyUrl)
+        : profile.proxyUrl,
     profile
   }));
   // While drift lasts: save what VS Code uses, or put the record back into the settings.
