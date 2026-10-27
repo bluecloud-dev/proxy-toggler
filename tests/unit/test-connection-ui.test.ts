@@ -65,7 +65,7 @@ describe('Test Connection', () => {
     assert.deepEqual(prefilled, ['https://marketplace.visualstudio.com']);
     assert.deepEqual(
       vscode.messages.map(({ kind, message }) => [kind, message]),
-      [['info', 'Work: The proxy fetched http://origin.test/, which answered 200.']]
+      [['info', 'Work: The proxy answered 200 for http://origin.test.']]
     );
     // The URL is stored nowhere, and results are never logged.
     assert.doesNotMatch(JSON.stringify([...vscode.settings.entries()]), /origin\.test/);
@@ -78,6 +78,34 @@ describe('Test Connection', () => {
 
     assert.deepEqual(vscode.messages, []);
     assert.deepEqual(proxy.requests, []);
+  });
+
+  it('rejects credentials in the target without sending or showing them', async () => {
+    let problem: unknown;
+    const vscode = createFakeVscode({
+      settings: { 'proxyToggler.profiles': [profile()] },
+      quickPick: (pick, index) => (index === 0 ? chooseTest(pick) : pick.dismiss()),
+      inputBox: (box) => {
+        box.submit('http://alice:secret@origin.test/');
+        problem = box.validationMessage;
+        box.dismiss();
+      }
+    });
+    createProxyToggler(vscode, createExtensionContext());
+
+    await vscode.commandHandlers.get(COMMANDS.configure)?.();
+
+    assert.match(String(problem), /credentials/i);
+    assert.doesNotMatch(String(problem), /alice|secret/);
+    assert.deepEqual(proxy.requests, []);
+    assert.doesNotMatch(JSON.stringify(vscode.messages), /alice|secret/);
+  });
+
+  it('explains the HTTPS test scope and does not show a target query', async () => {
+    const { vscode } = await testFromEdit('http://origin.test/private?token=secret');
+
+    assert.match(vscode.inputBoxes[0]?.prompt ?? '', /HTTPS.*origin/i);
+    assert.doesNotMatch(JSON.stringify(vscode.messages), /private|secret/);
   });
 
   it('is skipped when both the window and extensions reach the target directly', async () => {
@@ -138,9 +166,7 @@ describe('Test Connection', () => {
 
     assert.deepEqual(
       vscode.messages.map(({ message }) => message),
-      [
-        `Work: The proxy fetched http://api.example.com/, which answered 200. Tested from ${os.hostname()}.`
-      ]
+      [`Work: The proxy answered 200 for http://api.example.com. Tested from ${os.hostname()}.`]
     );
   });
 
@@ -152,7 +178,7 @@ describe('Test Connection', () => {
     assert.deepEqual(
       vscode.messages.map(({ message }) => message),
       [
-        "Work: The proxy fetched http://origin.test/, which answered 200. Tested from WSL. VS Code's window connects from this computer and was not tested."
+        "Work: The proxy answered 200 for http://origin.test. Tested from WSL. VS Code's window connects from this computer and was not tested."
       ]
     );
   });

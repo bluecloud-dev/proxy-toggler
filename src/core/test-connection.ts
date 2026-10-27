@@ -30,13 +30,18 @@ export async function testConnection(
   targetUrl: string,
   options: TestOptions = {}
 ): Promise<TestVerdict> {
+  const targetProblem = testTargetProblem(targetUrl);
+  if (targetProblem) {
+    return { outcome: 'fail', message: targetProblem };
+  }
   const untested = untestedProxy(proxyUrl);
   if (untested) {
     return untested;
   }
   const proxy = new URL(proxyUrl);
 
-  const target = new URL(targetUrl);
+  const target = new URL(targetUrl.trim());
+  target.hash = '';
   const settings = {
     timeoutMs: options.timeoutMs ?? DEFAULT_TIMEOUT_MS,
     ca: [...(options.ca ?? tls.rootCertificates)]
@@ -67,6 +72,15 @@ export async function testConnection(
   } finally {
     socket.destroy();
   }
+}
+
+export function testTargetProblem(value: string): string | undefined {
+  const target = value.trim();
+  if (!/^https?:\/\/[^/]/i.test(target) || !URL.canParse(target)) {
+    return 'Enter an http:// or https:// URL.';
+  }
+  const url = new URL(target);
+  return url.username || url.password ? 'Remove credentials from the URL.' : undefined;
 }
 
 // The verdict for a proxy the test does not cover, before any target is asked for.
@@ -267,12 +281,12 @@ async function throughProxy(
   if (answer.status >= 200 && answer.status < 400) {
     return {
       outcome: 'pass',
-      message: `The proxy fetched ${target.href}, which answered ${answer.status}.`
+      message: `The proxy answered ${answer.status} for ${target.origin}.`
     };
   }
   return {
     outcome: 'warn',
-    message: `The proxy answered ${answer.status} ${answer.statusText} for ${target.href}. The proxy may have sent this status rather than ${target.host}.`
+    message: `The proxy answered ${answer.status} for ${target.origin}. The proxy may have sent this status rather than ${target.host}.`
   };
 }
 

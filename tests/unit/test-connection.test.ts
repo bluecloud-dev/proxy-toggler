@@ -86,6 +86,33 @@ describe('testConnection', () => {
     }
   });
 
+  it('refuses target URLs with credentials before contacting the proxy', async () => {
+    const proxy = await proxyWith();
+
+    for (const target of ['http://alice:secret@origin.test/', 'https://alice@origin.test/']) {
+      const verdict = await testConnection(proxyUrl(proxy), target, TRUST);
+
+      assert.equal(verdict.outcome, 'fail');
+      assert.match(verdict.message, /credentials/i);
+      assert.doesNotMatch(verdict.message, /alice|secret/);
+    }
+    assert.deepEqual(proxy.requests, []);
+  });
+
+  it('omits sensitive target details from HTTP results and never sends a fragment', async () => {
+    for (const answerStatus of [200, 503]) {
+      const proxy = await proxyWith({ answerStatus });
+      const target = 'http://origin.test/private-token?key=secret#fragment';
+
+      const verdict = await testConnection(proxyUrl(proxy), target, TRUST);
+
+      assert.equal(verdict.outcome, answerStatus === 200 ? 'pass' : 'warn');
+      assert.match(verdict.message, /origin\.test/);
+      assert.doesNotMatch(verdict.message, /private-token|secret|fragment/);
+      assert.equal(proxy.requests[0]?.url, 'http://origin.test/private-token?key=secret');
+    }
+  });
+
   it('warns that the proxy may have sent another status for an http target', async () => {
     const proxy = await proxyWith({ answerStatus: 503 });
 

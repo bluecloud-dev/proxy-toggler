@@ -1,6 +1,11 @@
 import { extensionsSendDirect, windowSendsDirect } from '../core/bypass';
 import type { Profile } from '../core/profiles';
-import { testConnection, type TestOptions, untestedProxy } from '../core/test-connection';
+import {
+  testConnection,
+  type TestOptions,
+  testTargetProblem,
+  untestedProxy
+} from '../core/test-connection';
 import type { VscodeApi } from '../vscode/api';
 import type { Notifier } from '../vscode/notification-service';
 import { proxySide } from '../vscode/proxy-side';
@@ -30,13 +35,15 @@ export async function testConnectionCommand(
 
   const target = await askText(vscodeApi, {
     title: l10n.t('Test Connection for {0}', profile.name),
-    prompt: l10n.t('A URL to reach through the proxy. It is not saved.'),
+    prompt: l10n.t(
+      "A URL to reach through the proxy. HTTPS tests only the origin's root; the URL is not saved."
+    ),
     value: DEFAULT_TARGET,
     canGoBack: false,
-    validate: (value) =>
-      /^https?:\/\/[^/]/i.test(value.trim()) && URL.canParse(value.trim())
-        ? undefined
-        : l10n.t('Enter an http:// or https:// URL.')
+    validate: (value) => {
+      const problem = testTargetProblem(value);
+      return problem ? l10n.t(problem) : undefined;
+    }
   });
   if (typeof target !== 'string') {
     return;

@@ -566,8 +566,7 @@ const TEST_CONNECTION_CHECKS: readonly TestConnectionCheck[] = [
     proxyUrl: SQUID_OPEN,
     targetUrl: `${ORIGIN}/test-connection`,
     outcome: 'pass',
-    message:
-      /^The proxy fetched http:\/\/origin\.lab\.test:8088\/test-connection, which answered 200\.$/
+    message: /^The proxy answered 200 for http:\/\/origin\.lab\.test:8088\.$/
   },
   {
     // Squid answers 503 for a host it cannot resolve.
