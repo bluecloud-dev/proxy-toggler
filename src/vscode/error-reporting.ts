@@ -1,7 +1,5 @@
 import type * as vscode from 'vscode';
 
-import { ProfileApplyError } from '../core/proxy-manager';
-import { ConfigurationError } from '../core/proxy-settings-writer';
 import type { Logger, VscodeApi } from './api';
 import type { Notifier } from './notification-service';
 
@@ -24,7 +22,7 @@ export function createCommandRegistrar(
         await run(...args);
       } catch (error: unknown) {
         logger.error(`${command} failed`, error);
-        await notificationService.showError(userMessageFor(error, failureMessage));
+        await notificationService.showError(userMessageOf(error) ?? failureMessage);
       }
     });
 }
@@ -40,8 +38,16 @@ export function runInBackground(logger: Logger, task: string, run: () => Promise
   })();
 }
 
-function userMessageFor(error: unknown, failureMessage: string): string {
-  return error instanceof ConfigurationError || error instanceof ProfileApplyError
-    ? error.toUserMessage()
-    : failureMessage;
+type ExplainedError = Error & { toUserMessage(): string };
+
+// An error that words its own message says what failed better than a command's fallback, so any
+// error with toUserMessage() is shown in its own words, without a list of error classes.
+function userMessageOf(error: unknown): string | undefined {
+  return isExplained(error) ? error.toUserMessage() : undefined;
+}
+
+function isExplained(error: unknown): error is ExplainedError {
+  return (
+    error instanceof Error && typeof (error as Partial<ExplainedError>).toUserMessage === 'function'
+  );
 }

@@ -1,6 +1,11 @@
 import { strict as assert } from 'node:assert';
 
-import { ConfigurationError, ProxySettingsWriter } from '../../src/core/proxy-settings-writer';
+import { ProfileApplyError } from '../../src/core/proxy-manager';
+import {
+  ConfigurationError,
+  failedSettingWrite,
+  ProxySettingsWriter
+} from '../../src/core/proxy-settings-writer';
 import { createHttpSettings } from '../support/fakes';
 
 const VALUES = {
@@ -115,5 +120,27 @@ describe('ProxySettingsWriter', () => {
       { key: 'proxyStrictSSL', value: true },
       { key: 'noProxy', value: 'localhost' }
     ]);
+  });
+});
+
+describe('failedSettingWrite', () => {
+  it('finds the failed setting write behind wrapping errors', () => {
+    const failure = new ConfigurationError('enable', 'proxy');
+
+    assert.equal(failedSettingWrite(failure), failure);
+    assert.equal(failedSettingWrite(new ProfileApplyError('Work', failure)), failure);
+    assert.equal(
+      failedSettingWrite(new Error('outer', { cause: new Error('inner', { cause: failure }) })),
+      failure
+    );
+    assert.equal(failedSettingWrite(new Error('plain')), undefined);
+    assert.equal(failedSettingWrite('text'), undefined);
+  });
+
+  it('stops at a cause chain that loops', () => {
+    const loop = new Error('loop');
+    loop.cause = loop;
+
+    assert.equal(failedSettingWrite(loop), undefined);
   });
 });

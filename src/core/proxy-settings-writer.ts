@@ -50,6 +50,22 @@ export class ConfigurationError extends Error {
   }
 }
 
+// The failed setting write behind an error, found through `cause` when another error wraps it,
+// as ProfileApplyError does.
+export function failedSettingWrite(error: unknown): ConfigurationError | undefined {
+  // A cause chain can lead back to an error already seen.
+  const seen = new Set<Error>();
+  let current = error;
+  while (current instanceof Error && !seen.has(current)) {
+    if (current instanceof ConfigurationError) {
+      return current;
+    }
+    seen.add(current);
+    current = current.cause;
+  }
+  return undefined;
+}
+
 // Writes and clears VS Code's proxy settings. It stores nothing; callers keep their own record.
 export class ProxySettingsWriter {
   constructor(private readonly httpSettings: HttpSettings) {}
