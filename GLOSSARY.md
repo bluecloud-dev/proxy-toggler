@@ -70,6 +70,11 @@ A change to VS Code's proxy settings or to the profile list that the window seei
 make: a hand edit, Settings Sync, another window or another tool.
 _Avoid_: external edit, foreign change
 
+**Proxy change**:
+A change Proxy Toggler makes to the profiles, the record or VS Code's proxy settings because the
+user asked for it in this window.
+_Avoid_: own change, user action
+
 ### Remote
 
 **Remote window**:
