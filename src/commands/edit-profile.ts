@@ -70,6 +70,7 @@ export async function editProfileCommand(
         notificationService.inform('error', error.reason);
         return;
       }
+      await refreshUi();
       await showKnownProxyError(vscodeApi, notificationService, error, { offerDisable: true });
     }
     await refreshUi();

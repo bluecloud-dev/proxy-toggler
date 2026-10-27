@@ -122,6 +122,78 @@ describe('Edit Profile', () => {
     assert.deepEqual(vscode.settings.get('http.noProxy'), ['localhost', '.corp.example.com']);
   });
 
+  it('reports a saved edit that could not be applied and refreshes drift before the error', async () => {
+    let statusAtError: string | undefined;
+    const vscode = createFakeVscode({
+      ...script([choose('Proxy URL')], [(box) => box.submit('http://new.example.com:3128')]),
+      settings: { 'proxyToggler.profiles': [WORK, HOME], ...APPLIED },
+      answer: ({ kind }) => {
+        if (kind === 'error') {
+          statusAtError = api.getStatusBarText();
+        }
+        return undefined;
+      }
+    });
+    const getConfiguration = vscode.workspace.getConfiguration.bind(vscode.workspace);
+    vscode.workspace.getConfiguration = (section) => {
+      const config = getConfiguration(section);
+      return section === 'http'
+        ? {
+            ...config,
+            update: async (key, value, target) => {
+              if (key === 'noProxy') {
+                throw new Error('The setting is managed');
+              }
+              return config.update(key, value, target);
+            }
+          }
+        : config;
+    };
+    const state = new Map<string, unknown>([
+      ['proxyToggler.state', { isEnabled: true, currentProfile: WORK }]
+    ]);
+    const api = createProxyToggler(vscode, createExtensionContext({ state }));
+
+    await vscode.commandHandlers.get(COMMANDS.configure)?.();
+
+    assert.equal(profiles(vscode)[0]?.proxyUrl, 'http://new.example.com:3128');
+    assert.equal(vscode.settings.get('http.proxy'), WORK.proxyUrl);
+    assert.match(vscode.messages[0]?.message ?? '', /saved.*could not.*apply/i);
+    assert.match(vscode.messages[0]?.message ?? '', /http\.noProxy/);
+    assert.deepEqual(vscode.messages[0]?.items, ['Open Settings', 'Turn Proxy Off']);
+    assert.match(statusAtError ?? '', /warning/);
+  });
+
+  it('reports a saved edit when an unexpected error prevents re-application', async () => {
+    const vscode = createFakeVscode({
+      ...script([choose('Proxy URL')], [(box) => box.submit('http://new.example.com:3128')]),
+      settings: {
+        'proxyToggler.profiles': [WORK, HOME],
+        ...APPLIED,
+        'http.proxy': 'http://alice:secret@proxy.example.com:8080'
+      }
+    });
+    const context = createExtensionContext({
+      state: new Map([['proxyToggler.state', { isEnabled: true, currentProfile: WORK }]])
+    });
+    const update = context.globalState.update.bind(context.globalState);
+    context.globalState.update = async (key, value) => {
+      if (key === 'proxyToggler.credentialsRemovalNoticeShown') {
+        throw new Error('notice failed');
+      }
+      await update(key, value);
+    };
+    createProxyToggler(vscode, context);
+
+    await vscode.commandHandlers.get(COMMANDS.configure)?.();
+
+    assert.equal(profiles(vscode)[0]?.proxyUrl, 'http://new.example.com:3128');
+    assert.match(vscode.messages[0]?.message ?? '', /saved.*could not.*apply/i);
+    assert.match(vscode.messages[0]?.message ?? '', /output/i);
+    assert.doesNotMatch(vscode.messages[0]?.message ?? '', /alice|secret/);
+    assert.match(vscode.logs.join('\n'), /ProfileApplyError/);
+  });
+
   it('warns after a rename that keybindings using the old name stop working', async () => {
     const { vscode, api } = activate(script([choose('Name')], [(box) => box.submit('Office')]));
 

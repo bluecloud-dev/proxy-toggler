@@ -22,6 +22,7 @@ import {
 } from './profiles';
 import type { ToggleState } from './proxy-configuration';
 import {
+  ConfigurationError,
   type HttpSettingKey,
   type HttpSettings,
   ProxySettingsWriter
@@ -58,6 +59,22 @@ export type ProxyNotices = {
   // Before Proxy Toggler overwrites or clears an http.proxy that holds credentials.
   credentialsWillBeRemoved(): Promise<void>;
 };
+
+export class ProfileApplyError extends Error {
+  constructor(
+    private readonly profileName: string,
+    error: unknown
+  ) {
+    super(`Saved ${profileName}, but could not fully apply the changes.`, { cause: error });
+    this.name = 'ProfileApplyError';
+  }
+
+  toUserMessage(): string {
+    return this.cause instanceof ConfigurationError
+      ? this.cause.toUserMessage(`Saved ${this.profileName}, but could not fully apply the changes`)
+      : `${this.message} See the Proxy Toggler output for details.`;
+  }
+}
 
 // Profiles hold no credentials, and none reach settings or globalState (ADR 0003).
 export class ProxyManager {
@@ -139,7 +156,11 @@ export class ProxyManager {
       );
       if (isCurrent) {
         if (isEnabled) {
-          await this.applySettings(saved);
+          try {
+            await this.applySettings(saved);
+          } catch (error: unknown) {
+            throw new ProfileApplyError(saved.name, error);
+          }
         }
         await this.writeState({ currentProfile: saved });
       }

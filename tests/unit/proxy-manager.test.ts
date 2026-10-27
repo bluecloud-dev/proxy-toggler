@@ -1,6 +1,6 @@
 import { strict as assert } from 'node:assert';
 
-import { ProxyManager } from '../../src/core/proxy-manager';
+import { ProfileApplyError, ProxyManager } from '../../src/core/proxy-manager';
 import { ConfigurationError } from '../../src/core/proxy-settings-writer';
 import { ValidationError } from '../../src/core/validation';
 import { createHttpSettings, createMemento, createProfilesSetting } from '../support/fakes';
@@ -454,6 +454,84 @@ describe('ProxyManager', () => {
         (globalState.store.get('proxyToggler.state') as { currentProfile: unknown }).currentProfile,
         EDITED
       );
+    });
+
+    it('reports that the profile was saved when re-applying it fails', async () => {
+      const { globalState, httpSettings, profilesSetting, proxyManager } = setup({
+        profiles: [WORK, HOME],
+        record: { isEnabled: true, currentProfile: WORK },
+        http: { current: APPLIED, failKey: 'noProxy' }
+      });
+
+      await assert.rejects(
+        () => proxyManager.updateProfile('Work', EDITED),
+        (error: unknown) => {
+          assert.ok(error instanceof ProfileApplyError);
+          assert.ok(error.cause instanceof ConfigurationError);
+          assert.equal(error.cause.key, 'noProxy');
+          assert.match(error.toUserMessage(), /saved Work.*could not.*apply/i);
+          assert.doesNotMatch(error.toUserMessage(), /enable the proxy/i);
+          return true;
+        }
+      );
+      assert.deepEqual(profilesSetting.value, [EDITED, HOME]);
+      assert.deepEqual(httpSettings.current, APPLIED);
+      assert.deepEqual(
+        (globalState.store.get('proxyToggler.state') as { currentProfile: unknown }).currentProfile,
+        WORK
+      );
+    });
+
+    it('keeps rollback failures in the saved-profile error', async () => {
+      const { proxyManager } = setup({
+        profiles: [WORK],
+        record: { isEnabled: true, currentProfile: WORK },
+        http: {
+          current: APPLIED,
+          failWhen: ({ key, value }) =>
+            key === 'noProxy' || (key === 'proxy' && value === WORK.proxyUrl)
+        }
+      });
+
+      await assert.rejects(
+        () => proxyManager.updateProfile('Work', EDITED),
+        (error: unknown) => {
+          assert.ok(error instanceof ProfileApplyError);
+          assert.ok(error.cause instanceof ConfigurationError);
+          assert.equal(error.cause.key, 'noProxy');
+          assert.equal(error.cause.restoreErrors.has('proxy'), true);
+          assert.match(error.toUserMessage(), /Saved Work.*could not.*apply/);
+          assert.match(error.toUserMessage(), /could not be restored.*http\.proxy/);
+          return true;
+        }
+      );
+    });
+
+    it('reports a saved profile when an unexpected error prevents re-application', async () => {
+      const globalState = createMemento(
+        new Map([['proxyToggler.state', { isEnabled: true, currentProfile: WORK }]])
+      );
+      const httpSettings = createHttpSettings({
+        current: { ...APPLIED, proxy: 'http://alice:secret@proxy.example.com:8080' }
+      });
+      const profilesSetting = createProfilesSetting([WORK]);
+      const manager = new ProxyManager(globalState, httpSettings, profilesSetting, {
+        credentialsWillBeRemoved: async () => {
+          throw new Error('unexpected notice failure');
+        }
+      });
+
+      await assert.rejects(
+        () => manager.updateProfile('Work', EDITED),
+        (error: unknown) => {
+          assert.ok(error instanceof Error);
+          assert.match(error.message, /saved Work.*could not.*apply/i);
+          assert.doesNotMatch(error.message, /alice|secret/);
+          assert.match(String(error.cause), /unexpected notice failure/);
+          return true;
+        }
+      );
+      assert.deepEqual(profilesSetting.value, [EDITED]);
     });
 
     it('follows a rename of the current profile without touching the settings while off', async () => {

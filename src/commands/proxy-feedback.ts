@@ -1,3 +1,4 @@
+import { ProfileApplyError } from '../core/proxy-manager';
 import { ConfigurationError } from '../core/proxy-settings-writer';
 import type { VscodeApi } from '../vscode/api';
 import type { NotificationAction, Notifier } from '../vscode/notification-service';
@@ -44,17 +45,20 @@ export async function showKnownProxyError(
   error: unknown,
   options: { offerDisable: boolean }
 ): Promise<void> {
-  if (!(error instanceof ConfigurationError)) {
+  const cause = error instanceof ProfileApplyError ? error.cause : error;
+  if (!(cause instanceof ConfigurationError)) {
     throw error;
   }
 
   const actions = options.offerDisable
     ? [ACTION_OPEN_SETTINGS, ACTION_DISABLE_PROXY]
     : [ACTION_OPEN_SETTINGS];
-  const choice = await notificationService.showError(error.toUserMessage(), ...actions);
+  const message =
+    error instanceof ProfileApplyError ? error.toUserMessage() : cause.toUserMessage();
+  const choice = await notificationService.showError(message, ...actions);
 
   if (choice === ACTION_OPEN_SETTINGS.id) {
-    await vscodeApi.commands.executeCommand('workbench.action.openSettings', error.getSettingId());
+    await vscodeApi.commands.executeCommand('workbench.action.openSettings', cause.getSettingId());
   } else if (choice === ACTION_DISABLE_PROXY.id) {
     await vscodeApi.commands.executeCommand(COMMANDS.disable);
   }

@@ -154,11 +154,15 @@ Credentials never go to `globalState`, settings, logs, or messages.
 | `ValidationError`    | `core/validation.ts`                    | The reason and examples, in the input box or a notification |
 | `KeychainError`      | `KeychainService` removing old secrets  | Logged; the removal is retried at the next activation       |
 | `ConfigurationError` | `ProxySettingsWriter` writing a setting | `toUserMessage()` with an **Open Settings** action          |
+| `ProfileApplyError`  | `ProxyManager` reapplying a saved edit  | The profile was saved but could not be fully applied        |
 | Anything else        | Anywhere                                | Logged with its stack; the command's failure message        |
 
 Errors carry the original failure as the standard ES2022 `cause`. A message shown without waiting
 for the user, such as a test result, goes through `NotificationService.inform`, which logs a
 failure to show it.
+
+When a saved profile edit cannot be applied, a `ConfigurationError` cause retains its setting,
+rollback details, and recovery actions. Unexpected causes are logged for diagnosis.
 
 ### Failed setting writes
 

@@ -33,8 +33,8 @@ export class ConfigurationError extends Error {
     this.name = 'ConfigurationError';
   }
 
-  toUserMessage(): string {
-    const message = `Unable to ${this.operation} the proxy because VS Code setting "${this.getSettingId()}" could not be updated. Your settings may be managed by policy.`;
+  toUserMessage(action = `Unable to ${this.operation} the proxy`): string {
+    const message = `${action} because VS Code setting "${this.getSettingId()}" could not be updated. Your settings may be managed by policy.`;
     if (this.restoreErrors.size === 0) {
       return message;
     }
