@@ -1,6 +1,7 @@
 import { valuesFromSettings } from '../core/from-settings';
 import { defaultProfileName, type Profile, validateProfileName } from '../core/profiles';
 import type { ProxyManager } from '../core/proxy-manager';
+import type { Saved } from '../core/proxy-outcome';
 import { problemWith, validateProxyUrl } from '../core/validation';
 import type { VscodeApi } from '../vscode/api';
 import type { NotificationAction, Notifier } from '../vscode/notification-service';
@@ -15,7 +16,7 @@ type AddApi = Pick<
 
 type AddManager = Pick<
   ProxyManager,
-  'addProfile' | 'getEntryNames' | 'hasConfiguration' | 'readProxySettings' | 'settingsHoldProxy'
+  'getEntryNames' | 'hasConfiguration' | 'readProxySettings' | 'settingsHoldProxy'
 >;
 
 const ACTION_CONTINUE: NotificationAction = { id: 'continue', title: 'Continue Without Them' };
@@ -32,7 +33,6 @@ export async function addProfileCommand(
   vscodeApi: AddApi,
   proxyManager: AddManager,
   notificationService: Notifier,
-  refreshUi: () => Promise<void>,
   change: ProxyChange,
   options: { fromCurrentSettings?: boolean } = {}
 ): Promise<void> {
@@ -66,15 +66,13 @@ export async function addProfileCommand(
     }
   }
 
-  const answers = await askForProfile(vscodeApi, proxyManager.getEntryNames(), start.proxyUrl);
-  if (!answers) {
+  const saved = await askAndSave(vscodeApi, proxyManager, change, start);
+  if (!saved) {
     return;
   }
 
-  const profile: Profile = { ...answers, strictSSL: start.strictSSL, bypassList: start.bypassList };
-  const result = await proxyManager.addProfile(profile);
-  await refreshUi();
-  if (result === 'on') {
+  const { profile } = saved;
+  if (saved.isOn) {
     const tested = await notificationService.showSuccess(
       `Saved ${profile.name}. It matches VS Code's proxy settings, so it is on.`,
       ACTION_TEST
@@ -116,31 +114,72 @@ function startingValues(proxyManager: AddManager): Start {
     : fresh;
 }
 
+// Asks for the profile and saves it. When another window takes the name meanwhile, the name is
+// asked again, with the proxy URL kept. Undefined when the user cancels or the save failed.
+async function askAndSave(
+  vscodeApi: AddApi,
+  proxyManager: AddManager,
+  change: ProxyChange,
+  start: Start
+): Promise<Saved | undefined> {
+  let answers = await askForProfile(vscodeApi, proxyManager.getEntryNames(), start.proxyUrl);
+  while (answers) {
+    const profile: Profile = {
+      ...answers,
+      strictSSL: start.strictSSL,
+      bypassList: start.bypassList
+    };
+    const result = await change((manager) => manager.addProfile(profile));
+    if (result.kind === 'saved') {
+      return result;
+    }
+    // A failed write, which `change` has already reported.
+    if (result.kind === 'writeFailed') {
+      return undefined;
+    }
+    answers = await askForProfile(
+      vscodeApi,
+      proxyManager.getEntryNames(),
+      answers.proxyUrl,
+      result.name
+    );
+  }
+  return undefined;
+}
+
+// Given a name that was refused, it opens at the name step with that name, and the proxy URL as it
+// was.
 async function askForProfile(
   vscodeApi: AddApi,
   takenNames: readonly string[],
-  proxyUrl = ''
+  proxyUrl = '',
+  refusedName?: string
 ): Promise<Pick<Profile, 'name' | 'proxyUrl'> | undefined> {
   const { l10n } = vscodeApi;
   const title = l10n.t('Add Profile');
   let url = proxyUrl;
-  let name: string | undefined;
+  let name = refusedName;
   let suggestion: string | undefined;
+  let askUrl = refusedName === undefined;
 
   for (;;) {
-    const urlAnswer = await askText(vscodeApi, {
-      title,
-      step: 1,
-      totalSteps: 2,
-      prompt: l10n.t('The proxy URL, such as http://proxy.example.com:8080'),
-      value: url,
-      canGoBack: false,
-      validate: (value) => problemWith(() => validateProxyUrl(value))
-    });
-    if (typeof urlAnswer !== 'string') {
-      return undefined;
+    if (askUrl) {
+      const urlAnswer = await askText(vscodeApi, {
+        title,
+        step: 1,
+        totalSteps: 2,
+        prompt: l10n.t('The proxy URL, such as http://proxy.example.com:8080'),
+        value: url,
+        canGoBack: false,
+        validate: (value) => problemWith(() => validateProxyUrl(value))
+      });
+      if (typeof urlAnswer !== 'string') {
+        return undefined;
+      }
+      url = urlAnswer.trim();
     }
-    url = urlAnswer.trim();
+    // Back from the name step asks for the proxy URL again.
+    askUrl = true;
 
     // A name the user has not changed follows the host.
     const nextSuggestion = defaultProfileName(new URL(url).hostname, takenNames);

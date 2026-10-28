@@ -57,6 +57,11 @@ export function askText(
       input.dispose();
       resolve(result);
     });
+    // A value the step opens with can already be refused, such as a name another window took. An
+    // empty value is left alone, so a new field does not open with a complaint.
+    if (input.value !== '') {
+      input.validationMessage = step.validate(input.value);
+    }
     input.show();
   });
 }

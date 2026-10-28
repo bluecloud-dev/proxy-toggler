@@ -180,8 +180,8 @@ export function createProxyToggler(
     register(COMMANDS.configure, 'Failed to configure proxy.', () => {
       const current = proxyManager.getState().currentProfile;
       return current
-        ? editProfileCommand(vscodeApi, proxyManager, notificationService, refreshUi, current.name)
-        : addProfileCommand(vscodeApi, proxyManager, notificationService, refreshUi, change);
+        ? editProfileCommand(vscodeApi, proxyManager, notificationService, change, current.name)
+        : addProfileCommand(vscodeApi, proxyManager, notificationService, change);
     }),
     register(COMMANDS.enable, 'Failed to enable proxy.', () =>
       change((manager) => manager.enableProxy())
@@ -193,11 +193,11 @@ export function createProxyToggler(
     register(COMMANDS.toggle, 'Failed to toggle proxy.', () =>
       proxyManager.hasConfiguration()
         ? toggleProxyCommand(vscodeApi, proxyManager, notificationService, change)
-        : addProfileCommand(vscodeApi, proxyManager, notificationService, refreshUi, change)
+        : addProfileCommand(vscodeApi, proxyManager, notificationService, change)
     ),
     // Keybindings may pass a profile name.
     register(COMMANDS.switchProfile, 'Failed to switch the proxy profile.', (name?: unknown) =>
-      switchProfileCommand(vscodeApi, proxyManager, notificationService, refreshUi, change, name)
+      switchProfileCommand(vscodeApi, proxyManager, notificationService, change, name)
     )
   );
 

@@ -3,29 +3,21 @@ import type * as vscode from 'vscode';
 import { parseNoProxyList } from '../core/no-proxy';
 import { findProfileByName, type Profile, sameName, validateProfileName } from '../core/profiles';
 import type { ProxyManager } from '../core/proxy-manager';
-import {
-  problemWith,
-  validateBypassPattern,
-  validateProxyUrl,
-  ValidationError
-} from '../core/validation';
+import { problemWith, validateBypassPattern, validateProxyUrl } from '../core/validation';
 import type { VscodeApi } from '../vscode/api';
 import type { Notifier } from '../vscode/notification-service';
 import { askText } from '../vscode/quick-input';
 import { pickOne } from '../vscode/quick-pick';
 import { pickProfile } from './pick-profile';
-import { showKnownProxyError } from './proxy-feedback';
+import type { ProxyChange } from './proxy-change';
 import { testConnectionCommand } from './test-connection';
 
 type EditApi = Pick<
   VscodeApi,
-  'ProgressLocation' | 'QuickInputButtons' | 'commands' | 'env' | 'l10n' | 'window' | 'workspace'
+  'ProgressLocation' | 'QuickInputButtons' | 'env' | 'l10n' | 'window' | 'workspace'
 >;
 
-type EditManager = Pick<
-  ProxyManager,
-  'getEntryNames' | 'getProfiles' | 'getState' | 'updateProfile'
->;
+type EditManager = Pick<ProxyManager, 'getEntryNames' | 'getProfiles' | 'getState'>;
 
 type Field = 'name' | 'proxyUrl' | 'strictSSL' | 'bypassList' | 'test';
 
@@ -35,12 +27,14 @@ export async function editProfileCommand(
   vscodeApi: EditApi,
   proxyManager: EditManager,
   notificationService: Notifier,
-  refreshUi: () => Promise<void>,
+  change: ProxyChange,
   profileName?: string
 ): Promise<void> {
   let name =
     profileName ??
     (await pickProfile(vscodeApi, proxyManager, vscodeApi.l10n.t('Pick a profile to edit')))?.name;
+  // A name another window took before the edit saved; the name field then opens with it again.
+  let refusedName: string | undefined;
 
   while (name !== undefined) {
     const profile = findProfileByName(proxyManager.getProfiles(), name);
@@ -50,7 +44,7 @@ export async function editProfileCommand(
 
     const state = proxyManager.getState();
     const applies = state.isEnabled && sameName(state.currentProfile?.name ?? '', profile.name);
-    const field = await pickField(vscodeApi, profile, applies);
+    const field = refusedName === undefined ? await pickField(vscodeApi, profile, applies) : 'name';
     if (!field) {
       return;
     }
@@ -59,29 +53,27 @@ export async function editProfileCommand(
       continue;
     }
 
-    const edited = await editField(vscodeApi, profile, field, otherNames(proxyManager, profile));
+    const edited = await editField(
+      vscodeApi,
+      profile,
+      field,
+      otherNames(proxyManager, profile),
+      refusedName
+    );
+    refusedName = undefined;
     if (!edited) {
       continue;
     }
 
-    try {
-      await proxyManager.updateProfile(profile.name, edited);
-    } catch (error: unknown) {
-      // The list changed under the edit, in another window or through Settings Sync.
-      if (error instanceof ValidationError) {
-        notificationService.inform('error', error.reason);
-        return;
-      }
-      await refreshUi();
-      await showKnownProxyError(vscodeApi, notificationService, error, { offerDisable: true });
+    const result = await change((manager) => manager.updateProfile(profile.name, edited));
+    if (result.kind === 'gone') {
+      return;
     }
-    await refreshUi();
-    if (edited.name !== profile.name) {
-      notificationService.inform(
-        'warning',
-        `Renamed ${profile.name} to ${edited.name}. Keybindings that switch to "${profile.name}" by name stop working.`
-      );
+    if (result.kind === 'nameTaken') {
+      refusedName = result.name;
+      continue;
     }
+    // Saved, or saved but not applied, which `change` has already told the user.
     name = edited.name;
   }
 }
@@ -117,12 +109,14 @@ async function pickField(
   return choice?.field;
 }
 
-// The profile with one field changed, or undefined when the user cancels.
+// The profile with one field changed, or undefined when the user cancels. The name field opens
+// with `refusedName` instead of the profile's own name when there is one.
 async function editField(
   vscodeApi: EditApi,
   profile: Profile,
   field: Exclude<Field, 'test'>,
-  takenNames: readonly string[]
+  takenNames: readonly string[],
+  refusedName?: string
 ): Promise<Profile | undefined> {
   const { l10n } = vscodeApi;
   const ask = (prompt: string, value: string, validate: (value: string) => string | undefined) =>
@@ -136,8 +130,10 @@ async function editField(
 
   switch (field) {
     case 'name': {
-      const name = await ask(l10n.t('A name for the profile'), profile.name, (value) =>
-        validateProfileName(value, takenNames)
+      const name = await ask(
+        l10n.t('A name for the profile'),
+        refusedName ?? profile.name,
+        (value) => validateProfileName(value, takenNames)
       );
       return typeof name === 'string' ? { ...profile, name: name.trim() } : undefined;
     }

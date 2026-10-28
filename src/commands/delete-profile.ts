@@ -2,17 +2,17 @@ import type { ProxyManager } from '../core/proxy-manager';
 import type { VscodeApi } from '../vscode/api';
 import type { NotificationAction, Notifier } from '../vscode/notification-service';
 import { pickProfile } from './pick-profile';
-import { announceSwitch, showKnownProxyError } from './proxy-feedback';
+import type { ProxyChange } from './proxy-change';
 
 const ACTION_DELETE: NotificationAction = { id: 'delete', title: 'Delete' };
 
 // Asks which profile, then for confirmation. Deleting the current profile turns the proxy off
 // first, and the first remaining profile becomes current.
 export async function deleteProfileCommand(
-  vscodeApi: Pick<VscodeApi, 'commands' | 'l10n' | 'window' | 'workspace'>,
-  proxyManager: Pick<ProxyManager, 'deleteProfile' | 'getProfiles' | 'getState'>,
+  vscodeApi: Pick<VscodeApi, 'l10n' | 'window'>,
+  proxyManager: Pick<ProxyManager, 'getProfiles' | 'getState'>,
   notificationService: Notifier,
-  refreshUi: () => Promise<void>
+  change: ProxyChange
 ): Promise<void> {
   const profile = await pickProfile(
     vscodeApi,
@@ -31,11 +31,5 @@ export async function deleteProfileCommand(
     return;
   }
 
-  try {
-    await proxyManager.deleteProfile(profile.name);
-    await refreshUi();
-    await announceSwitch(vscodeApi, notificationService, `Proxy Toggler deleted ${profile.name}.`);
-  } catch (error: unknown) {
-    await showKnownProxyError(vscodeApi, notificationService, error, { offerDisable: false });
-  }
+  await change((manager) => manager.deleteProfile(profile.name));
 }

@@ -207,7 +207,11 @@ describe('ProxyManager', () => {
     it('makes it current while no profile is remembered, without turning it on', async () => {
       const { httpSettings, proxyManager } = setup({ profiles: [WORK] });
 
-      assert.equal(await proxyManager.addProfile(OFFICE), 'saved');
+      assert.deepEqual(await proxyManager.addProfile(OFFICE), {
+        kind: 'saved',
+        profile: OFFICE,
+        isOn: false
+      });
 
       assert.deepEqual(proxyManager.getState().currentProfile, OFFICE);
       assert.equal(proxyManager.getState().isEnabled, false);
@@ -231,7 +235,11 @@ describe('ProxyManager', () => {
         http: { current: { proxy: OFFICE.proxyUrl, proxyStrictSSL: true, noProxy: [] } }
       });
 
-      assert.equal(await proxyManager.addProfile(OFFICE), 'on');
+      assert.deepEqual(await proxyManager.addProfile(OFFICE), {
+        kind: 'saved',
+        profile: OFFICE,
+        isOn: true
+      });
 
       assert.deepEqual(proxyManager.getState().currentProfile, OFFICE);
       assert.equal(proxyManager.getState().isEnabled, true);
@@ -243,13 +251,26 @@ describe('ProxyManager', () => {
         profiles: [{ name: 'office' }]
       });
 
-      await assert.rejects(() => proxyManager.addProfile(OFFICE), ValidationError);
+      assert.deepEqual(await proxyManager.addProfile(OFFICE), {
+        kind: 'nameTaken',
+        name: OFFICE.name,
+        reason: `"${OFFICE.name}" is already used in proxyToggler.profiles.`
+      });
       await assert.rejects(
         () => proxyManager.addProfile({ ...OFFICE, name: 'Lab', proxyUrl: 'lab:8080' }),
         ValidationError
       );
       assert.deepEqual(profilesSetting.writes, []);
       assert.deepEqual(globalState.updates, []);
+    });
+
+    it('still throws for a blank or over-long name, which no input box lets through', async () => {
+      const { profilesSetting, proxyManager } = setup({ profiles: [WORK] });
+
+      for (const name of ['   ', 'N'.repeat(31)]) {
+        await assert.rejects(() => proxyManager.addProfile({ ...OFFICE, name }), ValidationError);
+      }
+      assert.deepEqual(profilesSetting.writes, []);
     });
   });
 
@@ -567,6 +588,34 @@ describe('ProxyManager', () => {
       assert.deepEqual(httpSettings.updates, []);
     });
 
+    it('reports a rename, and whether the saved profile is on', async () => {
+      const office = { ...WORK, name: 'Office' };
+      const homeWithStrictSSL = { ...HOME, strictSSL: true };
+      const withWorkCurrent = (isEnabled: boolean) =>
+        setup({
+          profiles: [WORK, HOME],
+          record: { isEnabled, currentProfile: WORK },
+          http: { current: isEnabled ? APPLIED : {} }
+        }).proxyManager;
+
+      assert.deepEqual(
+        await withWorkCurrent(true).updateProfile('Work', { ...office, name: ' Office ' }),
+        { kind: 'saved', profile: office, renamedFrom: 'Work', isOn: true }
+      );
+      assert.deepEqual(await withWorkCurrent(false).updateProfile('Work', office), {
+        kind: 'saved',
+        profile: office,
+        renamedFrom: 'Work',
+        isOn: false
+      });
+      // The proxy is on, but with Work.
+      assert.deepEqual(await withWorkCurrent(true).updateProfile('Home', homeWithStrictSSL), {
+        kind: 'saved',
+        profile: homeWithStrictSSL,
+        isOn: false
+      });
+    });
+
     it('leaves the settings and the record alone when the profile is not current', async () => {
       const { globalState, httpSettings, proxyManager } = setup({
         profiles: [WORK, HOME],
@@ -583,13 +632,34 @@ describe('ProxyManager', () => {
     it('refuses a name another entry holds, but accepts its own in other letter case', async () => {
       const { proxyManager } = setup({ profiles: [WORK, HOME] });
 
-      await assert.rejects(
-        () => proxyManager.updateProfile('Work', { ...WORK, name: 'home' }),
-        ValidationError
-      );
+      assert.deepEqual(await proxyManager.updateProfile('Work', { ...WORK, name: 'home' }), {
+        kind: 'nameTaken',
+        name: 'home',
+        reason: '"home" is already used in proxyToggler.profiles.'
+      });
       await proxyManager.updateProfile('Work', { ...WORK, name: 'WORK' });
 
       assert.equal(proxyManager.getProfiles()[0]?.name, 'WORK');
+    });
+
+    it('reports a name another entry took during an edit', async () => {
+      // Another window, or Settings Sync, added an entry with that name, which the switcher hides.
+      const { globalState, httpSettings, profilesSetting, proxyManager } = setup({
+        profiles: [WORK, HOME, { name: 'Lab' }],
+        record: { isEnabled: true, currentProfile: WORK },
+        http: { current: APPLIED }
+      });
+
+      const outcome = await proxyManager.updateProfile('Work', { ...EDITED, name: ' lab ' });
+
+      assert.deepEqual(outcome, {
+        kind: 'nameTaken',
+        name: 'lab',
+        reason: '"lab" is already used in proxyToggler.profiles.'
+      });
+      assert.deepEqual(profilesSetting.writes, []);
+      assert.deepEqual(httpSettings.updates, []);
+      assert.deepEqual(globalState.updates, []);
     });
 
     it('keeps its name when a hidden later entry holds the same one', async () => {
@@ -606,7 +676,17 @@ describe('ProxyManager', () => {
       // Another window, or Settings Sync, removed it while the edit was open.
       const { profilesSetting, proxyManager } = setup({ profiles: [HOME] });
 
-      await assert.rejects(() => proxyManager.updateProfile('Work', EDITED), ValidationError);
+      assert.deepEqual(await proxyManager.updateProfile('Work', EDITED), {
+        kind: 'gone',
+        name: 'Work',
+        change: 'save'
+      });
+      // Gone is decided first: Work may have been renamed to the very name that is now taken.
+      assert.deepEqual(await proxyManager.updateProfile('Work', { ...EDITED, name: 'home' }), {
+        kind: 'gone',
+        name: 'Work',
+        change: 'save'
+      });
 
       assert.deepEqual(profilesSetting.value, [HOME]);
       assert.deepEqual(profilesSetting.writes ?? [], []);
@@ -616,6 +696,8 @@ describe('ProxyManager', () => {
       const { profilesSetting, proxyManager } = setup({ profiles: [WORK] });
 
       for (const edited of [
+        { ...WORK, name: '   ' },
+        { ...WORK, name: 'N'.repeat(31) },
         { ...WORK, proxyUrl: 'proxy.example.com' },
         { ...WORK, bypassList: ['*'] }
       ]) {
@@ -669,6 +751,50 @@ describe('ProxyManager', () => {
         hasConfiguration: true,
         currentProfile: WORK
       });
+    });
+
+    it('reports a delete, or a profile already gone, writing nothing then', async () => {
+      const { globalState, httpSettings, profilesSetting, proxyManager } = setup({
+        profiles: [WORK, HOME]
+      });
+
+      assert.deepEqual(await proxyManager.deleteProfile('Home'), { kind: 'deleted', name: 'Home' });
+      const writes = [...profilesSetting.writes];
+      const records = [...globalState.updates];
+      // Another window, or Settings Sync, already removed it.
+      assert.deepEqual(await proxyManager.deleteProfile('Home'), {
+        kind: 'gone',
+        name: 'Home',
+        change: 'delete'
+      });
+
+      assert.deepEqual(profilesSetting.writes, writes);
+      assert.deepEqual(globalState.updates, records);
+      assert.deepEqual(httpSettings.updates, []);
+    });
+
+    it('keeps the current profile when turning it off fails during a delete', async () => {
+      const { profilesSetting, proxyManager } = setup({
+        profiles: [WORK, HOME],
+        record: { isEnabled: true, currentProfile: WORK },
+        http: {
+          current: { proxy: WORK.proxyUrl, proxyStrictSSL: true, noProxy: ['localhost'] },
+          failKey: 'proxy'
+        }
+      });
+
+      await assert.rejects(
+        () => proxyManager.deleteProfile('Work'),
+        (error: unknown) => {
+          assert.ok(error instanceof ConfigurationError);
+          assert.equal(error.operation, 'disable');
+          return true;
+        }
+      );
+
+      assert.deepEqual(profilesSetting.value, [WORK, HOME]);
+      assert.deepEqual(profilesSetting.writes, []);
+      assert.deepEqual(proxyManager.getState().currentProfile, WORK);
     });
   });
 

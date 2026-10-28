@@ -6,8 +6,10 @@ import { COMMANDS } from '../../src/commands/command-ids';
 import { createProxyToggler } from '../../src/proxy-toggler';
 import {
   createFakeVscode,
+  failSettingWrites,
   type FakeInputBox,
   type FakeQuickPick,
+  type FakeVscode,
   type FakeVscodeOptions
 } from '../support/fake-vscode';
 import { createExtensionContext } from '../support/fakes';
@@ -61,6 +63,25 @@ function activate(options: FakeVscodeOptions, record = { isEnabled: false, curre
 
 const profiles = (vscode: ReturnType<typeof createFakeVscode>) =>
   vscode.settings.get('proxyToggler.profiles') as Array<typeof WORK>;
+
+// Makes writes of one http.* setting fail, as when policy manages it.
+function failHttpWrite(vscode: FakeVscode, key: string): void {
+  const getConfiguration = vscode.workspace.getConfiguration.bind(vscode.workspace);
+  vscode.workspace.getConfiguration = (section) => {
+    const config = getConfiguration(section);
+    return section === 'http'
+      ? {
+          ...config,
+          update: async (updated, value, target) => {
+            if (updated === key) {
+              throw new Error('The setting is managed');
+            }
+            return config.update(updated, value, target);
+          }
+        }
+      : config;
+  };
+}
 
 describe('Edit Profile', () => {
   it('asks which profile, with the current one focused, then lists its fields and values', async () => {
@@ -135,21 +156,7 @@ describe('Edit Profile', () => {
         return undefined;
       }
     });
-    const getConfiguration = vscode.workspace.getConfiguration.bind(vscode.workspace);
-    vscode.workspace.getConfiguration = (section) => {
-      const config = getConfiguration(section);
-      return section === 'http'
-        ? {
-            ...config,
-            update: async (key, value, target) => {
-              if (key === 'noProxy') {
-                throw new Error('The setting is managed');
-              }
-              return config.update(key, value, target);
-            }
-          }
-        : config;
-    };
+    failHttpWrite(vscode, 'noProxy');
     const state = new Map<string, unknown>([
       ['proxyToggler.state', { isEnabled: true, currentProfile: WORK }]
     ]);
@@ -211,6 +218,31 @@ describe('Edit Profile', () => {
         ]
       ]
     );
+    // The field list reopens for the profile under its new name.
+    assert.equal(vscode.quickPicks[1]?.title, 'Edit Office');
+  });
+
+  it('shows only the error when a renamed edit saves but cannot be applied', async () => {
+    const vscode = createFakeVscode({
+      ...script([choose('Name')], [(box) => box.submit('Office')]),
+      settings: { 'proxyToggler.profiles': [WORK, HOME], ...APPLIED }
+    });
+    failHttpWrite(vscode, 'noProxy');
+    const state = new Map<string, unknown>([
+      ['proxyToggler.state', { isEnabled: true, currentProfile: WORK }]
+    ]);
+    createProxyToggler(vscode, createExtensionContext({ state }));
+
+    await vscode.commandHandlers.get(COMMANDS.configure)?.();
+
+    assert.equal(profiles(vscode)[0]?.name, 'Office');
+    assert.deepEqual(
+      vscode.messages.map(({ kind }) => kind),
+      ['error']
+    );
+    assert.match(vscode.messages[0]?.message ?? '', /saved Office.*could not.*apply/i);
+    // The edit was saved, so the field list reopens for the profile under its new name.
+    assert.equal(vscode.quickPicks[1]?.title, 'Edit Office');
   });
 
   it('says so, and saves nothing, when the profile is gone before the edit is saved', async () => {
@@ -235,11 +267,70 @@ describe('Edit Profile', () => {
       vscode.messages.map(({ kind, message }) => [kind, message]),
       [
         [
-          'error',
-          'Could not save Work: proxyToggler.profiles no longer has it. Another window or Settings Sync may have removed it.'
+          'warning',
+          'No proxy profile is named "Work". The list may have changed in another window or through Settings Sync.'
         ]
       ]
     );
+  });
+
+  it('treats a profile renamed in another window as gone', async () => {
+    const { vscode } = activate(
+      script(
+        [choose('Name')],
+        [
+          (box) => {
+            // Another window renames Work to the very name typed here.
+            vscode.changeSettings({ 'proxyToggler.profiles': [{ ...WORK, name: 'Lab' }, HOME] });
+            box.submit('Lab');
+          }
+        ]
+      )
+    );
+
+    await vscode.commandHandlers.get(COMMANDS.configure)?.();
+
+    assert.deepEqual(profiles(vscode), [{ ...WORK, name: 'Lab' }, HOME]);
+    assert.deepEqual(
+      vscode.messages.map(({ kind, message }) => [kind, message]),
+      [
+        [
+          'warning',
+          'No proxy profile is named "Work". The list may have changed in another window or through Settings Sync.'
+        ]
+      ]
+    );
+    assert.equal(vscode.inputBoxes.length, 1);
+  });
+
+  it('reopens the name field with the reason when another window takes the name', async () => {
+    const reopened: Array<{ value: string; message: unknown }> = [];
+    const { vscode } = activate(
+      script(
+        [choose('Name')],
+        [
+          (box) => {
+            // Another window adds a profile with the name typed here.
+            vscode.changeSettings({
+              'proxyToggler.profiles': [WORK, HOME, { ...HOME, name: 'Lab' }]
+            });
+            box.submit('Lab');
+          },
+          (box) => {
+            reopened.push({ value: box.value, message: box.validationMessage });
+            box.dismiss();
+          }
+        ]
+      )
+    );
+
+    await vscode.commandHandlers.get(COMMANDS.configure)?.();
+
+    assert.deepEqual(reopened, [
+      { value: 'Lab', message: '"Lab" is already used in proxyToggler.profiles.' }
+    ]);
+    assert.equal(profiles(vscode)[0]?.name, 'Work');
+    assert.deepEqual(vscode.messages, []);
   });
 
   it('checks each field like the UI does everywhere else', async () => {
@@ -310,5 +401,54 @@ describe('Delete Profile', () => {
     assert.deepEqual(api.getState().currentProfile, HOME);
     assert.match(vscode.messages[0]?.message ?? '', /proxy turns off/i);
     assert.equal(vscode.messages.at(-1)?.message, 'Proxy Toggler deleted Work.');
+  });
+
+  it('keeps the profile and offers only Open Settings when turning the proxy off fails', async () => {
+    const { vscode } = activate(
+      {
+        ...script([choose('Delete Profile…'), choose('Work')]),
+        settings: APPLIED,
+        answer: ({ kind }) => (kind === 'warning' ? 'Delete' : undefined)
+      },
+      { isEnabled: true, currentProfile: WORK }
+    );
+    failSettingWrites(vscode);
+
+    await vscode.commandHandlers.get(COMMANDS.switchProfile)?.();
+
+    assert.deepEqual(profiles(vscode), [WORK, HOME]);
+    assert.deepEqual(
+      vscode.messages.map(({ kind, items }) => [kind, items]),
+      [
+        ['warning', ['Delete']],
+        ['error', ['Open Settings']]
+      ]
+    );
+  });
+
+  it('says the profile was already deleted when another window removed it', async () => {
+    const { vscode } = activate({
+      ...script([choose('Delete Profile…'), choose('Home')]),
+      settings: { 'proxyToggler.showSwitchNotifications': true },
+      answer: ({ items }) => {
+        if (!items.includes('Delete')) {
+          return undefined;
+        }
+        // Another window deletes it while the confirmation is open.
+        vscode.changeSettings({ 'proxyToggler.profiles': [WORK] });
+        return 'Delete';
+      }
+    });
+
+    await vscode.commandHandlers.get(COMMANDS.switchProfile)?.();
+
+    assert.deepEqual(
+      vscode.messages.map(({ kind, message }) => [kind, message]),
+      [
+        ['warning', 'Delete the profile Home? If it is on when deleted, the proxy turns off.'],
+        ['warning', 'Home was already deleted, in another window or through Settings Sync.']
+      ]
+    );
+    assert.deepEqual(profiles(vscode), [WORK]);
   });
 });

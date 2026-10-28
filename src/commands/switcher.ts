@@ -28,8 +28,6 @@ type SwitcherApi = Pick<
 
 type SwitcherManager = Pick<
   ProxyManager,
-  | 'addProfile'
-  | 'deleteProfile'
   | 'getEntryNames'
   | 'getProfiles'
   | 'getState'
@@ -37,7 +35,6 @@ type SwitcherManager = Pick<
   | 'hasDrift'
   | 'readProxySettings'
   | 'settingsHoldProxy'
-  | 'updateProfile'
 >;
 
 type SwitcherItem = vscode.QuickPickItem & {
@@ -60,7 +57,6 @@ export async function switchProfileCommand(
   vscodeApi: SwitcherApi,
   proxyManager: SwitcherManager,
   notificationService: Notifier,
-  refreshUi: () => Promise<void>,
   change: ProxyChange,
   name?: unknown
 ): Promise<void> {
@@ -72,14 +68,13 @@ export async function switchProfileCommand(
     }
   }
 
-  await showSwitcher(vscodeApi, proxyManager, notificationService, refreshUi, change);
+  await showSwitcher(vscodeApi, proxyManager, notificationService, change);
 }
 
 async function showSwitcher(
   vscodeApi: SwitcherApi,
   proxyManager: SwitcherManager,
   notificationService: Notifier,
-  refreshUi: () => Promise<void>,
   change: ProxyChange
 ): Promise<void> {
   const { l10n } = vscodeApi;
@@ -150,21 +145,19 @@ async function showSwitcher(
   } else if (choice?.action === 'reapply' || choice?.action === 'clear') {
     await turnOnOrOff(change, isEnabled);
   } else if (choice?.action === 'save') {
-    await addProfileCommand(vscodeApi, proxyManager, notificationService, refreshUi, change, {
+    await addProfileCommand(vscodeApi, proxyManager, notificationService, change, {
       fromCurrentSettings: true
     });
   } else if (choice?.action === 'add') {
-    await addProfileCommand(vscodeApi, proxyManager, notificationService, refreshUi, change);
+    await addProfileCommand(vscodeApi, proxyManager, notificationService, change);
   } else if (choice?.action === 'edit') {
-    await editProfileCommand(vscodeApi, proxyManager, notificationService, refreshUi);
+    await editProfileCommand(vscodeApi, proxyManager, notificationService, change);
   } else if (choice?.action === 'delete') {
-    await deleteProfileCommand(vscodeApi, proxyManager, notificationService, refreshUi);
+    await deleteProfileCommand(vscodeApi, proxyManager, notificationService, change);
   } else if (choice?.action === 'separate') {
     await useOwnProxySettings(vscodeApi);
-    await refreshUi();
   } else if (choice?.action === 'shared') {
     await useLocalProxySettings(vscodeApi);
-    await refreshUi();
   } else if (choice?.action === 'settings') {
     await vscodeApi.commands.executeCommand(
       'workbench.action.openSettings',

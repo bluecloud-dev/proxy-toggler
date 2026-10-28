@@ -21,7 +21,7 @@ import {
   withProfile
 } from './profiles';
 import type { ToggleState } from './proxy-configuration';
-import type { Gone, NotConfigured, Off, On } from './proxy-outcome';
+import type { Deleted, Gone, NameTaken, NotConfigured, Off, On, Saved } from './proxy-outcome';
 import {
   ConfigurationError,
   type HttpSettingKey,
@@ -96,15 +96,15 @@ export class ProxyManager {
     this.settingsWriter = new ProxySettingsWriter(httpSettings);
   }
 
-  // Adds a profile at the end of the list, keeping every other entry. 'on' means it matched VS
+  // Adds a profile at the end of the list, keeping every other entry. `isOn` means it matched VS
   // Code's settings while no profile did, so it became current and on; otherwise it becomes
-  // current only while no profile is remembered.
-  addProfile(profile: Profile): Promise<'on' | 'saved'> {
+  // current only while no profile is remembered. A name an entry already holds is `nameTaken`.
+  addProfile(profile: Profile): Promise<Saved | NameTaken> {
     return this.serialize(async () => {
       const entries = this.profileEntries();
-      const nameProblem = validateProfileName(profile.name, entryNames(entries));
-      if (nameProblem) {
-        throw new ValidationError('name', nameProblem);
+      const taken = checkName(profile.name, entryNames(entries));
+      if (taken) {
+        return taken;
       }
       validateProxyUrl(profile.proxyUrl);
 
@@ -117,28 +117,34 @@ export class ProxyManager {
 
       if (!matchedBefore && settingsMatch(settings, profileSettingValues(added))) {
         await this.writeState({ isEnabled: true, currentProfile: added });
-        return 'on';
+        return { kind: 'saved', profile: added, isOn: true };
       }
       if (!this.storedRecord()?.currentProfile) {
         await this.writeState({ currentProfile: added });
       }
-      return 'saved';
+      return { kind: 'saved', profile: added, isOn: false };
     });
   }
 
   // Saves an edited profile over its entry. Saving the current profile keeps it current, under
-  // its new name if it has one, and re-applies it while the proxy is on.
-  updateProfile(originalName: string, profile: Profile): Promise<void> {
+  // its new name if it has one, and re-applies it while the proxy is on. When no entry holds the
+  // original name it is `gone`, and when another entry holds the new one, `nameTaken`; neither
+  // writes anything.
+  updateProfile(originalName: string, profile: Profile): Promise<Saved | Gone | NameTaken> {
     return this.serialize(async () => {
       const entries = this.profileEntries();
+      if (!holdsName(entries, originalName)) {
+        return { kind: 'gone', name: originalName, change: 'save' };
+      }
+
       // The profile keeps its own name even when a hidden later entry holds it too: the first
       // entry with a name owns it.
-      const nameProblem = validateProfileName(
+      const taken = checkName(
         profile.name,
         entryNames(entries).filter((name) => !sameName(name, originalName))
       );
-      if (nameProblem) {
-        throw new ValidationError('name', nameProblem);
+      if (taken) {
+        return taken;
       }
       validateProxyUrl(profile.proxyUrl);
       for (const pattern of profile.bypassList) {
@@ -165,13 +171,24 @@ export class ProxyManager {
         }
         await this.writeState({ currentProfile: saved });
       }
+      return {
+        kind: 'saved',
+        profile: saved,
+        ...(saved.name !== originalName && { renamedFrom: originalName }),
+        isOn: isCurrent && isEnabled
+      };
     });
   }
 
   // Deletes a profile. Deleting the current profile turns the proxy off first, and the first
-  // remaining profile becomes current; deleting the last one leaves nothing configured.
-  deleteProfile(name: string): Promise<void> {
+  // remaining profile becomes current; deleting the last one leaves nothing configured. When no
+  // entry holds the name it is `gone`, which writes nothing.
+  deleteProfile(name: string): Promise<Deleted | Gone> {
     return this.serialize(async () => {
+      if (!holdsName(this.profileEntries(), name)) {
+        return { kind: 'gone', name, change: 'delete' };
+      }
+
       const { isEnabled, currentProfile } = this.getState();
       const isCurrent = currentProfile !== undefined && sameName(currentProfile.name, name);
       if (isCurrent && isEnabled) {
@@ -185,6 +202,7 @@ export class ProxyManager {
         const first = sortByName(this.getProfiles())[0];
         await this.writeState({ isEnabled: false, currentProfile: first });
       }
+      return { kind: 'deleted', name };
     });
   }
 
@@ -448,6 +466,26 @@ export class ProxyManager {
       ...change
     });
   }
+}
+
+// Whether an entry holds the name, valid or not. A save or a delete finds its profile gone when
+// none does.
+function holdsName(entries: readonly unknown[], name: string): boolean {
+  return entryNames(entries).some((held) => sameName(held, name.trim()));
+}
+
+// A name that an entry holds is an outcome, not an error: another window can take it while the
+// user types. Any other problem with a name is one the input box already refuses, so it throws.
+function checkName(name: string, heldNames: readonly string[]): NameTaken | undefined {
+  const trimmed = name.trim();
+  const problem = validateProfileName(trimmed, heldNames);
+  if (problem === undefined) {
+    return undefined;
+  }
+  if (heldNames.some((held) => sameName(held, trimmed))) {
+    return { kind: 'nameTaken', name: trimmed, reason: problem };
+  }
+  throw new ValidationError('name', problem);
 }
 
 // The values of a 0.1.x configuration, or undefined when there is none or it cannot be used.

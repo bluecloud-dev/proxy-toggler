@@ -102,6 +102,60 @@ describe('Add Profile', () => {
     assert.equal(vscode.settings.has('http.proxy'), false);
   });
 
+  it('reopens the name step with the reason when another window takes the name', async () => {
+    const reopened: Array<{ step?: number; totalSteps?: number; value: string; message: unknown }> =
+      [];
+    const { vscode } = activate({
+      inputBox: steps(
+        (box) => box.submit(WORK.proxyUrl),
+        (box) => {
+          // Another window saves a profile with that name while this one is open.
+          vscode.changeSettings({ 'proxyToggler.profiles': [{ ...WORK, name: 'Lab' }] });
+          box.submit('Lab');
+        },
+        (box) => {
+          reopened.push({
+            step: box.step,
+            totalSteps: box.totalSteps,
+            value: box.value,
+            message: box.validationMessage
+          });
+          box.submit('Office');
+        }
+      )
+    });
+
+    await vscode.commandHandlers.get(COMMANDS.configure)?.();
+
+    assert.deepEqual(reopened, [
+      {
+        step: 2,
+        totalSteps: 2,
+        value: 'Lab',
+        message: '"Lab" is already used in proxyToggler.profiles.'
+      }
+    ]);
+    // The proxy URL is kept, so there is no second URL step.
+    assert.equal(vscode.inputBoxes.length, 3);
+    assert.deepEqual(vscode.settings.get('proxyToggler.profiles'), [
+      { ...WORK, name: 'Lab' },
+      { ...WORK, name: 'Office' }
+    ]);
+    assert.deepEqual(
+      vscode.messages.map(({ message }) => message),
+      ['Saved Office. Turn it on now?']
+    );
+  });
+
+  it('opens an empty URL step without a message', async () => {
+    const { vscode } = activate({ inputBox: steps() });
+
+    await vscode.commandHandlers.get(COMMANDS.configure)?.();
+
+    const [url] = vscode.inputBoxes;
+    assert.deepEqual([url?.value, url?.validationMessage], ['', undefined]);
+  });
+
   it('goes back from the name to the proxy URL, keeping what was typed', async () => {
     const { vscode } = activate({
       inputBox: steps(
