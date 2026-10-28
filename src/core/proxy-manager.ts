@@ -21,6 +21,7 @@ import {
   withProfile
 } from './profiles';
 import type { ToggleState } from './proxy-configuration';
+import type { Gone, NotConfigured, Off, On } from './proxy-outcome';
 import {
   ConfigurationError,
   type HttpSettingKey,
@@ -221,40 +222,44 @@ export class ProxyManager {
     });
   }
 
-  enableProxy(): Promise<void> {
+  enableProxy(): Promise<On | NotConfigured> {
     return this.serialize(() => this.enable());
   }
 
-  disableProxy(): Promise<void> {
-    return this.serialize(() => this.disable());
+  disableProxy(): Promise<Off> {
+    return this.serialize(async () => {
+      await this.disable();
+      return this.turnedOff();
+    });
   }
 
-  toggleProxy(): Promise<boolean> {
+  toggleProxy(): Promise<On | Off | NotConfigured> {
     return this.serialize(async () => {
       if (!this.hasConfiguration()) {
-        throw new Error('No proxy configuration found');
+        return { kind: 'notConfigured' };
       }
 
       if (this.getState().isEnabled) {
         await this.disable();
-        return false;
+        return this.turnedOff();
       }
 
-      await this.enable();
-      return true;
+      return this.enable();
     });
   }
 
-  // Makes the named profile current and turns it on. Undefined when no profile the switcher
-  // shows has that name.
-  switchTo(name: string): Promise<Profile | undefined> {
+  // Makes the named profile current and turns it on. Gone when no profile the switcher shows has
+  // that name.
+  switchTo(name: string): Promise<On | Gone> {
     return this.serialize(async () => {
       const profile = findProfileByName(this.getProfiles(), name);
-      if (profile) {
-        await this.applySettings(profile);
-        await this.writeState({ isEnabled: true, currentProfile: profile });
+      if (!profile) {
+        return { kind: 'gone', name, change: 'switch' };
       }
-      return profile;
+
+      await this.applySettings(profile);
+      await this.writeState({ isEnabled: true, currentProfile: profile });
+      return { kind: 'on', profile };
     });
   }
 
@@ -366,20 +371,28 @@ export class ProxyManager {
     return result;
   }
 
-  private async enable(): Promise<void> {
+  private async enable(): Promise<On | NotConfigured> {
     const current = this.getState().currentProfile;
     if (!current) {
-      throw new Error('No proxy configuration found');
+      return { kind: 'notConfigured' };
     }
 
     await this.applySettings(current);
     // Turning on is a UI action, so it remembers the profile even when it was only the fallback.
     await this.writeState({ isEnabled: true, currentProfile: current });
+    return { kind: 'on', profile: current };
   }
 
   private async disable(): Promise<void> {
     await this.clearSettings();
     await this.writeState({ isEnabled: false });
+  }
+
+  // Turning off keeps the current profile, so the outcome names it; there is none when not
+  // configured.
+  private turnedOff(): Off {
+    const profile = this.getState().currentProfile;
+    return profile ? { kind: 'off', profile } : { kind: 'off' };
   }
 
   private async applySettings(profile: Profile): Promise<void> {

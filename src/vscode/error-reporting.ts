@@ -6,7 +6,7 @@ import type { Notifier } from './notification-service';
 export type RegisterCommand = (
   command: string,
   failureMessage: string,
-  run: (...args: unknown[]) => Promise<void>
+  run: (...args: unknown[]) => Promise<unknown>
 ) => vscode.Disposable;
 
 // Commands handle the errors they can explain; anything that escapes is logged here and shown

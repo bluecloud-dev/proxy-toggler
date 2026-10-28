@@ -10,7 +10,7 @@ import { addProfileCommand } from './add-profile';
 import { EXTENSION_ID } from './command-ids';
 import { deleteProfileCommand } from './delete-profile';
 import { editProfileCommand } from './edit-profile';
-import { announceSwitch, showKnownProxyError } from './proxy-feedback';
+import type { ProxyChange } from './proxy-change';
 import { remoteProxyChoice } from './remote-proxy';
 
 type SwitcherApi = Pick<
@@ -30,8 +30,6 @@ type SwitcherManager = Pick<
   ProxyManager,
   | 'addProfile'
   | 'deleteProfile'
-  | 'disableProxy'
-  | 'enableProxy'
   | 'getEntryNames'
   | 'getProfiles'
   | 'getState'
@@ -39,7 +37,6 @@ type SwitcherManager = Pick<
   | 'hasDrift'
   | 'readProxySettings'
   | 'settingsHoldProxy'
-  | 'switchTo'
   | 'updateProfile'
 >;
 
@@ -64,23 +61,26 @@ export async function switchProfileCommand(
   proxyManager: SwitcherManager,
   notificationService: Notifier,
   refreshUi: () => Promise<void>,
+  change: ProxyChange,
   name?: unknown
 ): Promise<void> {
   if (typeof name === 'string') {
-    if (await turnOn(vscodeApi, proxyManager, notificationService, refreshUi, name)) {
+    const result = await change((manager) => manager.switchTo(name));
+    // Only a missing profile falls through to the switcher; the change has already said so.
+    if (result.kind !== 'gone') {
       return;
     }
-    notificationService.inform('error', `No proxy profile is named "${name}".`);
   }
 
-  await showSwitcher(vscodeApi, proxyManager, notificationService, refreshUi);
+  await showSwitcher(vscodeApi, proxyManager, notificationService, refreshUi, change);
 }
 
 async function showSwitcher(
   vscodeApi: SwitcherApi,
   proxyManager: SwitcherManager,
   notificationService: Notifier,
-  refreshUi: () => Promise<void>
+  refreshUi: () => Promise<void>,
+  change: ProxyChange
 ): Promise<void> {
   const { l10n } = vscodeApi;
   const { isEnabled, currentProfile } = proxyManager.getState();
@@ -142,18 +142,19 @@ async function showSwitcher(
 
   if (choice?.profile) {
     if (!(isEnabled && isCurrent(choice.profile))) {
-      await turnOn(vscodeApi, proxyManager, notificationService, refreshUi, choice.profile.name);
+      const { name } = choice.profile;
+      await change((manager) => manager.switchTo(name));
     }
   } else if (choice?.action === 'toggle') {
-    await turnOnOrOff(vscodeApi, proxyManager, notificationService, refreshUi, !isEnabled);
+    await turnOnOrOff(change, !isEnabled);
   } else if (choice?.action === 'reapply' || choice?.action === 'clear') {
-    await turnOnOrOff(vscodeApi, proxyManager, notificationService, refreshUi, isEnabled);
+    await turnOnOrOff(change, isEnabled);
   } else if (choice?.action === 'save') {
-    await addProfileCommand(vscodeApi, proxyManager, notificationService, refreshUi, {
+    await addProfileCommand(vscodeApi, proxyManager, notificationService, refreshUi, change, {
       fromCurrentSettings: true
     });
   } else if (choice?.action === 'add') {
-    await addProfileCommand(vscodeApi, proxyManager, notificationService, refreshUi);
+    await addProfileCommand(vscodeApi, proxyManager, notificationService, refreshUi, change);
   } else if (choice?.action === 'edit') {
     await editProfileCommand(vscodeApi, proxyManager, notificationService, refreshUi);
   } else if (choice?.action === 'delete') {
@@ -172,48 +173,8 @@ async function showSwitcher(
   }
 }
 
-// False when no profile has the name.
-async function turnOn(
-  vscodeApi: SwitcherApi,
-  proxyManager: SwitcherManager,
-  notificationService: Notifier,
-  refreshUi: () => Promise<void>,
-  name: string
-): Promise<boolean> {
-  try {
-    const profile = await proxyManager.switchTo(name);
-    if (!profile) {
-      return false;
-    }
-    await refreshUi();
-    await announceSwitch(
-      vscodeApi,
-      notificationService,
-      `Proxy Toggler turned on ${profile.name}.`
-    );
-  } catch (error: unknown) {
-    await showKnownProxyError(vscodeApi, notificationService, error, { offerDisable: true });
-  }
-  return true;
-}
-
-async function turnOnOrOff(
-  vscodeApi: SwitcherApi,
-  proxyManager: SwitcherManager,
-  notificationService: Notifier,
-  refreshUi: () => Promise<void>,
-  on: boolean
-): Promise<void> {
-  try {
-    await (on ? proxyManager.enableProxy() : proxyManager.disableProxy());
-    await refreshUi();
-    const name = proxyManager.getState().currentProfile?.name ?? '';
-    await announceSwitch(
-      vscodeApi,
-      notificationService,
-      on ? `Proxy Toggler turned on ${name}.` : `Proxy Toggler turned off ${name}.`
-    );
-  } catch (error: unknown) {
-    await showKnownProxyError(vscodeApi, notificationService, error, { offerDisable: on });
-  }
+async function turnOnOrOff(change: ProxyChange, on: boolean): Promise<void> {
+  await (on
+    ? change((manager) => manager.enableProxy())
+    : change((manager) => manager.disableProxy()));
 }

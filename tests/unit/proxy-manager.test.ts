@@ -75,10 +75,12 @@ describe('ProxyManager', () => {
     });
 
     it('is not configured without profiles and refuses to turn on', async () => {
-      const { proxyManager } = setup({ profiles: [] });
+      const { httpSettings, proxyManager } = setup({ profiles: [] });
 
       assert.deepEqual(proxyManager.getState(), { isEnabled: false, hasConfiguration: false });
-      await assert.rejects(() => proxyManager.toggleProxy(), /No proxy configuration found/);
+      assert.deepEqual(await proxyManager.toggleProxy(), { kind: 'notConfigured' });
+      assert.deepEqual(await proxyManager.enableProxy(), { kind: 'notConfigured' });
+      assert.deepEqual(httpSettings.updates, []);
     });
 
     it('never makes a hidden entry current', () => {
@@ -102,8 +104,9 @@ describe('ProxyManager', () => {
     it('turns the current profile on, writing its values, and remembers it', async () => {
       const { globalState, httpSettings, proxyManager } = setup({ profiles: [HOME, WORK] });
 
-      await proxyManager.enableProxy();
+      const outcome = await proxyManager.enableProxy();
 
+      assert.deepEqual(outcome, { kind: 'on', profile: HOME });
       assert.deepEqual(httpSettings.current, {
         proxy: HOME.proxyUrl,
         proxyStrictSSL: HOME.strictSSL,
@@ -124,10 +127,24 @@ describe('ProxyManager', () => {
         http: { current: { proxy: WORK.proxyUrl, proxyStrictSSL: true, noProxy: ['localhost'] } }
       });
 
-      assert.equal(await proxyManager.toggleProxy(), false);
+      assert.deepEqual(await proxyManager.toggleProxy(), { kind: 'off', profile: WORK });
 
       assert.deepEqual(httpSettings.current, CLEARED);
       assert.deepEqual(proxyManager.getState().currentProfile, WORK);
+    });
+
+    it('reports off with the current profile, or none when not configured', async () => {
+      const configured = setup({
+        profiles: [HOME, WORK],
+        record: { isEnabled: true, currentProfile: WORK }
+      });
+      const unconfigured = setup();
+
+      assert.deepEqual(await configured.proxyManager.disableProxy(), {
+        kind: 'off',
+        profile: WORK
+      });
+      assert.deepEqual(await unconfigured.proxyManager.disableProxy(), { kind: 'off' });
     });
 
     it('computes a fallback current profile without ever saving it', async () => {
@@ -166,10 +183,14 @@ describe('ProxyManager', () => {
 
       const switched = await proxyManager.switchTo('home');
 
-      assert.deepEqual(switched, HOME);
+      assert.deepEqual(switched, { kind: 'on', profile: HOME });
       assert.equal(httpSettings.current.proxy, HOME.proxyUrl);
       assert.deepEqual(proxyManager.getState().currentProfile, HOME);
-      assert.equal(await proxyManager.switchTo('Office'), undefined);
+      assert.deepEqual(await proxyManager.switchTo('Office'), {
+        kind: 'gone',
+        name: 'Office',
+        change: 'switch'
+      });
     });
   });
 
@@ -879,9 +900,9 @@ describe('ProxyManager', () => {
     it('toggles between on and off', async () => {
       const { proxyManager } = setup({ profiles: [WORK] });
 
-      assert.equal(await proxyManager.toggleProxy(), true);
+      assert.deepEqual(await proxyManager.toggleProxy(), { kind: 'on', profile: WORK });
       assert.equal(proxyManager.getState().isEnabled, true);
-      assert.equal(await proxyManager.toggleProxy(), false);
+      assert.deepEqual(await proxyManager.toggleProxy(), { kind: 'off', profile: WORK });
       assert.equal(proxyManager.getState().isEnabled, false);
     });
   });
@@ -890,14 +911,26 @@ describe('ProxyManager', () => {
     it('run one at a time, in call order', async () => {
       const { httpSettings, proxyManager } = setup({ profiles: [WORK] });
 
-      const results = await Promise.all([proxyManager.toggleProxy(), proxyManager.toggleProxy()]);
+      await Promise.all([proxyManager.toggleProxy(), proxyManager.toggleProxy()]);
 
-      assert.deepEqual(results, [true, false]);
       assert.deepEqual(
         httpSettings.updates.map((update) => update.key),
         ['proxy', 'proxyStrictSSL', 'noProxy', 'proxy', 'proxyStrictSSL', 'noProxy']
       );
       assert.equal(proxyManager.getState().isEnabled, false);
+    });
+
+    it('reports each of two overlapping toggles once, in order', async () => {
+      // A double click on the status bar.
+      const { httpSettings, proxyManager } = setup({ profiles: [WORK] });
+
+      const outcomes = await Promise.all([proxyManager.toggleProxy(), proxyManager.toggleProxy()]);
+
+      assert.deepEqual(
+        outcomes.map(({ kind }) => kind),
+        ['on', 'off']
+      );
+      assert.equal(httpSettings.current.proxy, undefined);
     });
 
     it('each finish before the next starts, even when the first is slow', async () => {

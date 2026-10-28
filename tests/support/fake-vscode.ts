@@ -439,6 +439,18 @@ export function createFakeVscode(options: FakeVscodeOptions = {}): FakeVscode {
   };
 }
 
+// Makes every settings update reject, as when policy manages the settings.
+export function failSettingWrites(vscode: FakeVscode): void {
+  const { workspace } = vscode;
+  vscode.workspace = {
+    ...workspace,
+    getConfiguration: (section) => ({
+      ...workspace.getConfiguration(section),
+      update: () => Promise.reject(new Error('managed by policy'))
+    })
+  };
+}
+
 // A minimal vscode.Event: listeners added with `event`, called by `fire`.
 function emitter<T>(): {
   event: (listener: (value: T) => unknown) => { dispose(): void };

@@ -5,7 +5,7 @@ import { problemWith, validateProxyUrl } from '../core/validation';
 import type { VscodeApi } from '../vscode/api';
 import type { NotificationAction, Notifier } from '../vscode/notification-service';
 import { askText, BACK } from '../vscode/quick-input';
-import { announceSwitch, showKnownProxyError } from './proxy-feedback';
+import type { ProxyChange } from './proxy-change';
 import { testConnectionCommand } from './test-connection';
 
 type AddApi = Pick<
@@ -15,12 +15,7 @@ type AddApi = Pick<
 
 type AddManager = Pick<
   ProxyManager,
-  | 'addProfile'
-  | 'getEntryNames'
-  | 'hasConfiguration'
-  | 'readProxySettings'
-  | 'settingsHoldProxy'
-  | 'switchTo'
+  'addProfile' | 'getEntryNames' | 'hasConfiguration' | 'readProxySettings' | 'settingsHoldProxy'
 >;
 
 const ACTION_CONTINUE: NotificationAction = { id: 'continue', title: 'Continue Without Them' };
@@ -38,6 +33,7 @@ export async function addProfileCommand(
   proxyManager: AddManager,
   notificationService: Notifier,
   refreshUi: () => Promise<void>,
+  change: ProxyChange,
   options: { fromCurrentSettings?: boolean } = {}
 ): Promise<void> {
   const start = options.fromCurrentSettings
@@ -104,17 +100,7 @@ export async function addProfileCommand(
     return;
   }
   if (choice === ACTION_TURN_ON.id) {
-    try {
-      await proxyManager.switchTo(profile.name);
-      await refreshUi();
-      await announceSwitch(
-        vscodeApi,
-        notificationService,
-        `Proxy Toggler turned on ${profile.name}.`
-      );
-    } catch (error: unknown) {
-      await showKnownProxyError(vscodeApi, notificationService, error, { offerDisable: true });
-    }
+    await change((manager) => manager.switchTo(profile.name));
   }
 }
 

@@ -5,6 +5,7 @@ import type { QuickPickItem } from 'vscode';
 import { createProxyToggler } from '../../src/proxy-toggler';
 import {
   createFakeVscode,
+  failSettingWrites,
   type FakeQuickPick,
   type FakeVscodeOptions
 } from '../support/fake-vscode';
@@ -141,16 +142,34 @@ describe('switcher', () => {
     assert.equal(vscode.quickPicks.length, 0);
   });
 
-  it('shows an error and the switcher when a keybinding names no profile', async () => {
+  it('warns and shows the switcher when a keybinding names no profile', async () => {
     const { vscode } = activate();
 
     await switchProfile(vscode, 'Office');
 
     assert.deepEqual(
       vscode.messages.map(({ kind, message }) => [kind, message]),
-      [['error', 'No proxy profile is named "Office".']]
+      [
+        [
+          'warning',
+          'No proxy profile is named "Office". The list may have changed in another window or through Settings Sync.'
+        ]
+      ]
     );
     assert.equal(vscode.quickPicks.length, 1);
+  });
+
+  it('shows only the error, not the switcher, when a keybinding names a profile that cannot be applied', async () => {
+    const { vscode } = activate();
+    failSettingWrites(vscode);
+
+    await switchProfile(vscode, 'Home');
+
+    assert.deepEqual(
+      vscode.messages.map(({ kind, items }) => [kind, items]),
+      [['error', ['Open Settings', 'Turn Proxy Off']]]
+    );
+    assert.equal(vscode.quickPicks.length, 0);
   });
 
   it('can be opened from the status bar gear', () => {
@@ -183,6 +202,19 @@ describe('switcher', () => {
       assert.deepEqual(vscode.messages, [
         { kind: 'info', message: 'Proxy Toggler turned on Home.', items: [] }
       ]);
+    });
+
+    it('do not hold the command open', async () => {
+      const { vscode } = activate({
+        quickPick: choose('Home'),
+        settings: { ...PROFILES, 'proxyToggler.showSwitchNotifications': true },
+        // The toast stays up until the user closes it.
+        answer: () => new Promise(() => undefined)
+      });
+
+      await switchProfile(vscode);
+
+      assert.equal(vscode.messages.length, 1);
     });
   });
 });

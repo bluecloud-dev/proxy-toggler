@@ -20,23 +20,8 @@ export async function announceSwitch(
   }
 }
 
-const ACTION_CONFIGURE_NOW: NotificationAction = { id: 'configure', title: 'Configure Now' };
 const ACTION_DISABLE_PROXY: NotificationAction = { id: 'disableProxy', title: 'Turn Proxy Off' };
 const ACTION_OPEN_SETTINGS: NotificationAction = { id: 'openSettings', title: 'Open Settings' };
-
-export async function offerToConfigure(
-  vscodeApi: CommandsApi,
-  notificationService: Notifier
-): Promise<void> {
-  const choice = await notificationService.showWarning(
-    'No proxy configuration found. Please configure proxy settings first.',
-    ACTION_CONFIGURE_NOW
-  );
-
-  if (choice === ACTION_CONFIGURE_NOW.id) {
-    await vscodeApi.commands.executeCommand(COMMANDS.configure);
-  }
-}
 
 // Shows the errors these commands can explain and rethrows the rest for the command registrar.
 export async function showKnownProxyError(

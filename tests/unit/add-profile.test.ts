@@ -70,6 +70,38 @@ describe('Add Profile', () => {
     assert.equal(api.getState().isEnabled, true);
   });
 
+  it('says the profile is gone when Turn On finds it removed', async () => {
+    const { vscode } = activate({
+      settings: { 'proxyToggler.showSwitchNotifications': true },
+      inputBox: steps(
+        (box) => box.submit(WORK.proxyUrl),
+        (box) => box.submit('Work')
+      ),
+      // Another window removes the profile while the save prompt is open.
+      answer: ({ items }) => {
+        if (!items.includes('Turn On')) {
+          return undefined;
+        }
+        vscode.changeSettings({ 'proxyToggler.profiles': [] });
+        return 'Turn On';
+      }
+    });
+
+    await vscode.commandHandlers.get(COMMANDS.configure)?.();
+
+    assert.deepEqual(
+      vscode.messages.map(({ kind, message }) => [kind, message]),
+      [
+        ['info', 'Saved Work. Turn it on now?'],
+        [
+          'warning',
+          'No proxy profile is named "Work". The list may have changed in another window or through Settings Sync.'
+        ]
+      ]
+    );
+    assert.equal(vscode.settings.has('http.proxy'), false);
+  });
+
   it('goes back from the name to the proxy URL, keeping what was typed', async () => {
     const { vscode } = activate({
       inputBox: steps(

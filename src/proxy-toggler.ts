@@ -1,10 +1,9 @@
 import { addProfileCommand } from './commands/add-profile';
 import { COMMANDS, CONTEXT_KEYS } from './commands/command-ids';
 import { createCredentialsNotice } from './commands/credentials-notice';
-import { disableProxyCommand } from './commands/disable-proxy';
 import { editProfileCommand } from './commands/edit-profile';
-import { enableProxyCommand } from './commands/enable-proxy';
 import { warnAboutHiddenProfiles } from './commands/profile-warning';
+import { createProxyChange } from './commands/proxy-change';
 import { announceRemovedCredentials, removeStoredCredentials } from './commands/stored-credentials';
 import { switchProfileCommand } from './commands/switcher';
 import { toggleProxyCommand } from './commands/toggle-proxy';
@@ -174,6 +173,7 @@ export function createProxyToggler(
     await refreshUi();
   });
 
+  const change = createProxyChange(vscodeApi, proxyManager, notificationService, refreshUi);
   const register = createCommandRegistrar(vscodeApi, logger, notificationService);
   context.subscriptions.push(
     // Adds the first profile, or edits the current one.
@@ -181,23 +181,23 @@ export function createProxyToggler(
       const current = proxyManager.getState().currentProfile;
       return current
         ? editProfileCommand(vscodeApi, proxyManager, notificationService, refreshUi, current.name)
-        : addProfileCommand(vscodeApi, proxyManager, notificationService, refreshUi);
+        : addProfileCommand(vscodeApi, proxyManager, notificationService, refreshUi, change);
     }),
     register(COMMANDS.enable, 'Failed to enable proxy.', () =>
-      enableProxyCommand(vscodeApi, proxyManager, notificationService, refreshUi)
+      change((manager) => manager.enableProxy())
     ),
     register(COMMANDS.disable, 'Failed to disable proxy.', () =>
-      disableProxyCommand(vscodeApi, proxyManager, notificationService, refreshUi)
+      change((manager) => manager.disableProxy())
     ),
     // With no profile, the toggle starts setup, from the proxy VS Code uses if any.
     register(COMMANDS.toggle, 'Failed to toggle proxy.', () =>
       proxyManager.hasConfiguration()
-        ? toggleProxyCommand(vscodeApi, proxyManager, notificationService, refreshUi)
-        : addProfileCommand(vscodeApi, proxyManager, notificationService, refreshUi)
+        ? toggleProxyCommand(vscodeApi, proxyManager, notificationService, change)
+        : addProfileCommand(vscodeApi, proxyManager, notificationService, refreshUi, change)
     ),
     // Keybindings may pass a profile name.
     register(COMMANDS.switchProfile, 'Failed to switch the proxy profile.', (name?: unknown) =>
-      switchProfileCommand(vscodeApi, proxyManager, notificationService, refreshUi, name)
+      switchProfileCommand(vscodeApi, proxyManager, notificationService, refreshUi, change, name)
     )
   );
 
