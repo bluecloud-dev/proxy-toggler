@@ -1,11 +1,10 @@
 import * as os from 'node:os';
 import * as path from 'node:path';
 
-import type { SecretStorage } from '../../src/core/keychain-service';
 import type { ProfilesSetting } from '../../src/core/profiles';
 import type { Memento } from '../../src/core/proxy-manager';
 import type { HttpSettingKey, HttpSettings } from '../../src/core/proxy-settings-writer';
-import type { ExtensionContext } from '../../src/vscode/api';
+import type { ExtensionContext, SecretStorage } from '../../src/vscode/api';
 import type { NotificationAction } from '../../src/vscode/notification-service';
 
 export type FakeMemento = Memento & {
@@ -31,12 +30,11 @@ export function createMemento(store = new Map<string, unknown>()): FakeMemento {
 
 export type SecretStorageFailures = { get?: Error; delete?: Error };
 
-export function createSecretStorage(
+function createSecretStorage(
   values = new Map<string, string>(),
   failures: SecretStorageFailures = {}
-): SecretStorage & { values: Map<string, string> } {
+): SecretStorage {
   return {
-    values,
     get: async (key) => {
       if (failures.get) {
         throw failures.get;

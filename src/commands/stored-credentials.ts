@@ -1,6 +1,10 @@
-import type { KeychainService } from '../core/keychain-service';
 import type { Memento } from '../core/proxy-manager';
+import type { SecretStorage } from '../vscode/api';
 import type { Notifier } from '../vscode/notification-service';
+
+// The proxy username and password 0.1.x stored and no version applied; profiles hold no
+// credentials (ADR 0003).
+const SECRET_KEYS = ['proxyToggler.credentials.username', 'proxyToggler.credentials.password'];
 
 // Per VS Code Profile, like the secrets: set when a removal found one, cleared once announced.
 const NOTICE_PENDING_KEY = 'proxyToggler.credentialsNoticePending';
@@ -10,12 +14,18 @@ const NOTICE =
 
 // A failed removal leaves the secrets for the next activation to retry.
 export async function removeStoredCredentials(
-  keychainService: Pick<KeychainService, 'removeStoredCredentials'>,
+  secrets: SecretStorage,
   globalState: Memento
 ): Promise<void> {
-  if (await keychainService.removeStoredCredentials()) {
-    await globalState.update(NOTICE_PENDING_KEY, true);
+  const values = await Promise.all(SECRET_KEYS.map((key) => secrets.get(key)));
+  if (values.every((value) => value === undefined)) {
+    return;
   }
+
+  for (const key of SECRET_KEYS) {
+    await secrets.delete(key);
+  }
+  await globalState.update(NOTICE_PENDING_KEY, true);
 }
 
 export async function announceRemovedCredentials(

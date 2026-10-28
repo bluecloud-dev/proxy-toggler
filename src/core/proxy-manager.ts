@@ -111,14 +111,11 @@ export class ProxyManager {
       }
       validateProxyUrl(profile.proxyUrl);
 
-      const settings = this.httpSettings.read();
-      const matchedBefore = this.getProfiles().some((existing) =>
-        matchesSettings(settings, existing)
-      );
+      const unmatched = this.unmatchedSettings();
       const added: Profile = { ...profile, name: profile.name.trim() };
       await this.writing(() => this.profilesSetting.write([...entries, added]));
 
-      if (!matchedBefore && matchesSettings(settings, added)) {
+      if (unmatched && matchesSettings(unmatched, added)) {
         await this.writeState({ isEnabled: true, currentProfile: added });
         return { kind: 'saved', profile: added, isOn: true };
       }
@@ -130,9 +127,10 @@ export class ProxyManager {
   }
 
   // Saves an edited profile over its entry. Saving the current profile keeps it current, under
-  // its new name if it has one, and re-applies it while the proxy is on. When no entry holds the
-  // original name it is `gone`, and when another entry holds the new one, `nameTaken`; neither
-  // writes anything.
+  // its new name if it has one, and re-applies it while the proxy is on. An edit that makes a
+  // profile match VS Code's settings while no profile did makes it current and on, as adding one
+  // does. When no entry holds the original name it is `gone`, and when another entry holds the
+  // new one, `nameTaken`; neither writes anything.
   updateProfile(originalName: string, profile: Profile): Promise<Saved | Gone | NameTaken> {
     return this.serialize(async () => {
       const entries = this.profileEntries();
@@ -156,29 +154,32 @@ export class ProxyManager {
 
       const { isEnabled, currentProfile } = this.getState();
       const isCurrent = currentProfile !== undefined && sameName(currentProfile.name, originalName);
+      const applies = isCurrent && isEnabled;
       const saved: Profile = {
         ...profile,
         name: profile.name.trim(),
         proxyUrl: profile.proxyUrl.trim()
       };
+      const unmatched = this.unmatchedSettings();
+      const adopted = !applies && unmatched !== undefined && matchesSettings(unmatched, saved);
       await this.writing(() =>
         this.profilesSetting.write(withProfile(entries, saved, originalName))
       );
-      if (isCurrent) {
-        if (isEnabled) {
-          try {
-            await this.applySettings(saved);
-          } catch (error: unknown) {
-            throw new ProfileApplyError(saved.name, error);
-          }
+      if (applies) {
+        try {
+          await this.applySettings(saved);
+        } catch (error: unknown) {
+          throw new ProfileApplyError(saved.name, error);
         }
-        await this.writeState({ currentProfile: saved });
+      }
+      if (isCurrent || adopted) {
+        await this.writeState({ currentProfile: saved, ...(adopted && { isEnabled: true }) });
       }
       return {
         kind: 'saved',
         profile: saved,
         ...(!sameName(saved.name, originalName) && { renamedFrom: originalName }),
-        isOn: isCurrent && isEnabled
+        isOn: applies || adopted
       };
     });
   }
@@ -344,12 +345,10 @@ export class ProxyManager {
   // Drift: while at least one profile exists, VS Code's settings carry a proxy that matches no
   // profile. Drift never changes the record.
   hasDrift(): boolean {
-    const profiles = this.getProfiles();
-    const settings = this.httpSettings.read();
     return (
-      profiles.length > 0 &&
+      this.getProfiles().length > 0 &&
       this.settingsHoldProxy() &&
-      !profiles.some((profile) => matchesSettings(settings, profile))
+      this.unmatchedSettings() !== undefined
     );
   }
 
@@ -445,6 +444,16 @@ export class ProxyManager {
     return marker !== undefined && sameValues({ name: '', ...marker }, { name: '', ...values });
   }
 
+  // VS Code's settings while no profile matches them, else undefined. A profile saved to match
+  // them becomes current and on here, since a window skips reconciliation for its own writes
+  // (ADR 0004).
+  private unmatchedSettings(): Record<HttpSettingKey, unknown> | undefined {
+    const settings = this.httpSettings.read();
+    return this.getProfiles().some((profile) => matchesSettings(settings, profile))
+      ? undefined
+      : settings;
+  }
+
   private profileEntries(): readonly unknown[] {
     const value = this.profilesSetting.read();
     return Array.isArray(value) ? value : [];
@@ -476,7 +485,7 @@ function checkName(name: string, heldNames: readonly string[]): NameTaken | unde
     return undefined;
   }
   if (heldNames.some((held) => sameName(held, trimmed))) {
-    return { kind: 'nameTaken', name: trimmed, reason: problem };
+    return { kind: 'nameTaken', name: trimmed };
   }
   throw new ValidationError('name', problem);
 }

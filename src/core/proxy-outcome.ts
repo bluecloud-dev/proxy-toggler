@@ -12,6 +12,6 @@ export type Deleted = { kind: 'deleted'; name: string };
 // `change` says what did not happen, so a delete can say the profile was already deleted.
 export type Gone = { kind: 'gone'; name: string; change: 'switch' | 'save' | 'delete' };
 export type NotConfigured = { kind: 'notConfigured' };
-export type NameTaken = { kind: 'nameTaken'; name: string; reason: string };
+export type NameTaken = { kind: 'nameTaken'; name: string };
 
 export type ProxyOutcome = On | Off | Saved | Deleted | Gone | NotConfigured | NameTaken;

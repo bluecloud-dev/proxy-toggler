@@ -178,6 +178,27 @@ describe('testConnection', () => {
     assert.match(timedOut.message, /did not answer/);
   });
 
+  it('fails at once when the proxy sends more than an HTTP head can hold', async () => {
+    // Sends 64 KiB that never end a head, then keeps the connection open. The test closes it
+    // with data unread, which can reset it.
+    const flood = net.createServer((socket) => {
+      socket.on('error', () => {});
+      socket.write(Buffer.alloc(64 * 1024, 'a'));
+      socket.resume();
+    });
+    flood.listen(0, '127.0.0.1');
+    await once(flood, 'listening');
+    cleanup.push(() => new Promise((resolve) => flood.close(() => resolve())));
+    const port = (flood.address() as AddressInfo).port;
+
+    const verdict = await testConnection(`http://127.0.0.1:${port}`, 'https://origin.test', {
+      timeoutMs: 1000
+    });
+
+    assert.equal(verdict.outcome, 'fail');
+    assert.match(verdict.message, /not HTTP/);
+  });
+
   it('fails, saying why, when the target never answers inside the tunnel', async () => {
     // Opens every tunnel, then reads whatever arrives and never answers.
     const opener = net.createServer((socket) => {

@@ -253,8 +253,7 @@ describe('ProxyManager', () => {
 
       assert.deepEqual(await proxyManager.addProfile(OFFICE), {
         kind: 'nameTaken',
-        name: OFFICE.name,
-        reason: `"${OFFICE.name}" is already used in proxyToggler.profiles.`
+        name: OFFICE.name
       });
       await assert.rejects(
         () => proxyManager.addProfile({ ...OFFICE, name: 'Lab', proxyUrl: 'lab:8080' }),
@@ -655,13 +654,32 @@ describe('ProxyManager', () => {
       assert.deepEqual(globalState.updates, []);
     });
 
+    it('turns it on when the edit makes it match the settings and no profile did', async () => {
+      const { httpSettings, proxyManager } = setup({
+        profiles: [WORK, HOME],
+        record: { isEnabled: true, currentProfile: WORK },
+        http: { current: { proxy: OFFICE.proxyUrl, proxyStrictSSL: true, noProxy: [] } }
+      });
+      const edited = { ...HOME, proxyUrl: OFFICE.proxyUrl, strictSSL: true };
+
+      assert.deepEqual(await proxyManager.updateProfile('Home', edited), {
+        kind: 'saved',
+        profile: edited,
+        isOn: true
+      });
+
+      assert.deepEqual(proxyManager.getState().currentProfile, edited);
+      assert.equal(proxyManager.getState().isEnabled, true);
+      assert.equal(proxyManager.hasDrift(), false);
+      assert.deepEqual(httpSettings.updates, []);
+    });
+
     it('refuses a name another entry holds, but accepts its own in other letter case', async () => {
       const { proxyManager } = setup({ profiles: [WORK, HOME] });
 
       assert.deepEqual(await proxyManager.updateProfile('Work', { ...WORK, name: 'home' }), {
         kind: 'nameTaken',
-        name: 'home',
-        reason: '"home" is already used in proxyToggler.profiles.'
+        name: 'home'
       });
       await proxyManager.updateProfile('Work', { ...WORK, name: 'WORK' });
 
@@ -680,8 +698,7 @@ describe('ProxyManager', () => {
 
       assert.deepEqual(outcome, {
         kind: 'nameTaken',
-        name: 'lab',
-        reason: '"lab" is already used in proxyToggler.profiles.'
+        name: 'lab'
       });
       assert.deepEqual(profilesSetting.writes, []);
       assert.deepEqual(httpSettings.updates, []);

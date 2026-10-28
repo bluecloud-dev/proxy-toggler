@@ -53,10 +53,11 @@ only the members it can produce:
   delete, when no entry of `proxyToggler.profiles` holds it, as `withProfile` and `withoutProfile`
   decide today. A change that finds its profile gone writes nothing.
 - `saved` has `renamedFrom` when the saved name differs from the original, as Edit decides today,
-  and `isOn` when the saved profile is current and on.
-- `nameTaken` means another entry already holds the name, ignoring case. Its `reason` is the text
-  `validateProfileName` gives. A blank or over-long name, an invalid proxy URL or bypass pattern
-  still throws `ValidationError`: the input boxes refuse those before any save.
+  and `isOn` when the saved profile is current and on. An add or an edit that makes a profile
+  match VS Code's settings while no profile did makes it current and on.
+- `nameTaken` means another entry already holds the name, ignoring case. A blank or over-long
+  name, an invalid proxy URL or bypass pattern still throws `ValidationError`: the input boxes
+  refuse those before any save.
 
 ## The proxy change module
 

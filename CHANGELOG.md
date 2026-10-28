@@ -26,7 +26,8 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
   kept. If another window removes the profile before you click **Turn On**, a warning says so.
 - **Edit Profile…** lists a profile's name, proxy URL, strict SSL choice and bypass list; each
   pick changes and saves one field. Saving the current profile while the proxy is on re-applies
-  it, and a rename warns that keybindings using the old name stop working. When a saved edit
+  it, and an edit that makes a profile match VS Code's proxy settings while no profile did turns
+  it on, as adding one does. A rename warns that keybindings using the old name stop working. When a saved edit
   cannot be applied, only the error shows, without that warning. If another window takes the new
   name before the edit saves, the name field opens again with the reason; if another window has
   removed the profile when a change saves, a warning says so and the edit ends. **Configure Proxy
@@ -65,6 +66,8 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
   `HEAD /` for an `https://` URL, a plain request for an `http://` one. It reports a pass, a
   warning (a sign-in request, or an `http://` status the proxy may have sent) or a failure with
   the reason, says which side of VS Code reaches the URL directly, and stores and logs nothing.
+  An answer longer than an HTTP head can be fails at once, so a server that streams without end
+  cannot fill the extension host's memory.
 - Test Connection checks certificates on both TLS connections against Node's built-in
   authorities. An untrusted or self-signed issuer is a warning that names it and links to the new
   README section on trusting a company's certificate authority; a name mismatch, or a certificate

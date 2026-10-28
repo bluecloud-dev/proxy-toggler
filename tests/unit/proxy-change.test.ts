@@ -108,11 +108,7 @@ const REPORTS: Array<{
   },
   {
     label: 'a taken name',
-    outcome: {
-      kind: 'nameTaken',
-      name: 'Work',
-      reason: '"Work" is already used in proxyToggler.profiles.'
-    },
+    outcome: { kind: 'nameTaken', name: 'Work' },
     gated: false,
     expected: []
   },
