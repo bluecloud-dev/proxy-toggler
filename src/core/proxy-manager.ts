@@ -174,7 +174,7 @@ export class ProxyManager {
       return {
         kind: 'saved',
         profile: saved,
-        ...(saved.name !== originalName && { renamedFrom: originalName }),
+        ...(!sameName(saved.name, originalName) && { renamedFrom: originalName }),
         isOn: isCurrent && isEnabled
       };
     });

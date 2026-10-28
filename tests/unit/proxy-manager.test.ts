@@ -616,6 +616,22 @@ describe('ProxyManager', () => {
       });
     });
 
+    it('reports no rename when only the letter case of the name changes', async () => {
+      // Names match ignoring case, so a keybinding that names the old spelling keeps working.
+      const work = { ...WORK, name: 'work' };
+      const { proxyManager } = setup({
+        profiles: [WORK, HOME],
+        record: { isEnabled: true, currentProfile: WORK },
+        http: { current: APPLIED }
+      });
+
+      assert.deepEqual(await proxyManager.updateProfile('Work', work), {
+        kind: 'saved',
+        profile: work,
+        isOn: true
+      });
+    });
+
     it('leaves the settings and the record alone when the profile is not current', async () => {
       const { globalState, httpSettings, proxyManager } = setup({
         profiles: [WORK, HOME],
