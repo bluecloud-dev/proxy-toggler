@@ -19,22 +19,28 @@ export function dismissNotifications(sandbox: sinon.SinonSandbox): void {
   sandbox.stub(vscode.window, 'showErrorMessage').resolves(undefined);
 }
 
-// Answers the configure wizard: proxy URL, an empty username (no credentials), the bypass list,
-// and the strict SSL choice.
-export async function configureWithoutCredentials(
-  sandbox: sinon.SinonSandbox,
-  options: { proxyUrl: string; noProxy: string; strictSSL: boolean }
-): Promise<void> {
-  const inputs = [options.proxyUrl, '', options.noProxy];
-  sandbox.stub(vscode.window, 'showInputBox').callsFake(async () => inputs.shift());
-  sandbox
-    .stub(vscode.window, 'showQuickPick')
-    .callsFake(
-      async (
-        items: readonly vscode.QuickPickItem[] | Thenable<readonly vscode.QuickPickItem[]>
-      ): Promise<vscode.QuickPickItem | undefined> =>
-        (await items).find((item) => (item as { value?: boolean }).value === options.strictSSL)
-    );
+// Makes this the only profile, so that it is the current one, as a user would by hand.
+export async function useProfile(profile: {
+  proxyUrl: string;
+  bypassList: string[];
+  strictSSL: boolean;
+}): Promise<void> {
+  await vscode.workspace
+    .getConfiguration('proxyToggler')
+    .update('profiles', [{ name: 'Test', ...profile }], vscode.ConfigurationTarget.Global);
+}
 
-  await vscode.commands.executeCommand('proxyToggler.configure');
+// Resolves once the condition holds, and fails after `timeoutMs`.
+export async function waitFor(
+  condition: () => boolean,
+  timeoutMs: number,
+  what: string
+): Promise<void> {
+  const deadline = Date.now() + timeoutMs;
+  while (!condition()) {
+    if (Date.now() > deadline) {
+      throw new Error(`Gave up after ${timeoutMs / 1000} s waiting for ${what}.`);
+    }
+    await new Promise((resolve) => setTimeout(resolve, 50));
+  }
 }

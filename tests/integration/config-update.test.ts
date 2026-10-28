@@ -3,7 +3,7 @@ import { strict as assert } from 'node:assert';
 import * as sinon from 'sinon';
 import * as vscode from 'vscode';
 
-import { configureWithoutCredentials, dismissNotifications } from './support';
+import { dismissNotifications, useProfile } from './support';
 
 // Makes every write to one http.* setting fail, as when a policy manages that setting.
 function failWritesTo(sandbox: sinon.SinonSandbox, failingKey: string): void {
@@ -43,9 +43,9 @@ describe('VS Code http proxy updates', function () {
   afterEach(() => sandbox.restore());
 
   it('enables proxy by writing global http settings', async () => {
-    await configureWithoutCredentials(sandbox, {
+    await useProfile({
       proxyUrl: 'http://proxy.example.com:8080',
-      noProxy: '',
+      bypassList: ['localhost', '127.0.0.1'],
       strictSSL: true
     });
 
@@ -59,9 +59,9 @@ describe('VS Code http proxy updates', function () {
   });
 
   it('disables proxy by clearing global http settings to undefined', async () => {
-    await configureWithoutCredentials(sandbox, {
+    await useProfile({
       proxyUrl: 'http://proxy.example.com:8080',
-      noProxy: 'localhost',
+      bypassList: ['localhost'],
       strictSSL: true
     });
 
@@ -80,9 +80,9 @@ describe('VS Code http proxy updates', function () {
     await http().update('proxy', 'http://old.example.com:3128', vscode.ConfigurationTarget.Global);
 
     try {
-      await configureWithoutCredentials(sandbox, {
+      await useProfile({
         proxyUrl: 'http://proxy.example.com:8080',
-        noProxy: 'localhost',
+        bypassList: ['localhost'],
         strictSSL: true
       });
       failWritesTo(sandbox, 'noProxy');

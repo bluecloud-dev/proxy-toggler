@@ -1,8 +1,7 @@
 import { strict as assert } from 'node:assert';
 
 import {
-  validateCredentials,
-  validateNoProxyList,
+  validateBypassPattern,
   validateProxyUrl,
   ValidationError
 } from '../../src/core/validation';
@@ -64,6 +63,33 @@ describe('validation', () => {
 
       assert.equal(error.field, 'proxyUrl');
       assert.match(error.reason, /scheme/i);
+    });
+
+    it('accepts socks and socks5 URLs with ports', () => {
+      assert.doesNotThrow(() => validateProxyUrl('socks://proxy.example.com:1080'));
+      assert.doesNotThrow(() => validateProxyUrl('socks5://Proxy.Example.com:1080'));
+      assert.doesNotThrow(() => validateProxyUrl('socks5://10.0.0.1:9050'));
+    });
+
+    it('refuses socks4, socks4a and socks5h, naming them and saying why', () => {
+      for (const scheme of ['socks4', 'socks4a', 'socks5h']) {
+        const error = captureValidationError(() =>
+          validateProxyUrl(`${scheme}://proxy.example.com:1080`)
+        );
+        assert.match(error.reason, /socks4, socks4a and socks5h/, scheme);
+        assert.match(error.reason, /host names/, scheme);
+      }
+    });
+
+    it('checks a socks URL like any other: port, credentials, path', () => {
+      for (const url of [
+        'socks5://proxy.example.com',
+        'socks5://alice:secret@proxy.example.com:1080',
+        'socks5://proxy.example.com:1080/path',
+        'socks5://proxy.example.com:1080/'
+      ]) {
+        assert.throws(() => validateProxyUrl(url), ValidationError, url);
+      }
     });
 
     it('rejects missing port numbers and invalid port ranges', () => {
@@ -146,65 +172,32 @@ describe('validation', () => {
     });
   });
 
-  describe('validateCredentials', () => {
-    it('accepts both omitted and both provided', () => {
-      assert.doesNotThrow(() => validateCredentials(undefined, undefined));
-      assert.doesNotThrow(() => validateCredentials('alice', 'secret'));
-      assert.doesNotThrow(() => validateCredentials('', ''));
-      assert.doesNotThrow(() => validateCredentials('   ', '   '));
-    });
-
-    it('rejects mismatched username/password pairing', () => {
-      const usernameOnlyError = captureValidationError(() =>
-        validateCredentials('alice', undefined)
-      );
-      assert.equal(usernameOnlyError.field, 'credentials');
-
-      const passwordOnlyError = captureValidationError(() =>
-        validateCredentials(undefined, 'secret')
-      );
-      assert.equal(passwordOnlyError.field, 'credentials');
-
-      assert.throws(() => validateCredentials('alice', ''), ValidationError);
-      assert.throws(() => validateCredentials('', 'secret'), ValidationError);
-    });
-  });
-
-  describe('validateNoProxyList', () => {
-    it('accepts empty or undefined patterns', () => {
-      assert.doesNotThrow(() => validateNoProxyList());
-      assert.doesNotThrow(() => validateNoProxyList(''));
-      assert.doesNotThrow(() => validateNoProxyList('   '));
-    });
-
+  describe('validateBypassPattern', () => {
     it('accepts hostnames, IP literals, domain suffixes, and *.-wildcards', () => {
-      assert.doesNotThrow(() => validateNoProxyList('localhost,127.0.0.1'));
-      assert.doesNotThrow(() => validateNoProxyList('.example.com,*.local'));
-      assert.doesNotThrow(() => validateNoProxyList('::1'));
-      assert.doesNotThrow(() => validateNoProxyList('localhost, 127.0.0.1,'));
+      for (const pattern of ['localhost', '127.0.0.1', '.example.com', '*.local', '::1']) {
+        assert.doesNotThrow(() => validateBypassPattern(pattern), pattern);
+      }
     });
 
     it('rejects CIDR patterns (out of scope for v1)', () => {
-      const error = captureValidationError(() => validateNoProxyList('10.0.0.0/8'));
+      const error = captureValidationError(() => validateBypassPattern('10.0.0.0/8'));
       assert.equal(error.field, 'noProxy');
       assert.match(error.reason, /cidr/i);
     });
 
     it('rejects schemes and invalid wildcard patterns', () => {
-      const schemeError = captureValidationError(() => validateNoProxyList('http://localhost'));
+      const schemeError = captureValidationError(() => validateBypassPattern('http://localhost'));
       assert.equal(schemeError.field, 'noProxy');
 
-      assert.throws(() => validateNoProxyList('**.example.com'), ValidationError);
-      assert.throws(() => validateNoProxyList('example.*.com'), ValidationError);
-      assert.throws(() => validateNoProxyList('*..example.com'), ValidationError);
+      for (const pattern of ['**.example.com', 'example.*.com', '*..example.com']) {
+        assert.throws(() => validateBypassPattern(pattern), ValidationError, pattern);
+      }
     });
 
     it('rejects invalid bypass entries', () => {
-      assert.throws(() => validateNoProxyList('.'), ValidationError);
-      assert.throws(() => validateNoProxyList('user@host'), ValidationError);
-      assert.throws(() => validateNoProxyList('example.com:8080'), ValidationError);
-      assert.throws(() => validateNoProxyList('local host'), ValidationError);
-      assert.throws(() => validateNoProxyList('*.127.0.0.1'), ValidationError);
+      for (const pattern of ['.', 'user@host', 'example.com:8080', 'local host', '*.127.0.0.1']) {
+        assert.throws(() => validateBypassPattern(pattern), ValidationError, pattern);
+      }
     });
   });
 });

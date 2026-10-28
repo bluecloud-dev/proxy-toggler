@@ -19,7 +19,7 @@ never write the settings or show a warning or notice.
 
 ## Consequences
 
-- Notification buttons check the state again when clicked and do nothing if it has changed.
+- Notification buttons check the state again when clicked and do nothing, and say so, if it has changed.
 - VS Code fires the change event before `update()` resolves, so a window records its pending write
   before awaiting `update()`; otherwise it would take its own change for an outside one.
 - An outside edit to the remembered current profile is applied whether a window saw it happen or

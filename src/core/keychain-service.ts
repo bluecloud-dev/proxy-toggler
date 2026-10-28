@@ -1,11 +1,9 @@
 import type * as vscode from 'vscode';
 
-import { validateCredentials } from './validation';
-
 const USERNAME_SECRET_KEY = 'proxyToggler.credentials.username';
 const PASSWORD_SECRET_KEY = 'proxyToggler.credentials.password';
 
-export type SecretStorage = Pick<vscode.SecretStorage, 'get' | 'store' | 'delete'>;
+export type SecretStorage = Pick<vscode.SecretStorage, 'get' | 'delete'>;
 
 export const KeychainErrorReason = {
   LOCKED: 'locked',
@@ -16,14 +14,6 @@ export const KeychainErrorReason = {
 
 export type KeychainErrorReason = (typeof KeychainErrorReason)[keyof typeof KeychainErrorReason];
 
-const USER_MESSAGES = {
-  locked: 'Your system keychain appears to be locked. Unlock it and try again.',
-  permission_denied:
-    'Permission denied accessing the system keychain. Check your OS keychain permissions.',
-  unavailable: 'The system keychain is unavailable on this machine.',
-  unknown: 'Failed to access the system keychain.'
-} satisfies Record<KeychainErrorReason, string>;
-
 // SecretStorage errors carry no codes, so the reason is a best-effort guess from the message.
 const REASON_HINTS = [
   [KeychainErrorReason.LOCKED, ['locked']],
@@ -33,43 +23,20 @@ const REASON_HINTS = [
 
 export class KeychainError extends Error {
   constructor(
-    public readonly operation: 'store' | 'retrieve' | 'delete',
+    public readonly operation: 'retrieve' | 'delete',
     public readonly reason: KeychainErrorReason,
     options?: ErrorOptions
   ) {
     super(`Keychain ${operation} failed: ${reason}`, options);
     this.name = 'KeychainError';
   }
-
-  toUserMessage(): string {
-    return USER_MESSAGES[this.reason];
-  }
 }
 
+// Proxy Toggler stores no secrets (ADR 0003); this only removes the ones 0.1.x stored.
 export class KeychainService {
   constructor(private readonly secrets: SecretStorage) {}
 
-  async storeCredentials(username?: string, password?: string): Promise<void> {
-    const normalizedUsername = normalizeSecretValue(username);
-    const normalizedPassword = normalizeSecretValue(password);
-
-    validateCredentials(normalizedUsername, normalizedPassword);
-
-    // Blank credentials mean "no authentication", so clear rather than store empty secrets.
-    if (!normalizedUsername || !normalizedPassword) {
-      await this.clearCredentials();
-      return;
-    }
-
-    try {
-      await this.secrets.store(USERNAME_SECRET_KEY, normalizedUsername);
-      await this.secrets.store(PASSWORD_SECRET_KEY, normalizedPassword);
-    } catch (error: unknown) {
-      throw new KeychainError('store', inferKeychainReason(error), { cause: error });
-    }
-  }
-
-  async clearCredentials(): Promise<void> {
+  private async clearCredentials(): Promise<void> {
     try {
       await this.secrets.delete(USERNAME_SECRET_KEY);
       await this.secrets.delete(PASSWORD_SECRET_KEY);
@@ -78,25 +45,23 @@ export class KeychainService {
     }
   }
 
-  async hasCredentials(): Promise<boolean> {
+  // 0.1.x stored a username and password that no version applied, and profiles hold no
+  // credentials (ADR 0003). Deletes both and reports whether either was there.
+  async removeStoredCredentials(): Promise<boolean> {
+    let found: boolean;
     try {
-      const username = normalizeSecretValue(await this.secrets.get(USERNAME_SECRET_KEY));
-      const password = normalizeSecretValue(await this.secrets.get(PASSWORD_SECRET_KEY));
-
-      return Boolean(username) && Boolean(password);
+      found =
+        (await this.secrets.get(USERNAME_SECRET_KEY)) !== undefined ||
+        (await this.secrets.get(PASSWORD_SECRET_KEY)) !== undefined;
     } catch (error: unknown) {
       throw new KeychainError('retrieve', inferKeychainReason(error), { cause: error });
     }
-  }
-}
 
-function normalizeSecretValue(value: string | undefined): string | undefined {
-  if (typeof value !== 'string') {
-    return undefined;
+    if (found) {
+      await this.clearCredentials();
+    }
+    return found;
   }
-
-  const trimmed = value.trim();
-  return trimmed.length > 0 ? trimmed : undefined;
 }
 
 function inferKeychainReason(error: unknown): KeychainErrorReason {

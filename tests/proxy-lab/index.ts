@@ -6,11 +6,17 @@ import { describeRequest } from './requests';
 
 // VS Code sends its Marketplace requests within a second or two of the search.
 const MARKETPLACE_WAIT_MS = 8000;
+// VS Code applies a change of the proxy settings to the window and the extension host shortly
+// after the settings change.
+const SETTLE_MS = 3000;
 
 // tests/run-proxy-lab-probe.ts runs this inside VS Code, in a profile whose settings point at the
 // proxy lab. It requests each URL in PROXY_LAB_URLS from the extension host, as an extension would,
-// then searches the Marketplace so that VS Code sends requests of its own. It writes how each
-// request ended to the file PROXY_LAB_RESULTS names; the runner judges that and the proxy logs.
+// then searches the Marketplace so that VS Code sends requests of its own. When PROXY_LAB_UPDATE
+// holds settings, as a JSON object in which null removes a setting, it then writes them while VS
+// Code runs, as Proxy Toggler does, and does it all again with PROXY_LAB_UPDATE_URLS and another
+// search. It writes how each request ended to the file PROXY_LAB_RESULTS names; the runner judges
+// that and the proxy logs.
 export async function run(): Promise<void> {
   const resultsFile = process.env.PROXY_LAB_RESULTS;
   if (!resultsFile) {
@@ -24,5 +30,21 @@ export async function run(): Promise<void> {
 
   await vscode.commands.executeCommand('workbench.extensions.search', 'keymap');
   await new Promise((resolve) => setTimeout(resolve, MARKETPLACE_WAIT_MS));
+
+  const update = process.env.PROXY_LAB_UPDATE;
+  if (update) {
+    const configuration = vscode.workspace.getConfiguration();
+    for (const [id, value] of Object.entries(JSON.parse(update) as Record<string, unknown>)) {
+      await configuration.update(id, value ?? undefined, vscode.ConfigurationTarget.Global);
+    }
+    await new Promise((resolve) => setTimeout(resolve, SETTLE_MS));
+    for (const url of (process.env.PROXY_LAB_UPDATE_URLS ?? '').split(' ').filter(Boolean)) {
+      results[url] = await describeRequest(url);
+    }
+    // Another query, so that VS Code cannot answer it from the first search.
+    await vscode.commands.executeCommand('workbench.extensions.search', 'theme');
+    await new Promise((resolve) => setTimeout(resolve, MARKETPLACE_WAIT_MS));
+  }
+
   await fs.writeFile(resultsFile, JSON.stringify(results));
 }

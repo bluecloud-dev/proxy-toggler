@@ -152,7 +152,7 @@ VS Code server. On Linux without a display, run it as `xvfb-run -a npm run proxy
 - `proxy-lab:up` fails with "port is already allocated": another program uses one of the ports
   above. Stop it, or change the host side of that port in [`compose.yaml`](compose.yaml).
 - A VS Code window with a lab proxy configured cannot reach the internet once the lab is down. Run
-  **Proxy Toggler: Disable Proxy** before `proxy-lab:down`.
+  **Proxy Toggler: Turn Proxy Off** before `proxy-lab:down`.
 - A remote check fails with "did not close within 180 s": the Remote-SSH window waited for
   something, such as a prompt. Run that check alone and watch the window. **Output → Remote - SSH**
   shows the connection log.

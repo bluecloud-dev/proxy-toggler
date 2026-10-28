@@ -60,7 +60,7 @@ reviewer checks it because no tool does yet.
   `consistent-type-imports`, and `explicit-module-boundary-types`.
 - `@types/vscode` is pinned to the `engines.vscode` minimum, so APIs newer than the supported
   range fail to compile. `@types/node` tracks the Node major of that VS Code release (Node 20 for
-  VS Code 1.91).
+  VS Code 1.97).
 
 ## VS Code extension standards
 
@@ -145,7 +145,7 @@ The extension has no webviews or custom editors today. If one is added:
   Fix moderate advisories when a non-major fix exists. `.github/workflows/security.yml` runs
   CodeQL with the `security-extended` queries on the TypeScript and on the workflows, dependency
   review on pull requests (failing on high severity), and OpenSSF Scorecard on `main` and weekly.
-- **Toolchain:** Node comes from `.nvmrc` (24 LTS), locally and in CI.
+- **Toolchain:** Node comes from `.nvmrc` (26 LTS), locally and in CI.
 
 ## Documentation conventions
 

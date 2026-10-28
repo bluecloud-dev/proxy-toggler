@@ -2,28 +2,70 @@ import type * as vscode from 'vscode';
 
 import type { ToggleState } from '../core/proxy-configuration';
 import type { StatusBarItem, VscodeApi } from './api';
+import type { ProxySide } from './proxy-side';
 
-type StatusBarApi = Pick<VscodeApi, 'StatusBarAlignment' | 'l10n' | 'window'>;
+type StatusBarApi = Pick<VscodeApi, 'StatusBarAlignment' | 'ThemeColor' | 'l10n' | 'window'>;
+
+// What the toggle shows besides the record.
+export type StatusView = {
+  // The profile name shows in the text only when there are profiles to tell apart.
+  profileCount: number;
+  drift: boolean;
+  settingsHoldProxy: boolean;
+  // Whose proxy settings the toggle manages; a remote machine's own settings show its label.
+  side: ProxySide;
+};
 
 type Presentation = { icon: string; text: string; tooltip: string; label: string };
 
+// The toggle, and next to it the gear that opens the switcher.
 export class StatusBarController implements vscode.Disposable {
   private readonly item: StatusBarItem;
+  private readonly gear: StatusBarItem;
 
   constructor(
     private readonly vscodeApi: StatusBarApi,
-    toggleCommandId: string
+    toggleCommandId: string,
+    switchCommandId: string
   ) {
-    this.item = vscodeApi.window.createStatusBarItem(vscodeApi.StatusBarAlignment.Right, 100);
+    const { l10n, window, StatusBarAlignment } = vscodeApi;
+    this.item = window.createStatusBarItem(StatusBarAlignment.Right, 100);
     this.item.command = toggleCommandId;
     this.item.show();
+
+    this.gear = window.createStatusBarItem(StatusBarAlignment.Right, 99);
+    this.gear.text = '$(gear)';
+    this.gear.tooltip = l10n.t('Switch proxy profile');
+    this.gear.accessibilityInformation = { label: l10n.t('Switch proxy profile'), role: 'button' };
+    this.gear.command = switchCommandId;
+    this.gear.show();
   }
 
-  updateState(state: ToggleState): void {
-    const { icon, text, tooltip, label } = this.presentationFor(state);
+  updateState(state: ToggleState, view: StatusView): void {
+    const { l10n, ThemeColor } = this.vscodeApi;
+    const presentation = this.presentationFor(state, view);
+    // Drift keeps the text, which shows the record, and changes the icon and background: the
+    // warning icon shows in every theme, High Contrast Dark included, which has no background.
+    const drift = view.drift && state.currentProfile !== undefined;
+    const warning = l10n.t('VS Code uses a proxy that matches no profile.');
+    const { icon, text, tooltip, label } = drift
+      ? {
+          ...presentation,
+          icon: 'warning',
+          tooltip: `${warning} ${presentation.tooltip}`,
+          label: `${presentation.label}. ${warning}`
+        }
+      : presentation;
+    const sideNote = this.sideNoteFor(view.side);
     this.item.text = `$(${icon}) ${text}`;
-    this.item.tooltip = tooltip;
-    this.item.accessibilityInformation = { label, role: 'button' };
+    this.item.tooltip = sideNote ? `${tooltip} ${sideNote}` : tooltip;
+    this.item.accessibilityInformation = {
+      label: sideNote ? `${label.endsWith('.') ? label : `${label}.`} ${sideNote}` : label,
+      role: 'button'
+    };
+    this.item.backgroundColor = drift
+      ? new ThemeColor('statusBarItem.warningBackground')
+      : undefined;
   }
 
   getText(): string {
@@ -36,35 +78,85 @@ export class StatusBarController implements vscode.Disposable {
 
   dispose(): void {
     this.item.dispose();
+    this.gear.dispose();
+  }
+
+  // In a remote window, which settings the toggle manages.
+  private sideNoteFor(side: ProxySide): string | undefined {
+    const { l10n } = this.vscodeApi;
+    if (side.kind === 'remote') {
+      return l10n.t(
+        'In this window, Proxy Toggler manages the proxy settings of {0}.',
+        side.remote
+      );
+    }
+    return side.remote === undefined
+      ? undefined
+      : l10n.t(
+          "In this {0} window, Proxy Toggler manages this computer's proxy settings.",
+          side.remote
+        );
   }
 
   // Literal l10n.t calls, rather than a lookup table, keep these strings extractable.
-  private presentationFor(state: ToggleState): Presentation {
+  private presentationFor(state: ToggleState, view: StatusView): Presentation {
     const { l10n } = this.vscodeApi;
+    const current = state.currentProfile;
+    const profileCount = view.profileCount;
+    // A remote machine's own settings show its label in the text.
+    const remote = view.side.kind === 'remote' ? view.side.remote : undefined;
+    const notConfigured =
+      remote === undefined
+        ? l10n.t('Proxy: Not Configured')
+        : l10n.t('Proxy ({0}): Not Configured', remote);
 
-    if (!state.hasConfiguration) {
-      return {
-        icon: 'warning',
-        text: l10n.t('Proxy: Not Configured'),
-        tooltip: l10n.t('Configure proxy settings to enable toggling.'),
-        label: l10n.t('Proxy status: not configured')
-      };
+    // With no profiles there is no drift; a click starts setup from the proxy in use.
+    if (!current) {
+      return view.settingsHoldProxy
+        ? {
+            icon: 'warning',
+            text: notConfigured,
+            tooltip: l10n.t('VS Code already uses a proxy. Click to add a profile from it.'),
+            label: l10n.t('Proxy not configured; VS Code already uses a proxy')
+          }
+        : {
+            icon: 'warning',
+            text: notConfigured,
+            tooltip: l10n.t('No proxy profile yet. Click to add one.'),
+            label: l10n.t('Proxy not configured')
+          };
     }
 
     if (state.isEnabled) {
       return {
         icon: 'plug',
-        text: l10n.t('Proxy: ON'),
-        tooltip: l10n.t('Proxy is enabled. Click to toggle.'),
-        label: l10n.t('Proxy status: enabled')
+        text: this.onText(remote, profileCount > 1 ? current.name : undefined),
+        tooltip: l10n.t('Proxy on: {0}. Click to turn it off.', current.name),
+        label: l10n.t('Proxy on, profile {0}', current.name)
       };
     }
 
     return {
       icon: 'debug-disconnect',
-      text: l10n.t('Proxy: OFF'),
-      tooltip: l10n.t('Proxy is disabled. Click to toggle.'),
-      label: l10n.t('Proxy status: disabled')
+      text: remote === undefined ? l10n.t('Proxy: OFF') : l10n.t('Proxy ({0}): OFF', remote),
+      // Off says only that Proxy Toggler sets no proxy: what VS Code then uses depends on the
+      // environment and on whether VS Code has restarted since (TESTING.md, "What Off does").
+      tooltip: l10n.t(
+        'Proxy off: Proxy Toggler sets no proxy. Click to turn on {0}.',
+        current.name
+      ),
+      label: l10n.t('Proxy off, profile {0}', current.name)
     };
+  }
+
+  // The profile name shows only when there are profiles to tell apart.
+  private onText(remote: string | undefined, name: string | undefined): string {
+    const { l10n } = this.vscodeApi;
+    if (remote === undefined) {
+      return name === undefined ? l10n.t('Proxy: ON') : l10n.t('Proxy: {0}', name);
+    }
+    return name === undefined
+      ? l10n.t('Proxy ({0}): ON', remote)
+      : l10n.t('Proxy ({0}): {1}', remote, name);
   }
 }

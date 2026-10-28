@@ -5,11 +5,14 @@ import { createProxyToggler } from '../../src/proxy-toggler';
 import { createFakeVscode, type FakeVscodeOptions } from '../support/fake-vscode';
 import { createExtensionContext, flushBackgroundTasks } from '../support/fakes';
 
-const SAVED_PROXY = {
+const PROFILE = {
+  name: 'Work',
   proxyUrl: 'http://proxy.example.com:8080',
   strictSSL: true,
-  noProxy: 'localhost'
+  bypassList: ['localhost']
 };
+
+const PROFILES = { 'proxyToggler.profiles': [PROFILE] };
 
 const APPLIED_SETTINGS = {
   'http.proxy': 'http://proxy.example.com:8080',
@@ -30,9 +33,15 @@ describe('createProxyToggler', () => {
 
     assert.deepEqual(
       [...vscode.commandHandlers.keys()],
-      [COMMANDS.configure, COMMANDS.enable, COMMANDS.disable, COMMANDS.toggle]
+      [
+        COMMANDS.configure,
+        COMMANDS.enable,
+        COMMANDS.disable,
+        COMMANDS.toggle,
+        COMMANDS.switchProfile
+      ]
     );
-    assert.equal(context.subscriptions.length, 6);
+    assert.equal(context.subscriptions.length, 10);
   });
 
   it('runs every command without a saved configuration', async () => {
@@ -42,53 +51,92 @@ describe('createProxyToggler', () => {
       await vscode.commandHandlers.get(command)?.();
     }
 
+    // Turn Proxy On offers to configure, and the toggle starts setup; success toasts are off by
+    // default.
     assert.deepEqual(
       vscode.messages.map((message) => message.kind),
-      ['warning', 'info', 'warning']
+      ['warning']
     );
   });
 
-  it('syncs the stored state when the user accepts the drift prompt', async () => {
+  it('turns the record on without asking when the settings match a profile at activation', async () => {
     const { vscode, api } = activateWith(
-      { settings: APPLIED_SETTINGS, answer: () => 'Sync' },
-      {
-        'proxyToggler.savedProxy': SAVED_PROXY,
-        'proxyToggler.state': { isEnabled: false, hasConfiguration: true }
-      }
+      { settings: { ...APPLIED_SETTINGS, ...PROFILES } },
+      { 'proxyToggler.state': { isEnabled: false, hasConfiguration: true } }
     );
 
     await flushBackgroundTasks();
 
-    assert.deepEqual(
-      vscode.messages.map((message) => message.message),
-      ['VS Code proxy settings differ from Proxy Toggler state.']
-    );
+    assert.deepEqual(vscode.messages, []);
     assert.equal(api.getState().isEnabled, true);
   });
 
-  it('does not undo a change made while the drift prompt was open', async () => {
-    let acceptSync = (): void => undefined;
-    const syncAccepted = new Promise<string>((resolve) => {
-      acceptSync = () => resolve('Sync');
+  it('turns a profile added by hand on and off from the status bar', async () => {
+    const { vscode, api } = activateWith({});
+    await flushBackgroundTasks();
+    const beforeEdit = api.getStatusBarText();
+
+    vscode.changeSettings(PROFILES);
+    await flushBackgroundTasks();
+    const afterEdit = api.getStatusBarText();
+    await vscode.commandHandlers.get(COMMANDS.toggle)?.();
+    const proxyWhenOn = vscode.settings.get('http.proxy');
+    await vscode.commandHandlers.get(COMMANDS.toggle)?.();
+
+    assert.match(beforeEdit ?? '', /not configured/i);
+    assert.match(afterEdit ?? '', /proxy: off/i);
+    assert.equal(proxyWhenOn, PROFILE.proxyUrl);
+    assert.equal(vscode.settings.has('http.proxy'), false);
+    assert.match(api.getStatusBarText() ?? '', /proxy: off/i);
+  });
+
+  describe('status bar', () => {
+    const HOME = { ...PROFILE, name: 'Home', proxyUrl: 'http://home.example:3128' };
+    const statusOf = (vscode: ReturnType<typeof createFakeVscode>) => {
+      const [item] = vscode.statusBarItems;
+      return {
+        text: item?.text,
+        tooltip: item?.tooltip,
+        label: item?.accessibilityInformation?.label
+      };
+    };
+
+    it('says ON or OFF with one profile, and names it in the tooltip and label', async () => {
+      const { vscode } = activateWith(
+        { settings: { ...PROFILES, ...APPLIED_SETTINGS } },
+        { 'proxyToggler.state': { isEnabled: true, currentProfile: PROFILE } }
+      );
+      await flushBackgroundTasks();
+
+      assert.deepEqual(statusOf(vscode), {
+        text: '$(plug) Proxy: ON',
+        tooltip: 'Proxy on: Work. Click to turn it off.',
+        label: 'Proxy on, profile Work'
+      });
     });
-    const { vscode, api } = activateWith(
-      // Only the drift warning waits for the user; the enable command's notification does not.
-      { answer: (message) => (message.kind === 'warning' ? syncAccepted : undefined) },
-      {
-        'proxyToggler.savedProxy': SAVED_PROXY,
-        'proxyToggler.state': { isEnabled: true, hasConfiguration: true }
-      }
-    );
 
-    await vscode.commandHandlers.get(COMMANDS.enable)?.();
-    acceptSync();
-    await flushBackgroundTasks();
+    it('shows the current profile while on once two or more profiles exist', async () => {
+      const settings = { 'proxyToggler.profiles': [HOME, PROFILE] };
+      const on = activateWith(
+        { settings: { ...settings, ...APPLIED_SETTINGS } },
+        { 'proxyToggler.state': { isEnabled: true, currentProfile: PROFILE } }
+      );
+      const off = activateWith(
+        { settings },
+        { 'proxyToggler.state': { isEnabled: false, currentProfile: PROFILE } }
+      );
+      await flushBackgroundTasks();
 
-    assert.equal(vscode.settings.get('http.proxy'), SAVED_PROXY.proxyUrl);
-    assert.equal(api.getState().isEnabled, true);
+      assert.equal(statusOf(on.vscode).text, '$(plug) Proxy: Work');
+      assert.deepEqual(statusOf(off.vscode), {
+        text: '$(debug-disconnect) Proxy: OFF',
+        tooltip: 'Proxy off: Proxy Toggler sets no proxy. Click to turn on Work.',
+        label: 'Proxy off, profile Work'
+      });
+    });
   });
 
-  it('does not check drift without a saved configuration', async () => {
+  it('says nothing at activation when VS Code uses a proxy and no profile exists', async () => {
     const { vscode } = activateWith({ settings: APPLIED_SETTINGS });
 
     await flushBackgroundTasks();
@@ -96,13 +144,10 @@ describe('createProxyToggler', () => {
     assert.deepEqual(vscode.messages, []);
   });
 
-  it('does not prompt when the stored state matches the settings', async () => {
+  it('says nothing at activation when the record matches the settings', async () => {
     const { vscode } = activateWith(
-      { settings: APPLIED_SETTINGS },
-      {
-        'proxyToggler.savedProxy': SAVED_PROXY,
-        'proxyToggler.state': { isEnabled: true, hasConfiguration: true }
-      }
+      { settings: { ...APPLIED_SETTINGS, ...PROFILES } },
+      { 'proxyToggler.state': { isEnabled: true, hasConfiguration: true } }
     );
 
     await flushBackgroundTasks();
@@ -110,27 +155,26 @@ describe('createProxyToggler', () => {
     assert.deepEqual(vscode.messages, []);
   });
 
-  it('treats an array-valued http.noProxy like the saved comma-separated list', async () => {
+  it('shows no drift when http.noProxy holds the same bypass patterns as a list', async () => {
     const { vscode } = activateWith(
-      { settings: { ...APPLIED_SETTINGS, 'http.noProxy': ['localhost'] } },
-      {
-        'proxyToggler.savedProxy': SAVED_PROXY,
-        'proxyToggler.state': { isEnabled: true, hasConfiguration: true }
-      }
+      { settings: { ...APPLIED_SETTINGS, 'http.noProxy': ['localhost'], ...PROFILES } },
+      { 'proxyToggler.state': { isEnabled: true, hasConfiguration: true } }
     );
 
     await flushBackgroundTasks();
 
-    assert.deepEqual(vscode.messages, []);
+    assert.equal(vscode.statusBarItems[0]?.text, '$(plug) Proxy: ON');
+    assert.equal(vscode.statusBarItems[0]?.backgroundColor, undefined);
   });
 
   it('writes http.noProxy as an array', async () => {
     const { vscode } = activateWith(
-      {},
       {
-        'proxyToggler.savedProxy': { ...SAVED_PROXY, noProxy: 'localhost,127.0.0.1' },
-        'proxyToggler.state': { isEnabled: false, hasConfiguration: true }
-      }
+        settings: {
+          'proxyToggler.profiles': [{ ...PROFILE, bypassList: ['localhost', '127.0.0.1'] }]
+        }
+      },
+      { 'proxyToggler.state': { isEnabled: false, hasConfiguration: true } }
     );
 
     await vscode.commandHandlers.get(COMMANDS.enable)?.();
@@ -145,11 +189,8 @@ describe('createProxyToggler', () => {
 
     it('still shows the latest state', async () => {
       const { vscode, context, api } = activateWith(
-        {},
-        {
-          'proxyToggler.savedProxy': SAVED_PROXY,
-          'proxyToggler.state': { isEnabled: false, hasConfiguration: true }
-        }
+        { settings: PROFILES },
+        { 'proxyToggler.state': { isEnabled: false, hasConfiguration: true } }
       );
 
       await vscode.commandHandlers.get(COMMANDS.enable)?.();
@@ -162,11 +203,8 @@ describe('createProxyToggler', () => {
 
     it('toggles from the latest state, not from the echo', async () => {
       const { vscode, context, api } = activateWith(
-        {},
-        {
-          'proxyToggler.savedProxy': SAVED_PROXY,
-          'proxyToggler.state': { isEnabled: false, hasConfiguration: true }
-        }
+        { settings: PROFILES },
+        { 'proxyToggler.state': { isEnabled: false, hasConfiguration: true } }
       );
 
       await vscode.commandHandlers.get(COMMANDS.toggle)?.();
@@ -178,26 +216,9 @@ describe('createProxyToggler', () => {
     });
   });
 
-  it('shows the keychain message and logs when the keychain cannot be read', async () => {
-    const vscode = createFakeVscode();
-    const context = createExtensionContext({
-      state: new Map<string, unknown>([['proxyToggler.savedProxy', SAVED_PROXY]]),
-      secretFailures: { get: new Error('Keychain is locked') }
-    });
-    createProxyToggler(vscode, context);
-
-    await vscode.commandHandlers.get(COMMANDS.configure)?.();
-
-    assert.deepEqual(
-      vscode.messages.map((message) => [message.kind, message.message]),
-      [['error', 'Your system keychain appears to be locked. Unlock it and try again.']]
-    );
-    assert.match(vscode.logs.join('\n'), /proxyToggler\.configure failed/);
-  });
-
   it('logs an unexpected failure and shows the command failure message', async () => {
     const { vscode } = activateWith({});
-    vscode.window.showInputBox = async () => {
+    vscode.window.createInputBox = () => {
       throw new Error('input box failed');
     };
 

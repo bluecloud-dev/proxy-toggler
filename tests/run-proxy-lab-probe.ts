@@ -5,7 +5,7 @@ import { promisify } from 'node:util';
 
 import { runTests, runVSCodeCommand, VSCodeCommandError } from '@vscode/test-electron';
 
-import { DEFAULT_NO_PROXY, parseNoProxyList } from '../src/core/no-proxy';
+import { testConnection, type TestVerdict } from '../src/core/test-connection';
 import type { RemotePlan } from './proxy-lab/remote';
 import { makeTempDir, removeTempDir } from './temp-dir';
 import { versionsToTest } from './vscode-versions';
@@ -32,8 +32,8 @@ const MITMPROXY = 'http://127.0.0.1:8080';
 const PAC_ARGUMENT = '--proxy-pac-url=http://127.0.0.1:8000/proxy.pac';
 const ORIGIN = 'http://origin.lab.test:8088';
 const MARKETPLACE = 'https://marketplace.visualstudio.com/';
-// The bypass list Proxy Toggler writes when the user keeps the default.
-const DEFAULT_BYPASS = parseNoProxyList(DEFAULT_NO_PROXY);
+// The bypass list 0.1.x saved when the user kept the default.
+const DEFAULT_BYPASS = ['localhost', '127.0.0.1'];
 
 // The SSH host reaches the proxies by service name, on the lab's remote network.
 const REMOTE_SQUID_OPEN = 'http://squid-open:3128';
@@ -45,6 +45,10 @@ const SSH_HOST = 'proxy-lab';
 const REMOTE_AUTHORITY = `ssh-remote+${SSH_HOST}`;
 const REMOTE_PROBE = '/home/lab/probe';
 const MACHINE_SETTINGS = '/home/lab/.vscode-server/data/Machine/settings.json';
+// Proxy Toggler as the runner copies it to the SSH host, and the record it keeps there.
+const REMOTE_PROXY_TOGGLER = '/home/lab/proxy-toggler';
+const REMOTE_RECORD_DIR =
+  '/home/lab/.vscode-server/data/User/globalStorage/aymenhammouda.proxy-toggler';
 
 const MARKETPLACE_TUNNEL = /TCP_TUNNEL\/200 \d+ CONNECT marketplace\.visualstudio\.com:443 /;
 const MARKETPLACE_DENIED = /TCP_DENIED\/407 \d+ CONNECT marketplace\.visualstudio\.com:443 /;
@@ -79,12 +83,13 @@ type HttpSettings = {
   'http.proxyStrictSSL'?: boolean;
   'http.noProxy'?: string[];
 };
+type LabProfile = { name: string; proxyUrl: string; strictSSL: boolean; bypassList: string[] };
 type MachineSettings = HttpSettings & { 'http.useLocalProxyConfiguration'?: boolean };
 
 type CheckBase = {
   name: string;
   // The local user settings.
-  settings: HttpSettings;
+  settings: HttpSettings & { 'proxyToggler.profiles'?: LabProfile[] };
   args?: string[];
   logs: LogLine[];
   absentLogs?: LogLine[];
@@ -92,19 +97,34 @@ type CheckBase = {
   since?: string;
 };
 // `code --install-extension`: VS Code's own requests, sent by its Node.js request service.
-type CliCheck = CheckBase & { client: 'cli'; installs: boolean };
-// The desktop app: requests from the extension host, keyed by URL, and a Marketplace search. With
-// `windowMarketplace`, Chromium's net log records how the window's Marketplace requests ended.
+// `onVersion` gives the outcome on releases that behave otherwise.
+type CliCheck = CheckBase & {
+  client: 'cli';
+  installs: boolean;
+  onVersion?: Record<string, { installs: boolean; logs: LogLine[] }>;
+};
+// The desktop app: requests from the extension host, keyed by URL, and a Marketplace search.
+// Chromium's net log records how the window's Marketplace requests ended, and `windowMarketplace`
+// is what they must show.
+// `update` writes settings while VS Code runs, as Proxy Toggler does, then sends its own requests
+// and searches again. `env` adds variables to VS Code's environment.
+// `onPlatform` gives the logs and window outcome where the window behaves otherwise.
 type AppCheck = CheckBase & {
   client: 'app';
   responses: Record<string, RegExp>;
   windowMarketplace?: RegExp;
+  update?: { settings: Record<string, unknown>; responses: Record<string, RegExp> };
+  env?: Record<string, string>;
+  onPlatform?: Partial<Record<NodeJS.Platform, { logs: LogLine[]; windowMarketplace: RegExp }>>;
 };
 // A Remote-SSH window on the lab's SSH host that runs a plan of tests/proxy-lab/remote.ts. Once the
 // plan waits for an outside change, `localChange` replaces http.* settings in the window's local
 // settings.json, and `secondWindow` opens another window on the same host, in its own profile.
 type SshCheck = CheckBase & {
   client: 'ssh';
+  // Loads Proxy Toggler on the SSH host beside the probe, whose plan can run its commands; the
+  // observations then include its record on that host.
+  withProxyToggler?: true;
   // The SSH host's Machine/settings.json when the window opens.
   machineSettings: MachineSettings;
   plan: RemotePlan;
@@ -143,7 +163,14 @@ const CHECKS: readonly Check[] = [
     client: 'cli',
     settings: proxySettings(MITMPROXY, false),
     installs: true,
-    logs: [{ service: 'mitmproxy', pattern: MARKETPLACE_INTERCEPTED }]
+    logs: [{ service: 'mitmproxy', pattern: MARKETPLACE_INTERCEPTED }],
+    // VS Code 1.97.0's CLI checks the certificate whatever http.proxyStrictSSL says.
+    onVersion: {
+      '1.97.0': {
+        installs: false,
+        logs: [{ service: 'mitmproxy', pattern: MARKETPLACE_TLS_FAILED }]
+      }
+    }
   },
   {
     name: 'CLI with only --proxy-pac-url',
@@ -198,7 +225,18 @@ const CHECKS: readonly Check[] = [
       { service: 'pac', pattern: PAC_FETCHED },
       { service: 'squid-open', pattern: /GET http:\/\/origin\.lab\.test:8088\/pac / },
       { service: 'squid-auth', pattern: MARKETPLACE_DENIED }
-    ]
+    ],
+    // On Linux the window's Marketplace requests do not take the PAC file's proxy: they succeed,
+    // and squid-auth sees none. The extension host still follows the PAC file.
+    onPlatform: {
+      linux: {
+        logs: [
+          { service: 'pac', pattern: PAC_FETCHED },
+          { service: 'squid-open', pattern: /GET http:\/\/origin\.lab\.test:8088\/pac / }
+        ],
+        windowMarketplace: /^OK ×\d+$/
+      }
+    }
   },
   {
     // Chromium has no socks5h scheme, while the extension host reads it as SOCKS5.
@@ -295,6 +333,123 @@ const CHECKS: readonly Check[] = [
     logs: [{ service: 'squid-open', pattern: REMOTE_PROBE_REQUEST }]
   },
   {
+    // "Use a Separate Proxy for This Remote" pins the remote machine at once: right after
+    // http.useLocalProxyConfiguration turns false, a Global write of http.proxy must land in the
+    // remote machine's settings, not in this computer's.
+    name: 'SSH window, http.proxy written right after http.useLocalProxyConfiguration turns false',
+    client: 'ssh',
+    since: REMOTE_SINCE,
+    settings: { 'http.proxy': SQUID_OPEN },
+    machineSettings: { 'http.useLocalProxyConfiguration': true },
+    plan: {
+      steps: [
+        { observe: 'before' },
+        { label: 'separate', update: 'useLocalProxyConfiguration', value: false },
+        { label: 'pin', update: 'proxy', value: '' },
+        { observe: 'pinned' }
+      ]
+    },
+    observations: {
+      'before: http.proxy': recorded(SQUID_OPEN),
+      'separate: update': /^ok$/,
+      'pin: update': /^ok$/,
+      'pinned: http.proxy': recorded(''),
+      'pinned: request': DIRECT,
+      'local settings.json http.proxy': recorded(SQUID_OPEN),
+      'remote Machine/settings.json http.proxy': recorded(''),
+      'remote Machine/settings.json http.useLocalProxyConfiguration': recorded(false)
+    },
+    logs: []
+  },
+  {
+    // "Use This Computer's Proxy Again" removes the setting rather than writing true. Over SSH,
+    // whose default is false, a removal switches the other way.
+    name: 'SSH window, http.useLocalProxyConfiguration removed while open',
+    client: 'ssh',
+    since: REMOTE_SINCE,
+    settings: { 'http.proxy': SQUID_OPEN },
+    machineSettings: { 'http.useLocalProxyConfiguration': true, 'http.proxy': REMOTE_SQUID_OPEN },
+    plan: {
+      steps: [
+        { observe: 'before' },
+        { label: 'removed', update: 'useLocalProxyConfiguration', value: null },
+        { observe: 'removed' }
+      ]
+    },
+    observations: {
+      'before: http.proxy': recorded(SQUID_OPEN),
+      'before: request': LOCAL_PROXY_ON_REMOTE,
+      'removed: update': /^ok$/,
+      'removed: event': /^http\.proxy changed$/,
+      'removed: http.proxy': recorded(REMOTE_SQUID_OPEN),
+      'removed: request': ORIGIN_REPLY,
+      'remote Machine/settings.json http.useLocalProxyConfiguration': /^absent$/
+    },
+    logs: [{ service: 'squid-open', pattern: REMOTE_PROBE_REQUEST }]
+  },
+  {
+    // Proxy Toggler pins every remote machine it manages: turning the proxy off there writes an
+    // empty http.proxy instead of removing it, so that the local value cannot leak in (check 1).
+    name: 'SSH window whose remote settings pin an empty http.proxy',
+    client: 'ssh',
+    since: REMOTE_SINCE,
+    settings: { 'http.proxy': SQUID_OPEN },
+    machineSettings: { 'http.proxy': '' },
+    plan: { steps: [{ observe: 'initial' }] },
+    observations: {
+      remoteName: /^ssh-remote$/,
+      'initial: http.proxy': recorded(''),
+      'initial: request': DIRECT,
+      'remote Machine/settings.json http.proxy': recorded('')
+    },
+    logs: []
+  },
+  {
+    // Proxy Toggler manages the SSH host's own settings and keeps its record there. It trusts only
+    // the host's own values, whatever VS Code hands the remote side at start-up (result 1), and
+    // turning the proxy off pins an empty http.proxy (result 6).
+    name: 'Proxy Toggler in an SSH window',
+    client: 'ssh',
+    since: REMOTE_SINCE,
+    withProxyToggler: true,
+    settings: {
+      'http.proxy': SQUID_OPEN,
+      'proxyToggler.profiles': [
+        { name: 'Lab remote', proxyUrl: REMOTE_SQUID_OPEN, strictSSL: true, bypassList: [] },
+        { name: 'Lab local', proxyUrl: SQUID_OPEN, strictSSL: true, bypassList: [] }
+      ]
+    },
+    machineSettings: {},
+    plan: {
+      steps: [
+        { observe: 'initial' },
+        { label: 'switch', command: 'proxyToggler.switchProfile', args: ['Lab remote'] },
+        { observe: 'after switch' },
+        { label: 'off', command: 'proxyToggler.disable' },
+        { observe: 'after off' }
+      ]
+    },
+    observations: {
+      remoteName: /^ssh-remote$/,
+      'initial: request': oneOf(LOCAL_PROXY_ON_REMOTE, DIRECT),
+      'initial: toggle': /^\$\(debug-disconnect\) Proxy \(.+\): OFF$/,
+      'switch: command': /^ok$/,
+      'switch: event': /^http\.proxy changed$/,
+      'after switch: http.proxy': recorded(REMOTE_SQUID_OPEN),
+      'after switch: request': ORIGIN_REPLY,
+      'after switch: toggle': /^\$\(plug\) Proxy \(.+\): Lab remote$/,
+      'off: command': /^ok$/,
+      'off: event': /^http\.proxy changed$/,
+      'after off: http.proxy': recorded(''),
+      'after off: request': DIRECT,
+      'after off: toggle': /^\$\(debug-disconnect\) Proxy \(.+\): OFF$/,
+      'local settings.json http.proxy': recorded(SQUID_OPEN),
+      'remote Machine/settings.json http.proxy': recorded(''),
+      'remote record': /"isEnabled":false,.*"currentProfile":\{"name":"Lab remote"/
+    },
+    logs: [{ service: 'squid-open', pattern: REMOTE_PROBE_REQUEST }]
+  },
+  {
     name: 'Two SSH windows, the second writes the remote http.proxy',
     client: 'ssh',
     since: REMOTE_SINCE,
@@ -319,6 +474,162 @@ const CHECKS: readonly Check[] = [
       'after: request': ORIGIN_REPLY
     },
     logs: [{ service: 'squid-open', pattern: REMOTE_PROBE_REQUEST }]
+  }
+];
+
+// What Off does: Proxy Toggler removes the three settings while VS Code runs. `npm run
+// proxy-lab:probe -- "App, Off:"` runs only these checks.
+const CLEARED = { 'http.proxy': null, 'http.proxyStrictSSL': null, 'http.noProxy': null };
+// A candidate for a Direct entry: no proxy, and every host bypassed.
+const DIRECT_CANDIDATE = { 'http.proxy': '', 'http.noProxy': ['*'] };
+
+const OFF_CHECKS: readonly Check[] = [
+  {
+    name: 'App, Off: settings removed while running, with --proxy-pac-url',
+    client: 'app',
+    settings: proxySettings(SQUID_OPEN, true),
+    args: [PAC_ARGUMENT],
+    responses: { [`${ORIGIN}/off-before`]: ORIGIN_REPLY },
+    update: { settings: CLEARED, responses: { [`${ORIGIN}/off-after`]: DIRECT } },
+    logs: [{ service: 'squid-open', pattern: /GET http:\/\/origin\.lab\.test:8088\/off-before / }],
+    absentLogs: [
+      { service: 'squid-open', pattern: /\/off-after / },
+      { service: 'squid-auth', pattern: MARKETPLACE_DENIED }
+    ]
+  },
+  {
+    name: 'App, Off: settings removed while running, with HTTP_PROXY and HTTPS_PROXY',
+    client: 'app',
+    settings: proxySettings(SQUID_OPEN, true),
+    env: { HTTP_PROXY: SQUID_AUTH, HTTPS_PROXY: SQUID_AUTH },
+    responses: { [`${ORIGIN}/env-before`]: ORIGIN_REPLY },
+    update: { settings: CLEARED, responses: { [`${ORIGIN}/env-after`]: /^status 407: / } },
+    logs: [
+      { service: 'squid-open', pattern: /GET http:\/\/origin\.lab\.test:8088\/env-before / },
+      {
+        service: 'squid-auth',
+        pattern: /TCP_DENIED\/407 \d+ GET http:\/\/origin\.lab\.test:8088\/env-after /
+      },
+      // The window follows the variables too once the settings are gone.
+      { service: 'squid-auth', pattern: MARKETPLACE_DENIED }
+    ]
+  },
+  {
+    name: 'App, Off: Direct candidate at start-up, with --proxy-pac-url',
+    client: 'app',
+    settings: DIRECT_CANDIDATE,
+    args: [PAC_ARGUMENT],
+    responses: { [`${ORIGIN}/direct-start`]: DIRECT },
+    logs: [],
+    absentLogs: [
+      { service: 'squid-open', pattern: /\/direct-start / },
+      { service: 'squid-auth', pattern: MARKETPLACE_DENIED }
+    ]
+  },
+  {
+    name: 'App, Off: Direct candidate while running, with --proxy-pac-url',
+    client: 'app',
+    settings: proxySettings(SQUID_OPEN, true),
+    args: [PAC_ARGUMENT],
+    responses: { [`${ORIGIN}/direct-before`]: ORIGIN_REPLY },
+    update: { settings: DIRECT_CANDIDATE, responses: { [`${ORIGIN}/direct-after`]: DIRECT } },
+    logs: [
+      { service: 'squid-open', pattern: /GET http:\/\/origin\.lab\.test:8088\/direct-before / }
+    ],
+    absentLogs: [
+      { service: 'squid-open', pattern: /\/direct-after / },
+      { service: 'squid-auth', pattern: MARKETPLACE_DENIED }
+    ]
+  }
+];
+
+// Test Connection (src/core/test-connection.ts) against the lab's proxies, for each verdict of
+// #69 and #70. It is Proxy Toggler's own code, so it runs once, not for each VS Code release.
+type TestConnectionCheck = {
+  name: string;
+  proxyUrl: string;
+  targetUrl: string;
+  outcome: TestVerdict['outcome'];
+  message: RegExp;
+};
+
+const TEST_CONNECTION_CHECKS: readonly TestConnectionCheck[] = [
+  {
+    name: 'Test Connection: an https:// target through squid-open',
+    proxyUrl: SQUID_OPEN,
+    targetUrl: MARKETPLACE,
+    outcome: 'pass',
+    message: /^The proxy opened a tunnel to marketplace\.visualstudio\.com, which answered \d{3}\.$/
+  },
+  {
+    name: 'Test Connection: an http:// target through squid-open',
+    proxyUrl: SQUID_OPEN,
+    targetUrl: `${ORIGIN}/test-connection`,
+    outcome: 'pass',
+    message: /^The proxy answered 200 for http:\/\/origin\.lab\.test:8088\.$/
+  },
+  {
+    // Squid answers 503 for a host it cannot resolve.
+    name: 'Test Connection: an http:// target that squid-open cannot resolve',
+    proxyUrl: SQUID_OPEN,
+    targetUrl: 'http://missing.lab.test:8088/',
+    outcome: 'warn',
+    message:
+      /^The proxy answered 503 .* The proxy may have sent this status rather than missing\.lab\.test:8088\.$/
+  },
+  {
+    name: 'Test Connection: squid-auth asks for a sign-in',
+    proxyUrl: SQUID_AUTH,
+    targetUrl: MARKETPLACE,
+    outcome: 'warn',
+    message: /^The proxy asks for a sign-in \(407\)\./
+  },
+  {
+    name: 'Test Connection: no proxy listening',
+    proxyUrl: 'http://127.0.0.1:3130',
+    targetUrl: MARKETPLACE,
+    outcome: 'fail',
+    message: /^Could not reach the proxy at 127\.0\.0\.1:3130: the connection was refused\.$/
+  },
+  {
+    // Squid allows CONNECT only to the SSL ports, 443 and 8443.
+    name: 'Test Connection: squid-open refuses the tunnel',
+    proxyUrl: SQUID_OPEN,
+    targetUrl: 'https://origin.lab.test:8088/',
+    outcome: 'fail',
+    message: /^The proxy refused the tunnel to origin\.lab\.test:8088: 403 Forbidden\.$/
+  },
+  {
+    name: "Test Connection: the origin's self-signed certificate",
+    proxyUrl: SQUID_OPEN,
+    targetUrl: 'https://origin.lab.test:8443/',
+    outcome: 'warn',
+    message:
+      /^The proxy opened a tunnel to origin\.lab\.test:8443, which answered 200\. origin\.lab\.test:8443's certificate is self-signed by origin\.lab\.test, /
+  },
+  {
+    // `origin` is the origin's service name on the lab network; its certificate does not name it.
+    name: 'Test Connection: a certificate that does not name the host',
+    proxyUrl: SQUID_OPEN,
+    targetUrl: 'https://origin:8443/',
+    outcome: 'fail',
+    message:
+      /^origin:8443's certificate is for origin\.lab\.test, localhost, 127\.0\.0\.1, not origin\.$/
+  },
+  {
+    name: "Test Connection: mitmproxy's certificate",
+    proxyUrl: MITMPROXY,
+    targetUrl: MARKETPLACE,
+    outcome: 'warn',
+    message:
+      /marketplace\.visualstudio\.com's certificate comes from mitmproxy, an authority that Node's built-in list does not include\./
+  },
+  {
+    name: 'Test Connection: a SOCKS proxy',
+    proxyUrl: 'socks5://127.0.0.1:1080',
+    targetUrl: MARKETPLACE,
+    outcome: 'skip',
+    message: /^Test Connection covers only HTTP and HTTPS proxies/
   }
 ];
 
@@ -353,22 +664,37 @@ async function main(): Promise<boolean> {
     }
   }
   const filter = process.argv[2] ?? '';
-  const checks = CHECKS.filter((check) => check.name.includes(filter));
+  const checks = [...CHECKS, ...OFF_CHECKS].filter((check) => check.name.includes(filter));
+  const connectionChecks = TEST_CONNECTION_CHECKS.filter((check) => check.name.includes(filter));
   // Running nothing would look like a pass.
-  if (checks.length === 0) {
+  if (checks.length === 0 && connectionChecks.length === 0) {
     throw new Error(`No check name contains "${filter}".`);
   }
   await assertLabIsRunning(
     checks.some((check) => check.client === 'ssh') ? REQUIRED_SSH_SERVICES : REQUIRED_SERVICES
   );
 
+  let passed = true;
+  for (const check of connectionChecks) {
+    const verdict = await testConnection(check.proxyUrl, check.targetUrl);
+    const matches = verdict.outcome === check.outcome && check.message.test(verdict.message);
+    passed &&= matches;
+    console.log(`${matches ? 'PASS' : 'FAIL'}  ${check.name}`);
+    console.log(`      ${verdict.outcome}: ${verdict.message}`);
+    if (!matches) {
+      console.log(`      expected ${check.outcome} matching ${String(check.message)}`);
+    }
+  }
+
   // A check with `since` runs on that release instead of an older engines.vscode minimum.
   const runs = (await versionsToTest()).flatMap((version) =>
-    checks.map((check) => ({ version: atLeast(version, check.since), check }))
+    checks.map((check) => {
+      const run = atLeast(version, check.since);
+      return { version: run, check: forVersion(check, run) };
+    })
   );
   let ssh: Promise<SshLab> | undefined;
   const sshLab = (): Promise<SshLab> => (ssh ??= prepareSshLab());
-  let passed = true;
   try {
     for (const { version, check } of runs) {
       const { problems, evidence } = await runCheck(version, check, sshLab);
@@ -387,6 +713,19 @@ async function main(): Promise<boolean> {
     }
   }
   return passed;
+}
+
+// The check as it applies to that release, on this platform.
+function forVersion(check: Check, version: string): Check {
+  if (check.client === 'cli') {
+    const outcome = check.onVersion?.[version];
+    return outcome ? { ...check, ...outcome } : check;
+  }
+  if (check.client === 'app') {
+    const outcome = check.onPlatform?.[process.platform];
+    return outcome ? { ...check, ...outcome } : check;
+  }
+  return check;
 }
 
 function atLeast(version: string, since: string | undefined): string {
@@ -432,21 +771,18 @@ async function runCheck(
       }
     } else if (check.client === 'app') {
       const responses = await runInVsCode(version, profile, check, temp);
-      for (const [url, expected] of Object.entries(check.responses)) {
+      const expectedResponses = { ...check.responses, ...check.update?.responses };
+      for (const [url, expected] of Object.entries(expectedResponses)) {
         const actual = responses[url] ?? 'no result';
         evidence.push(`extension host ${url}: ${actual}`);
         if (!expected.test(actual)) {
           problems.push(`expected ${url} to match ${String(expected)}`);
         }
       }
-      if (check.windowMarketplace) {
-        const actual = await windowRequests(path.join(temp, 'net-log.json'), MARKETPLACE);
-        evidence.push(`window ${MARKETPLACE}: ${actual}`);
-        if (!check.windowMarketplace.test(actual)) {
-          problems.push(
-            `expected the window's requests to match ${String(check.windowMarketplace)}`
-          );
-        }
+      const windowMarketplace = await windowRequests(path.join(temp, 'net-log.json'), MARKETPLACE);
+      evidence.push(`window ${MARKETPLACE}: ${windowMarketplace}`);
+      if (check.windowMarketplace && !check.windowMarketplace.test(windowMarketplace)) {
+        problems.push(`expected the window's requests to match ${String(check.windowMarketplace)}`);
       }
     } else {
       const observed = await runInSshWindows(version, check, await sshLab(), temp, settings);
@@ -535,9 +871,7 @@ async function runInVsCode(
 ): Promise<Record<string, string>> {
   const resultsFile = path.join(temp, 'results.json');
   // VS Code passes switches it does not know to Chromium, which then logs every request.
-  const netLog = check.windowMarketplace
-    ? [`--log-net-log=${path.join(temp, 'net-log.json')}`]
-    : [];
+  const netLog = [`--log-net-log=${path.join(temp, 'net-log.json')}`];
   // VS Code loads extension tests only in a development host; the packaged tests' empty
   // extension serves as one.
   await runTests({
@@ -553,8 +887,13 @@ async function runInVsCode(
       ...(check.args ?? [])
     ],
     extensionTestsEnv: {
+      ...check.env,
       PROXY_LAB_URLS: Object.keys(check.responses).join(' '),
-      PROXY_LAB_RESULTS: resultsFile
+      PROXY_LAB_RESULTS: resultsFile,
+      ...(check.update && {
+        PROXY_LAB_UPDATE: JSON.stringify(check.update.settings),
+        PROXY_LAB_UPDATE_URLS: Object.keys(check.update.responses).join(' ')
+      })
     }
   });
   return JSON.parse(await fs.readFile(resultsFile, 'utf8')) as Record<string, string>;
@@ -646,6 +985,12 @@ async function prepareSshLab(): Promise<SshLab> {
     };
     await sshHost(['rm', '-rf', REMOTE_PROBE]);
     await writeRemoteFile(`${REMOTE_PROBE}/package.json`, JSON.stringify(manifest, null, 2));
+    // Proxy Toggler's build, which npm run proxy-lab:probe makes first.
+    await sshHost(['rm', '-rf', REMOTE_PROXY_TOGGLER], 'root');
+    await sshHost(['mkdir', '-p', `${REMOTE_PROXY_TOGGLER}/dist`]);
+    for (const file of ['package.json', 'package.nls.json', 'dist/extension.js']) {
+      await compose(['cp', path.join(root, file), `ssh-host:${REMOTE_PROXY_TOGGLER}/${file}`]);
+    }
     for (const file of ['remote.js', 'requests.js']) {
       const compiled = await fs.readFile(
         path.join(root, 'out', 'tests', 'proxy-lab', file),
@@ -701,7 +1046,7 @@ async function runInSshWindows(
 
   // Each check starts a new VS Code server, so nothing carries over from the check before.
   await sshHost(['pkill', '-KILL', '-u', 'lab'], 'root').catch(() => undefined);
-  await sshHost(['rm', '-rf', MACHINE_SETTINGS, first.folder, second.folder]);
+  await sshHost(['rm', '-rf', MACHINE_SETTINGS, REMOTE_RECORD_DIR, first.folder, second.folder]);
   if (Object.keys(check.machineSettings).length > 0) {
     await writeRemoteFile(MACHINE_SETTINGS, JSON.stringify(check.machineSettings, null, 2));
   }
@@ -713,14 +1058,15 @@ async function runInSshWindows(
   }
 
   const problems: string[] = [];
-  const firstClosed = openSshWindow(version, first, extensionsDir);
+  const extensions = check.withProxyToggler ? [REMOTE_PROXY_TOGGLER] : [];
+  const firstClosed = openSshWindow(version, first, extensionsDir, extensions);
   if (check.localChange || check.secondWindow) {
     if (await waitForRemoteFile(`${first.folder}/ready`, firstClosed)) {
       if (check.localChange) {
         await writeUserSettings(first.userDataDir, { ...windowSettings, ...check.localChange });
       }
       if (check.secondWindow) {
-        problems.push(...(await openSshWindow(version, second, extensionsDir)));
+        problems.push(...(await openSshWindow(version, second, extensionsDir, extensions)));
       }
     } else {
       problems.push('the window never became ready for the outside change');
@@ -742,6 +1088,16 @@ async function runInSshWindows(
     observations[`local settings.json ${key}`] = describeSetting(localSettings, key);
     observations[`remote Machine/settings.json ${key}`] = describeSetting(machineSettings, key);
   }
+  if (check.withProxyToggler) {
+    const record = await sshHost([
+      'sh',
+      '-c',
+      'cat "$1" 2>/dev/null || true',
+      'sh',
+      `${REMOTE_RECORD_DIR}/proxyToggler.state.json`
+    ]);
+    observations['remote record'] = record.trim() === '' ? 'absent' : record.trim();
+  }
   return { observations, problems };
 }
 
@@ -754,12 +1110,17 @@ function describeSetting(settings: object, key: string): string {
 async function openSshWindow(
   version: string,
   window: { folder: string; userDataDir: string },
-  extensionsDir: string
+  extensionsDir: string,
+  // Folders on the SSH host of more extensions to load beside the probe.
+  extensions: string[]
 ): Promise<string[]> {
   const probe = `vscode-remote://${REMOTE_AUTHORITY}${REMOTE_PROBE}`;
   const closed = runTests({
     version,
-    extensionDevelopmentPath: probe,
+    extensionDevelopmentPath: [
+      probe,
+      ...extensions.map((folder) => `vscode-remote://${REMOTE_AUTHORITY}${folder}`)
+    ],
     extensionTestsPath: `${probe}/remote.js`,
     launchArgs: [
       // A remote extensionDevelopmentPath alone opens a local window.
