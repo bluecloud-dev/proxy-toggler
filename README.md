@@ -68,7 +68,7 @@
 
 ## :zap: Quick Start
 
-1. Install from the [VS Code Marketplace](#) or via VSIX:
+1. Install from the [VS Code Marketplace](https://marketplace.visualstudio.com/items?itemName=bluecloud-dev.proxy-toggler) or via VSIX:
 
    ```sh
    code --install-extension proxy-toggler-*.vsix
@@ -166,7 +166,7 @@ To keep either on one machine, list it in `settingsSync.ignoredSettings`, for ex
 remembers on a machine, such as the current profile and on or off, is never synced.
 
 When Settings Sync shows a conflict in `proxyToggler.profiles`, for example after two machines each
-copied their 0.1.x configuration into a profile, keep the entries of both sides. If both hold a
+added a profile, keep the entries of both sides. If both hold a
 profile with the same name, Proxy Toggler shows the first and warns about the other.
 
 ### VS Code Profiles
@@ -211,7 +211,7 @@ proxy settings and the system's. Test Connection notes when it is `off`.
 In a remote window, such as SSH, Tunnels, WSL or a Dev Container, Proxy Toggler runs on the remote
 side, so it must be installed there too. Click **Install in SSH: devbox**, or the button for your
 remote, on Proxy Toggler in the Extensions view. To install it on every remote, list
-`aymenhammouda.proxy-toggler` in `remote.defaultExtensionsIfInstalledLocally` (VS Code 1.99 and
+`bluecloud-dev.proxy-toggler` in `remote.defaultExtensionsIfInstalledLocally` (VS Code 1.99 and
 later), `remote.SSH.defaultExtensions` or `dev.containers.defaultExtensions`.
 
 The remote side of a window uses one of two sets of proxy settings. The remote machine's
@@ -270,7 +270,8 @@ flowchart LR
   writes credentials to `settings.json`, `globalState`, logs, or messages. When a proxy asks for a
   sign-in, VS Code's own login dialog asks you
 - **No `http.proxyAuthorization`** header is set by this extension
-- The username and password that 0.1.x stored in your OS keychain are deleted, with a one-time notice
+- The user name and password that 0.1.0 could store stay under its own extension ID,
+  `aymenhammouda.proxy-toggler`, where this version cannot reach them
 - **Works in Restricted Mode**: the extension reads no workspace files, so it stays available in folders you have not trusted
 - **Report vulnerabilities privately**; see [SECURITY.md](SECURITY.md)
 

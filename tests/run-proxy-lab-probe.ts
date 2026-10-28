@@ -48,7 +48,7 @@ const MACHINE_SETTINGS = '/home/lab/.vscode-server/data/Machine/settings.json';
 // Proxy Toggler as the runner copies it to the SSH host, and the record it keeps there.
 const REMOTE_PROXY_TOGGLER = '/home/lab/proxy-toggler';
 const REMOTE_RECORD_DIR =
-  '/home/lab/.vscode-server/data/User/globalStorage/aymenhammouda.proxy-toggler';
+  '/home/lab/.vscode-server/data/User/globalStorage/bluecloud-dev.proxy-toggler';
 
 const MARKETPLACE_TUNNEL = /TCP_TUNNEL\/200 \d+ CONNECT marketplace\.visualstudio\.com:443 /;
 const MARKETPLACE_DENIED = /TCP_DENIED\/407 \d+ CONNECT marketplace\.visualstudio\.com:443 /;
