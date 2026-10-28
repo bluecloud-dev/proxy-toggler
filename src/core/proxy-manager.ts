@@ -24,7 +24,7 @@ import {
 import type { ToggleState } from './proxy-configuration';
 import type { Deleted, Gone, NameTaken, NotConfigured, Off, On, Saved } from './proxy-outcome';
 import {
-  ConfigurationError,
+  failedSettingWrite,
   type HttpSettingKey,
   type HttpSettings,
   ProxySettingsWriter
@@ -72,8 +72,9 @@ export class ProfileApplyError extends Error {
   }
 
   toUserMessage(): string {
-    return this.cause instanceof ConfigurationError
-      ? this.cause.toUserMessage(`Saved ${this.profileName}, but could not fully apply the changes`)
+    const failure = failedSettingWrite(this.cause);
+    return failure
+      ? failure.toUserMessage(`Saved ${this.profileName}, but could not fully apply the changes`)
       : `${this.message} See the Proxy Toggler output for details.`;
   }
 }

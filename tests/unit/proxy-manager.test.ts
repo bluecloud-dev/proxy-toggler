@@ -549,6 +549,16 @@ describe('ProxyManager', () => {
       );
     });
 
+    it('words a failed setting write that lies deeper in the cause chain', () => {
+      const wrapped = new Error('wrapped', { cause: new ConfigurationError('enable', 'noProxy') });
+
+      const message = new ProfileApplyError('Work', wrapped).toUserMessage();
+
+      assert.match(message, /^Saved Work, but could not fully apply the changes because/);
+      assert.match(message, /"http\.noProxy"/);
+      assert.doesNotMatch(message, /output/i);
+    });
+
     it('reports a saved profile when an unexpected error prevents re-application', async () => {
       const globalState = createMemento(
         new Map([['proxyToggler.state', { isEnabled: true, currentProfile: WORK }]])
