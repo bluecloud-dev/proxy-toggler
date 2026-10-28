@@ -21,13 +21,19 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
   uses a loopback proxy, which WSL's NAT mode cannot reach, the first comes first.
 - **Add Profile…** in two native steps with a Back button: the proxy URL, then the name, which
   defaults to the proxy host. When no profile exists and VS Code already uses a proxy, setup
-  starts from those settings and names anything a profile cannot hold.
+  starts from those settings and names anything a profile cannot hold. If another window takes
+  the name before the profile saves, the name step opens again with the reason and the proxy URL
+  kept. If another window removes the profile before you click **Turn On**, a warning says so.
 - **Edit Profile…** lists a profile's name, proxy URL, strict SSL choice and bypass list; each
   pick changes and saves one field. Saving the current profile while the proxy is on re-applies
-  it, and a rename warns that keybindings using the old name stop working. **Configure Proxy
-  Settings** edits the current profile once one exists.
+  it, and a rename warns that keybindings using the old name stop working. When a saved edit
+  cannot be applied, only the error shows, without that warning. If another window takes the new
+  name before the edit saves, the name field opens again with the reason; if another window has
+  removed the profile, a warning says so and the edit ends. **Configure Proxy Settings** edits the
+  current profile once one exists.
 - **Delete Profile…** asks for confirmation. Deleting the current profile turns the proxy off
-  first, and the first remaining profile becomes current.
+  first, and the first remaining profile becomes current. If another window or Settings Sync has
+  already deleted the profile, a warning says so.
 - Proxy profiles, kept in the `proxyToggler.profiles` setting: each has a name, a proxy URL, a
   strict SSL choice and a bypass list. The toggle turns the current profile on and off. The
   setting is shared by every VS Code Profile and read only from user settings.
@@ -36,8 +42,10 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
   downgrade still finds it.
 - The switcher, behind a gear next to the status bar toggle and the **Proxy Toggler: Switch
   Profile…** command, lists the profiles alphabetically with the current one checked, then the
-  proxy actions. It opens on the current profile, and picking a profile turns it on. Keybindings
-  can pass a profile name to `proxyToggler.switchProfile`.
+  proxy actions. It opens on the current profile, and picking a profile turns it on; a profile
+  that another window has removed meanwhile gets a warning instead. Keybindings can pass a
+  profile name to `proxyToggler.switchProfile`, and a name that no profile has shows the same
+  warning, then opens the switcher.
 - The README explains how VS Code uses proxy settings: signing in to a proxy, Settings Sync,
   VS Code Profiles, bypass patterns that work for all of VS Code, what "off" means, and
   `http.proxySupport`.
@@ -82,6 +90,12 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
   window shows the toggle and keeps in step with the others from the start.
 - The words are now on and off: the commands are **Turn Proxy On** and **Turn Proxy Off**, with
   the same command IDs. Turning the proxy on or off no longer shows a notification by default.
+- When turning the proxy off fails, the error offers only **Open Settings**. 0.1.0's toggle
+  offered **Disable Proxy** after any failed setting write, even when turning off was what failed
+  and the button could not help. A failed turn-on still offers **Turn Proxy Off**.
+- The notification that `proxyToggler.showSwitchNotifications` turns on no longer holds the
+  command open. 0.1.0 kept the command running until you closed its notification, which delayed
+  anything waiting for the command to finish.
 - `proxyToggler.confirmBeforeToggle` asks only before the status bar toggle and the Toggle Proxy
   command.
 - Require VS Code 1.97 or later; older releases keep Proxy Toggler 0.1.x. Releases before 1.91

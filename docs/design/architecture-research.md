@@ -211,7 +211,7 @@ The other blocks compared were `Disposable`, `ExtensionContext`, `Memento`, `Con
 - Notifications: no notification in `src/` offers "Do not show again" (no match). The repo avoids
   repetition by other means: one-time notices, a warning shown once per distinct set of hidden entries
   ([src/commands/profile-warning.ts L22-L27](../../src/commands/profile-warning.ts)), and success toasts
-  off by default ([src/commands/proxy-feedback.ts L9-L21](../../src/commands/proxy-feedback.ts)).
+  off by default (`src/commands/proxy-feedback.ts` L9-L21, which `src/commands/proxy-change.ts` replaced).
 - Quick input: [src/vscode/quick-pick.ts](../../src/vscode/quick-pick.ts) and
   [src/vscode/quick-input.ts](../../src/vscode/quick-input.ts) use `createQuickPick`/`createInputBox`. Their
   comments give the flexibility reasons `vscode.d.ts` asks for (open with an item focused; Back button;
@@ -377,7 +377,7 @@ HaT Technical Report 2005.02, dated 2005-09-04.
   part of each command's interface in the skill's sense. The error classes `ConfigurationError` and
   `ProfileApplyError` are interpreted in two places,
   [src/vscode/error-reporting.ts L43-L47](../../src/vscode/error-reporting.ts) and
-  [src/commands/proxy-feedback.ts L42-L65](../../src/commands/proxy-feedback.ts). Ousterhout's
+  `src/commands/proxy-feedback.ts` L42-L65, which `src/commands/proxy-change.ts` replaced. Ousterhout's
   "reduce the number of places where exceptions must be handled" bears on that.
 - **Interface size.** `ProxyManager` ([src/core/proxy-manager.ts](../../src/core/proxy-manager.ts), 460
   lines) has 18 public methods (L101–L357), several of them read-only queries the composition root

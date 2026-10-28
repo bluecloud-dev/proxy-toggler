@@ -107,7 +107,7 @@ Keyboard Shortcuts (JSON)** and add entries like these:
 ]
 ```
 
-- `args` names the profile to turn on, ignoring letter case. An unknown name shows an error and
+- `args` names the profile to turn on, ignoring letter case. An unknown name shows a warning and
   opens the switcher; without `args`, the command opens the switcher.
 - Renaming a profile breaks the keybindings that use its old name. Proxy Toggler warns when you
   rename one, so you can update them.

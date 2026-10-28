@@ -12,12 +12,14 @@ src/
   proxy-toggler.ts  Composition root: creates every object, registers commands, starts activation checks.
   core/             Domain logic: configuration types, validation, bypass-list rules, the Match
                     rule (when VS Code's settings carry a profile's values), profiles (reading
-                    the setting, the current profile), ProxyManager (the record, the toggle),
-                    ProxySettingsWriter (writing and clearing the http.* settings), the test
-                    connection and the bypass rules of the window and of extensions,
-                    KeychainService (removing the credentials 0.1.x stored).
-  commands/         One file per command or flow (enable, disable, toggle, the switcher, add,
-                    edit and delete), the activation-time checks, and the shared feedback.
+                    the setting, the current profile), ProxyManager (the record, the toggle) and
+                    the outcomes its changes return, ProxySettingsWriter (writing and clearing the
+                    http.* settings), the test connection and the bypass rules of the window and
+                    of extensions, KeychainService (removing the credentials 0.1.x stored).
+  commands/         One file per command or flow (toggle, the switcher, add, edit and delete), the
+                    activation-time checks, and proxy-change.ts, which runs every proxy change
+                    and reports what it did. Turn Proxy On and Turn Proxy Off have no file: the
+                    composition root registers them as one-line changes.
   vscode/           Adapters over the VS Code API: the API surface type, the http.* and profiles
                     setting adapters, notifications, the status bar item, and error reporting.
 ```
@@ -37,8 +39,12 @@ flowchart LR
   extension --> root["proxy-toggler.ts<br/>composition root"]
   root --> registrar["vscode/error-reporting<br/>command registrar"]
   registrar --> commands["commands/*"]
-  commands --> manager["core/ProxyManager"]
+  commands -->|changes| change["commands/proxy-change<br/>change(...)"]
+  commands -->|queries| manager["core/ProxyManager"]
   commands --> notifications["vscode/NotificationService"]
+  root -->|refreshUi| change
+  change --> manager
+  change --> notifications
   manager --> validation["core/validation, core/no-proxy"]
   manager --> writer["core/ProxySettingsWriter"]
   manager --> httpSettings["vscode/http-settings"]
@@ -57,14 +63,28 @@ flowchart LR
 
 1. VS Code activates the extension once it has finished starting (`onStartupFinished`), or
    earlier when one of its commands runs (no `onCommand` events are needed since VS Code 1.74).
-2. The registrar in `vscode/error-reporting.ts` calls the command. Commands show the errors they
-   can explain; any other error is logged to the **Proxy Toggler** output channel and shown with
-   the command's failure message.
-3. Commands call `ProxyManager`, which validates input, saves profiles in the
-   `proxyToggler.profiles` setting, keeps the record (below), and writes or clears the three
-   `http.*` user settings through `ProxySettingsWriter` and the settings adapter.
-4. `refreshUi` updates the status bar and the `setContext` keys that decide which commands the
-   Command Palette shows.
+2. The registrar in `vscode/error-reporting.ts` calls the command. An error that escapes the
+   command is logged to the **Proxy Toggler** output channel and shown with its own message when
+   it has one (`toUserMessage()`), or else with the command's failure message.
+3. A command that changes the proxy (turning it on or off, the toggle, switching, and adding,
+   editing or deleting a profile) passes `change` a function that makes one `ProxyManager` call
+   and never waits for the user. The composition root registers **Turn Proxy On** and **Turn Proxy
+   Off** as one such function each, and hands `change` to every other command. Commands hold only
+   `ProxyManager`'s queries, so the compiler routes every change through `change`.
+4. `ProxyManager` validates input, saves profiles in the `proxyToggler.profiles` setting, keeps
+   the record (below), and writes or clears the three `http.*` user settings through
+   `ProxySettingsWriter` and the settings adapter. It returns an outcome: what the change did.
+5. `change` (`commands/proxy-change.ts`) calls `refreshUi`, which updates the status bar and the
+   `setContext` keys that decide which commands the Command Palette shows. It does so whether the
+   change worked or failed, and only then shows at most one message, worded from the outcome. A
+   success message appears only while `proxyToggler.showSwitchNotifications` is on. The
+   composition root creates `change` once, with `refreshUi`, and no command receives `refreshUi`.
+   The reasoning is in [the design note](docs/design/proxy-change-outcomes.md).
+
+The switcher's **Use a Separate Proxy for This Remote** and **Use This Computer's Proxy Again**
+are not proxy changes: they write the settings themselves, and the configuration listener in the
+composition root refreshes the status bar after them, as it does after any change to those
+settings.
 
 At activation these background tasks run, and their failures are logged:
 
@@ -121,6 +141,7 @@ Core classes depend on small structural types rather than on VS Code objects:
 | `ProxySettingsWriter` | `HttpSettings`     | `createHttpSettings(vscode)`                        |
 | `KeychainService`     | `SecretStorage`    | `context.secrets`                                   |
 | Commands, UI          | `VscodeApi` slice  | the `vscode` module, passed in by `extension.ts`    |
+| Commands              | `ProxyChange`      | `createProxyChange(…)`                              |
 
 `VscodeApi` (`src/vscode/api.ts`) is declared once and typed against `@types/vscode`, which is
 pinned to the minimum supported VS Code release. Because `extension.ts` passes the real module
@@ -149,17 +170,34 @@ Credentials never go to `globalState`, settings, logs, or messages.
 
 ## Error model
 
-| Error                | Raised by                               | Shown as                                                    |
-| -------------------- | --------------------------------------- | ----------------------------------------------------------- |
-| `ValidationError`    | `core/validation.ts`                    | The reason and examples, in the input box or a notification |
-| `KeychainError`      | `KeychainService` removing old secrets  | Logged; the removal is retried at the next activation       |
-| `ConfigurationError` | `ProxySettingsWriter` writing a setting | `toUserMessage()` with an **Open Settings** action          |
-| `ProfileApplyError`  | `ProxyManager` reapplying a saved edit  | The profile was saved but could not be fully applied        |
-| Anything else        | Anywhere                                | Logged with its stack; the command's failure message        |
+A proxy change can fail in two ways, and the code keeps them apart:
 
-Errors carry the original failure as the standard ES2022 `cause`. A message shown without waiting
-for the user, such as a test result, goes through `NotificationService.inform`, which logs a
-failure to show it.
+- **An expected race with another window is an outcome.** Another window or Settings Sync can
+  remove a profile or take a name while a command waits for the user. `ProxyManager`'s changes
+  return what they did as a value from `src/core/proxy-outcome.ts` (`on`, `off`, `saved`,
+  `deleted`, `gone`, `notConfigured` and `nameTaken`). A change that finds its profile gone or its
+  name taken writes nothing.
+- **A failed setting write is an exception.** `ProxySettingsWriter` throws `ConfigurationError`,
+  and `ProxyManager` wraps it in `ProfileApplyError` when a saved edit cannot be applied. `change`
+  catches it once. `failedSettingWrite(error)` follows the `cause` chain to the first
+  `ConfigurationError`, and `change` refreshes, shows that error's own message with **Open
+  Settings**, and resolves `{ kind: 'writeFailed' }`. It adds **Turn Proxy Off** when the failed
+  write applied a profile (`operation: 'enable'`), never after a failed turn-off. Any other error
+  is rethrown to the registrar after the refresh.
+
+| Error                | Raised by                               | Shown as                                                                               |
+| -------------------- | --------------------------------------- | -------------------------------------------------------------------------------------- |
+| `ValidationError`    | `core/validation.ts`                    | The reason, in the input box                                                           |
+| `KeychainError`      | `KeychainService` removing old secrets  | Logged; the removal is retried at the next activation                                  |
+| `ConfigurationError` | `ProxySettingsWriter` writing a setting | `toUserMessage()` with **Open Settings**, plus **Turn Proxy Off** after a failed apply |
+| `ProfileApplyError`  | `ProxyManager` reapplying a saved edit  | The profile was saved but could not be fully applied                                   |
+| Anything else        | Anywhere                                | Logged with its stack; the command's failure message                                   |
+
+Errors carry the original failure as the standard ES2022 `cause`. An error that can explain itself
+has a `toUserMessage()` method. The registrar shows that message, or the command's failure message
+when the error has none, so no list of error classes exists and `vscode/error-reporting.ts`
+imports nothing from `core/`. A message shown without waiting for the user, such as a test result
+or a success message, goes through `NotificationService.inform`, which logs a failure to show it.
 
 When a saved profile edit cannot be applied, a `ConfigurationError` cause retains its setting,
 rollback details, and recovery actions. Unexpected causes are logged for diagnosis.
