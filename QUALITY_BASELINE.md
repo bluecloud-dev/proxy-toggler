@@ -145,7 +145,7 @@ The extension has no webviews or custom editors today. If one is added:
   Fix moderate advisories when a non-major fix exists. `.github/workflows/security.yml` runs
   CodeQL with the `security-extended` queries on the TypeScript and on the workflows, dependency
   review on pull requests (failing on high severity), and OpenSSF Scorecard on `main` and weekly.
-- **Toolchain:** Node comes from `.nvmrc` (24 LTS), locally and in CI.
+- **Toolchain:** Node comes from `.nvmrc` (26 LTS), locally and in CI.
 
 ## Documentation conventions
 
