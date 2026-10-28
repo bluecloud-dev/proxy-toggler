@@ -250,6 +250,9 @@ describe('remote windows', () => {
       await settle();
 
       await wsl.vscode.commandHandlers.get(COMMANDS.switchProfile)?.();
+      // No timer has run yet, so only the configuration listener can have refreshed the toggle.
+      await flushBackgroundTasks();
+      const separateAtOnce = wsl.api.getStatusBarText();
       await settle();
       const afterSeparate = wsl.api.getStatusBarText();
       // Pinned at once, so that this computer's proxy cannot reach the remote side at start-up.
@@ -259,6 +262,7 @@ describe('remote windows', () => {
 
       // A proxy that is not on loopback leaves the action among the others, after the profiles.
       assert.equal(wsl.vscode.quickPicks[0]?.items[0]?.label, 'Home');
+      assert.equal(separateAtOnce, '$(debug-disconnect) Proxy (WSL): OFF');
       assert.equal(afterSeparate, '$(debug-disconnect) Proxy (WSL): OFF');
       assert.deepEqual(pinned, { 'http.useLocalProxyConfiguration': false, 'http.proxy': '' });
       assert.deepEqual(Object.fromEntries(remote.settings), {
@@ -283,8 +287,14 @@ describe('remote windows', () => {
       await settle();
 
       await wsl.vscode.commandHandlers.get(COMMANDS.switchProfile)?.();
+      // No timer has run yet, so only the configuration listener can have refreshed the toggle.
+      await flushBackgroundTasks();
+      const sharedAtOnce = wsl.api.getStatusBarText();
       await settle();
 
+      // The toggle already follows this computer's settings: it no longer names the remote or
+      // warns about drift. The record is brought in step later, by reconciliation.
+      assert.doesNotMatch(sharedAtOnce ?? '', /WSL|warning/);
       assert.deepEqual(Object.fromEntries(remote.settings), {});
       assert.equal(host.settings.get('http.proxy'), WORK.proxyUrl);
       assert.equal(wsl.api.getStatusBarText(), '$(plug) Proxy: ON');
