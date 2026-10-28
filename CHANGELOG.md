@@ -29,8 +29,8 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
   it, and a rename warns that keybindings using the old name stop working. When a saved edit
   cannot be applied, only the error shows, without that warning. If another window takes the new
   name before the edit saves, the name field opens again with the reason; if another window has
-  removed the profile, a warning says so and the edit ends. **Configure Proxy Settings** edits the
-  current profile once one exists.
+  removed the profile when a change saves, a warning says so and the edit ends. **Configure Proxy
+  Settings** edits the current profile once one exists.
 - **Delete Profile…** asks for confirmation. Deleting the current profile turns the proxy off
   first, and the first remaining profile becomes current. If another window or Settings Sync has
   already deleted the profile, a warning says so.

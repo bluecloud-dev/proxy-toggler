@@ -17,9 +17,10 @@ src/
                     http.* settings), the test connection and the bypass rules of the window and
                     of extensions, KeychainService (removing the credentials 0.1.x stored).
   commands/         One file per command or flow (toggle, the switcher, add, edit and delete), the
-                    activation-time checks, and proxy-change.ts, which runs every proxy change
-                    and reports what it did. Turn Proxy On and Turn Proxy Off have no file: the
-                    composition root registers them as one-line changes.
+                    activation-time checks, and proxy-change.ts, which runs the changes commands
+                    make through ProxyManager and reports what it did. Turn Proxy On and Turn
+                    Proxy Off have no file: the composition root registers them as one-line
+                    changes.
   vscode/           Adapters over the VS Code API: the API surface type, the http.* and profiles
                     setting adapters, notifications, the status bar item, and error reporting.
 ```
@@ -82,8 +83,8 @@ flowchart LR
    The reasoning is in [the design note](docs/design/proxy-change-outcomes.md).
 
 The switcher's **Use a Separate Proxy for This Remote** and **Use This Computer's Proxy Again**
-are not proxy changes: they write the settings themselves, and the configuration listener in the
-composition root refreshes the status bar after them, as it does after any change to those
+do not go through `change`: they write the settings themselves, and the configuration listener in
+the composition root refreshes the status bar after them, as it does after any change to those
 settings.
 
 At activation these background tasks run, and their failures are logged:
@@ -180,7 +181,7 @@ A proxy change can fail in two ways, and the code keeps them apart:
 - **A failed setting write is an exception.** `ProxySettingsWriter` throws `ConfigurationError`,
   and `ProxyManager` wraps it in `ProfileApplyError` when a saved edit cannot be applied. `change`
   catches it once. `failedSettingWrite(error)` follows the `cause` chain to the first
-  `ConfigurationError`, and `change` refreshes, shows that error's own message with **Open
+  `ConfigurationError`, and `change` refreshes, shows the thrown error's own message with **Open
   Settings**, and resolves `{ kind: 'writeFailed' }`. It adds **Turn Proxy Off** when the failed
   write applied a profile (`operation: 'enable'`), never after a failed turn-off. Any other error
   is rethrown to the registrar after the refresh.

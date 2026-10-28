@@ -122,8 +122,9 @@ describe('network routing through the proxy', function () {
 
   afterEach(async () => {
     try {
-      // Disable while the notifications are still stubbed: the real "Proxy disabled" message
-      // waits for a click, and the hook would time out.
+      // Disable while the notifications are still stubbed: a message with buttons, such as the
+      // error for a failed setting write, would wait for an answer once they are restored, and
+      // the hook would time out.
       await vscode.commands.executeCommand('proxyToggler.disable');
       for (const key of settingsSetByTest) {
         await httpConfiguration().update(key, undefined, vscode.ConfigurationTarget.Global);

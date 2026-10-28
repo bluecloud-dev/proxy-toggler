@@ -9,8 +9,9 @@ export type RegisterCommand = (
   run: (...args: unknown[]) => Promise<unknown>
 ) => vscode.Disposable;
 
-// Commands handle the errors they can explain; anything that escapes is logged here and shown
-// with the command's failure message, so no failure is silent or reaches VS Code unhandled.
+// Commands handle the errors they can explain; anything that escapes is logged here and shown in
+// the error's own words, or with the command's failure message when it has none, so no failure is
+// silent or reaches VS Code unhandled.
 export function createCommandRegistrar(
   vscodeApi: Pick<VscodeApi, 'commands'>,
   logger: Logger,

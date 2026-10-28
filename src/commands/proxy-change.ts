@@ -6,8 +6,8 @@ import { userMessageOf } from '../vscode/error-reporting';
 import type { NotificationAction, Notifier } from '../vscode/notification-service';
 import { COMMANDS } from './command-ids';
 
-// The ProxyManager methods that change something. Commands hold only its queries, so every proxy
-// change goes through a ProxyChange.
+// The ProxyManager methods that change something. Commands hold only its queries, so every change
+// they make through ProxyManager goes through a ProxyChange.
 export type ProxyChanger = Pick<
   ProxyManager,
   | 'enableProxy'

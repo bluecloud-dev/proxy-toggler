@@ -73,8 +73,9 @@ Rules for network tests:
   tests therefore probe new `.invalid` names until one goes direct before they check the host
   under test, and the test of VS Code's own traffic repeats its search.
 - Clean up in `afterEach`: disable the proxy, remove every `http.*` user setting the test set, and
-  close the servers. Disable before `sandbox.restore()`: otherwise a real "Proxy disabled"
-  notification waits for a click and the hook times out.
+  close the servers. Disable before `sandbox.restore()`: a message with buttons, such as the error
+  for a failed setting write, still waits for an answer once the stubs are restored, and the hook
+  times out.
 - Generate credentials at run time, and commit no keys or certificates: GitGuardian and CodeQL
   scan this public repository.
 - Do not assert that `http.proxyAuthorization` works: the extension host does not apply it. The
