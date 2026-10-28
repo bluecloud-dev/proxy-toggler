@@ -159,6 +159,7 @@ export type ProxyOutcome = On | Off | Saved | Deleted | Gone | NotConfigured | N
     `new Error('boom')` rejects with `/boom/`, with `seenAtRefresh` `[0]` and no notification.
   - One `it` per row, with `proxyToggler.showSwitchNotifications` both `true` and `false`. Each
     asserts the recorded `[kind, message]` pairs. Gated rows record nothing when it is `false`.
+
     | Outcome                               | Kind      | Message                                                                                                   | Gated |
     | ------------------------------------- | --------- | --------------------------------------------------------------------------------------------------------- | ----- |
     | `on` Work                             | `success` | `Proxy Toggler turned on Work.`                                                                           | yes   |
@@ -171,6 +172,7 @@ export type ProxyOutcome = On | Off | Saved | Deleted | Gone | NotConfigured | N
     | `gone` Work, change `'delete'`        | `warning` | `Work was already deleted, in another window or through Settings Sync.`                                   | no    |
     | `gone` Work, change `'switch'`        | `warning` | `No proxy profile is named "Work". The list may have changed in another window or through Settings Sync.` | no    |
     | `notConfigured`                       | `warning` | `No proxy configuration found. Please configure proxy settings first.`                                    | no    |
+
   - `it('returns the outcome it was given')`: `assert.equal(await change(() => Promise.resolve(outcome)), outcome)`.
   - `it('runs Configure Now when chosen')`: answering `configure` records
     `{ command: 'proxyToggler.configure', args: [] }` in `vscode.executedCommands`.
