@@ -18,6 +18,10 @@ export type TestOptions = {
 
 const DEFAULT_TIMEOUT_MS = 10_000;
 
+// Node's own limit for HTTP headers. A longer answer is not HTTP, and keeping it would let a
+// server that streams without end fill the extension host's memory.
+const MAX_HEAD_BYTES = 16 * 1024;
+
 const CA_SECTION =
   'https://github.com/bluecloud-dev/proxy-toggler#trusting-a-companys-certificate-authority';
 
@@ -317,6 +321,9 @@ function readHead(socket: Duplex, timeoutMs: number): Promise<Head> {
       received = Buffer.concat([received, chunk]);
       const end = received.indexOf('\r\n\r\n');
       if (end === -1) {
+        if (received.length > MAX_HEAD_BYTES) {
+          finish(new Error('The proxy sent an answer that is not HTTP'));
+        }
         return;
       }
       const statusLine = received.subarray(0, end).toString('latin1').split('\r\n')[0] ?? '';

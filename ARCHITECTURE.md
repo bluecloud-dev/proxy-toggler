@@ -15,9 +15,10 @@ src/
                     the setting, the current profile), ProxyManager (the record, the toggle) and
                     the outcomes its changes return, ProxySettingsWriter (writing and clearing the
                     http.* settings), the test connection and the bypass rules of the window and
-                    of extensions, KeychainService (removing the credentials 0.1.x stored).
+                    of extensions.
   commands/         One file per command or flow (toggle, the switcher, add, edit and delete), the
-                    activation-time checks, and proxy-change.ts, which runs the changes commands
+                    activation-time checks (among them removing the credentials 0.1.x stored),
+                    and proxy-change.ts, which runs the changes commands
                     make through ProxyManager and reports what it did. Turn Proxy On and Turn
                     Proxy Off have no file: the composition root registers them as one-line
                     changes.
@@ -52,8 +53,8 @@ flowchart LR
   manager --> profilesSetting["vscode/profiles-setting"]
   writer --> httpSettings
   profilesSetting --> profiles[("User settings: proxyToggler.profiles")]
-  root --> keychain["core/KeychainService"]
-  keychain --> secrets[("SecretStorage")]
+  root --> credentials["commands/stored-credentials"]
+  credentials --> secrets[("SecretStorage")]
   manager --> state[("globalState, or global storage on a remote machine")]
   httpSettings --> settings[("User settings: http.*")]
   root --> statusBar["vscode/StatusBarController"]
@@ -133,16 +134,16 @@ window treats the events they cause as done.
 
 Core classes depend on small structural types rather than on VS Code objects:
 
-| Consumer              | Port               | Real implementation                                 |
-| --------------------- | ------------------ | --------------------------------------------------- |
-| `ProxyManager`        | `Memento`          | `readYourWrites(context.globalState)`               |
-| `ProxyManager`        | `Memento` (record) | `globalState`, or `fileMemento` on a remote machine |
-| `ProxyManager`        | `HttpSettings`     | `createHttpSettings(vscode)`, read only             |
-| `ProxyManager`        | `ProfilesSetting`  | `createProfilesSetting(vscode)`                     |
-| `ProxySettingsWriter` | `HttpSettings`     | `createHttpSettings(vscode)`                        |
-| `KeychainService`     | `SecretStorage`    | `context.secrets`                                   |
-| Commands, UI          | `VscodeApi` slice  | the `vscode` module, passed in by `extension.ts`    |
-| Commands              | `ProxyChange`      | `createProxyChange(…)`                              |
+| Consumer                  | Port               | Real implementation                                 |
+| ------------------------- | ------------------ | --------------------------------------------------- |
+| `ProxyManager`            | `Memento`          | `readYourWrites(context.globalState)`               |
+| `ProxyManager`            | `Memento` (record) | `globalState`, or `fileMemento` on a remote machine |
+| `ProxyManager`            | `HttpSettings`     | `createHttpSettings(vscode)`, read only             |
+| `ProxyManager`            | `ProfilesSetting`  | `createProfilesSetting(vscode)`                     |
+| `ProxySettingsWriter`     | `HttpSettings`     | `createHttpSettings(vscode)`                        |
+| `removeStoredCredentials` | `SecretStorage`    | `context.secrets`                                   |
+| Commands, UI              | `VscodeApi` slice  | the `vscode` module, passed in by `extension.ts`    |
+| Commands                  | `ProxyChange`      | `createProxyChange(…)`                              |
 
 `VscodeApi` (`src/vscode/api.ts`) is declared once and typed against `@types/vscode`, which is
 pinned to the minimum supported VS Code release. Because `extension.ts` passes the real module
@@ -186,13 +187,13 @@ A proxy change can fail in two ways, and the code keeps them apart:
   write applied a profile (`operation: 'enable'`), never after a failed turn-off. Any other error
   is rethrown to the registrar after the refresh.
 
-| Error                | Raised by                               | Shown as                                                                               |
-| -------------------- | --------------------------------------- | -------------------------------------------------------------------------------------- |
-| `ValidationError`    | `core/validation.ts`                    | The reason, in the input box                                                           |
-| `KeychainError`      | `KeychainService` removing old secrets  | Logged; the removal is retried at the next activation                                  |
-| `ConfigurationError` | `ProxySettingsWriter` writing a setting | `toUserMessage()` with **Open Settings**, plus **Turn Proxy Off** after a failed apply |
-| `ProfileApplyError`  | `ProxyManager` reapplying a saved edit  | The profile was saved but could not be fully applied                                   |
-| Anything else        | Anywhere                                | Logged with its stack; the command's failure message                                   |
+| Error                  | Raised by                                      | Shown as                                                                               |
+| ---------------------- | ---------------------------------------------- | -------------------------------------------------------------------------------------- |
+| `ValidationError`      | `core/validation.ts`                           | The reason, in the input box                                                           |
+| `SecretStorage` errors | `removeStoredCredentials` removing old secrets | Logged; the removal is retried at the next activation                                  |
+| `ConfigurationError`   | `ProxySettingsWriter` writing a setting        | `toUserMessage()` with **Open Settings**, plus **Turn Proxy Off** after a failed apply |
+| `ProfileApplyError`    | `ProxyManager` reapplying a saved edit         | The profile was saved but could not be fully applied                                   |
+| Anything else          | Anywhere                                       | Logged with its stack; the command's failure message                                   |
 
 Errors carry the original failure as the standard ES2022 `cause`. An error that can explain itself
 has a `toUserMessage()` method. The registrar shows that message, or the command's failure message

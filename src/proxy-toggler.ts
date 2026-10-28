@@ -7,7 +7,6 @@ import { createProxyChange } from './commands/proxy-change';
 import { announceRemovedCredentials, removeStoredCredentials } from './commands/stored-credentials';
 import { switchProfileCommand } from './commands/switcher';
 import { toggleProxyCommand } from './commands/toggle-proxy';
-import { KeychainService } from './core/keychain-service';
 import type { ToggleState } from './core/proxy-configuration';
 import { type Memento, ProxyManager } from './core/proxy-manager';
 import { HTTP_SETTING_KEYS } from './core/proxy-settings-writer';
@@ -60,7 +59,6 @@ export function createProxyToggler(
         ? remoteRecords.update(key, value)
         : globalState.update(key, value)
   };
-  const keychainService = new KeychainService(context.secrets);
   const notificationService = new NotificationService(vscodeApi, logger);
   const proxyManager = new ProxyManager(
     globalState,
@@ -155,7 +153,7 @@ export function createProxyToggler(
   );
   runInBackground(logger, 'Hidden profiles warning', warnIfFocused);
   runInBackground(logger, 'Stored credentials removal', async () => {
-    await removeStoredCredentials(keychainService, globalState);
+    await removeStoredCredentials(context.secrets, globalState);
     await announceIfFocused();
   });
   // Migration first, so that reconciliation sees the profile this VS Code Profile used in 0.1.x.

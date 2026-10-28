@@ -1,6 +1,5 @@
 import type * as vscode from 'vscode';
 
-import type { SecretStorage } from '../core/keychain-service';
 import type { Memento } from '../core/proxy-manager';
 
 // The slice of the VS Code API this extension uses. src/extension.ts passes the real module,
@@ -41,6 +40,8 @@ export type VscodeApi = {
 };
 
 export type Logger = Pick<vscode.LogOutputChannel, 'dispose' | 'error'>;
+
+export type SecretStorage = Pick<vscode.SecretStorage, 'get' | 'delete'>;
 
 export type StatusBarItem = Pick<
   vscode.StatusBarItem,
