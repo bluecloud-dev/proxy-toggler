@@ -1,25 +1,17 @@
 import { isIP } from 'node:net';
 
-const PROXY_URL_EXAMPLES = [
-  'http://proxy.example.com:8080',
-  'https://10.0.0.1:3128',
-  'socks5://proxy.example.com:1080'
-];
-
 const SUPPORTED_SCHEMES = ['http:', 'https:', 'socks:', 'socks5:'];
 
 // The VS Code window rejects socks4a and socks5h, and with socks4 the window and extensions
 // resolve host names in different places.
 const REFUSED_SOCKS_SCHEMES = ['socks4:', 'socks4a:', 'socks5h:'];
-const NO_PROXY_EXAMPLES = ['localhost', '127.0.0.1', '*.example.com', '.example.com'];
 
 export type ValidatedField = 'proxyUrl' | 'noProxy' | 'name';
 
 export class ValidationError extends Error {
   constructor(
     public readonly field: ValidatedField,
-    public readonly reason: string,
-    public readonly examples?: readonly string[]
+    public readonly reason: string
   ) {
     super(`Invalid ${field}: ${reason}`);
     this.name = 'ValidationError';
@@ -27,8 +19,7 @@ export class ValidationError extends Error {
 }
 
 export function validateProxyUrl(url: string): void {
-  const invalidUrl = (reason: string): ValidationError =>
-    new ValidationError('proxyUrl', reason, PROXY_URL_EXAMPLES);
+  const invalidUrl = (reason: string): ValidationError => new ValidationError('proxyUrl', reason);
 
   if (typeof url !== 'string' || url.trim().length === 0) {
     throw invalidUrl('URL is required');
@@ -93,8 +84,7 @@ function explicitPort(url: string, parsedUrl: URL): string {
 }
 
 export function validateBypassPattern(entry: string): void {
-  const invalidEntry = (reason: string): ValidationError =>
-    new ValidationError('noProxy', reason, NO_PROXY_EXAMPLES);
+  const invalidEntry = (reason: string): ValidationError => new ValidationError('noProxy', reason);
 
   if (entry.includes('://')) {
     throw invalidEntry(`Do not include a scheme in "${entry}"`);

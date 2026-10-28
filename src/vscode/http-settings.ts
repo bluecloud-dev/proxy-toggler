@@ -1,5 +1,9 @@
 import { parseNoProxyList } from '../core/no-proxy';
-import type { HttpSettingKey, HttpSettings } from '../core/proxy-settings-writer';
+import {
+  HTTP_SETTING_KEYS,
+  type HttpSettingKey,
+  type HttpSettings
+} from '../core/proxy-settings-writer';
 import type { VscodeApi, WorkspaceConfiguration } from './api';
 import { proxySide } from './proxy-side';
 
@@ -90,7 +94,7 @@ export async function useOwnProxySettings(vscodeApi: SideSwitchApi): Promise<voi
 export async function useLocalProxySettings(vscodeApi: SideSwitchApi): Promise<void> {
   const http = vscodeApi.workspace.getConfiguration('http');
   const target = vscodeApi.ConfigurationTarget.Global;
-  for (const key of ['proxy', 'proxyStrictSSL', 'noProxy']) {
+  for (const key of HTTP_SETTING_KEYS) {
     await http.update(key, undefined, target);
   }
   await http.update('useLocalProxyConfiguration', undefined, target);

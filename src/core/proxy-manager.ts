@@ -1,6 +1,6 @@
 import type * as vscode from 'vscode';
 
-import { hasCredentials, settingsMatch } from './match';
+import { hasCredentials } from './match';
 import { parseNoProxyList } from './no-proxy';
 import {
   checkProfiles,
@@ -10,6 +10,7 @@ import {
   findProfileByName,
   type FlaggedEntry,
   holdsName,
+  matchesSettings,
   type Profile,
   profileSettingValues,
   type ProfilesSetting,
@@ -112,12 +113,12 @@ export class ProxyManager {
 
       const settings = this.httpSettings.read();
       const matchedBefore = this.getProfiles().some((existing) =>
-        settingsMatch(settings, profileSettingValues(existing))
+        matchesSettings(settings, existing)
       );
       const added: Profile = { ...profile, name: profile.name.trim() };
       await this.writing(() => this.profilesSetting.write([...entries, added]));
 
-      if (!matchedBefore && settingsMatch(settings, profileSettingValues(added))) {
+      if (!matchedBefore && matchesSettings(settings, added)) {
         await this.writeState({ isEnabled: true, currentProfile: added });
         return { kind: 'saved', profile: added, isOn: true };
       }
@@ -303,11 +304,7 @@ export class ProxyManager {
 
       if (options.focused && stored?.isEnabled && remembered) {
         const edited = findProfileByName(profiles, remembered.name);
-        if (
-          edited &&
-          !sameValues(edited, remembered) &&
-          settingsMatch(settings, profileSettingValues(remembered))
-        ) {
+        if (edited && !sameValues(edited, remembered) && matchesSettings(settings, remembered)) {
           // The remembered values change only once the apply succeeds.
           await this.applySettings(edited);
           await this.writeState({ isEnabled: true, currentProfile: edited });
@@ -324,7 +321,7 @@ export class ProxyManager {
 
       const current = findCurrentProfile(profiles, remembered);
       const matching = [...(current ? [current] : []), ...sortByName(profiles)].find((profile) =>
-        settingsMatch(settings, profileSettingValues(profile))
+        matchesSettings(settings, profile)
       );
       const inStep =
         stored?.isEnabled === true &&
@@ -352,7 +349,7 @@ export class ProxyManager {
     return (
       profiles.length > 0 &&
       this.settingsHoldProxy() &&
-      !profiles.some((profile) => settingsMatch(settings, profileSettingValues(profile)))
+      !profiles.some((profile) => matchesSettings(settings, profile))
     );
   }
 

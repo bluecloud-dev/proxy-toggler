@@ -10,7 +10,7 @@ import { addProfileCommand } from './add-profile';
 import { EXTENSION_ID } from './command-ids';
 import { deleteProfileCommand } from './delete-profile';
 import { editProfileCommand } from './edit-profile';
-import type { ProxyChange } from './proxy-change';
+import { type ProxyChange, turnOnOrOff } from './proxy-change';
 import { remoteProxyChoice } from './remote-proxy';
 
 type SwitcherApi = Pick<
@@ -39,17 +39,7 @@ type SwitcherManager = Pick<
 
 type SwitcherItem = vscode.QuickPickItem & {
   profile?: Profile;
-  action?:
-    | 'toggle'
-    | 'save'
-    | 'reapply'
-    | 'clear'
-    | 'add'
-    | 'edit'
-    | 'delete'
-    | 'separate'
-    | 'shared'
-    | 'settings';
+  action?: 'on' | 'off' | 'save' | 'add' | 'edit' | 'delete' | 'separate' | 'shared' | 'settings';
 };
 
 // Opens the switcher, or switches straight to the profile a keybinding names.
@@ -95,10 +85,14 @@ async function showSwitcher(
       ? [
           { label: l10n.t('Save Current Settings as Profile…'), action: 'save' },
           isEnabled
-            ? { label: l10n.t('Re-apply {0}', currentProfile.name), action: 'reapply' }
-            : { label: l10n.t('Turn Proxy Off'), action: 'clear' }
+            ? { label: l10n.t('Re-apply {0}', currentProfile.name), action: 'on' }
+            : { label: l10n.t('Turn Proxy Off'), action: 'off' }
         ]
       : [];
+  const toggleItem: SwitcherItem = {
+    label: l10n.t(isEnabled ? 'Turn Proxy Off' : 'Turn Proxy On'),
+    action: isEnabled ? 'off' : 'on'
+  };
   // Whose proxy settings the remote side uses: first while the current profile cannot work there.
   const remote = remoteProxyChoice(vscodeApi, currentProfile);
   const remoteItem: SwitcherItem[] = remote
@@ -106,14 +100,7 @@ async function showSwitcher(
     : [];
   const actionItems: SwitcherItem[] = [
     ...driftItems,
-    ...(currentProfile
-      ? [
-          {
-            label: l10n.t(isEnabled ? 'Turn Proxy Off' : 'Turn Proxy On'),
-            action: 'toggle' as const
-          }
-        ]
-      : []),
+    ...(currentProfile ? [toggleItem] : []),
     { label: l10n.t('Add Profile…'), action: 'add' },
     ...(profileItems.length > 0
       ? [
@@ -140,10 +127,8 @@ async function showSwitcher(
       const { name } = choice.profile;
       await change((manager) => manager.switchTo(name));
     }
-  } else if (choice?.action === 'toggle') {
-    await turnOnOrOff(change, !isEnabled);
-  } else if (choice?.action === 'reapply' || choice?.action === 'clear') {
-    await turnOnOrOff(change, isEnabled);
+  } else if (choice?.action === 'on' || choice?.action === 'off') {
+    await turnOnOrOff(change, choice.action === 'on');
   } else if (choice?.action === 'save') {
     await addProfileCommand(vscodeApi, proxyManager, notificationService, change, {
       fromCurrentSettings: true
@@ -164,10 +149,4 @@ async function showSwitcher(
       `@ext:${EXTENSION_ID}`
     );
   }
-}
-
-async function turnOnOrOff(change: ProxyChange, on: boolean): Promise<void> {
-  await (on
-    ? change((manager) => manager.enableProxy())
-    : change((manager) => manager.disableProxy()));
 }

@@ -68,7 +68,11 @@ function globMatches(glob: string, name: string): boolean {
   return new RegExp(`^${source}$`).test(name);
 }
 
-// Lowercase, without the brackets a URL puts around an IPv6 address.
+// The host without the brackets a URL puts around an IPv6 address.
+export function unbracket(host: string): string {
+  return host.replace(/^\[(.*)\]$/, '$1');
+}
+
 function normalize(host: string): string {
-  return host.toLowerCase().replace(/^\[(.*)\]$/, '$1');
+  return unbracket(host.toLowerCase());
 }

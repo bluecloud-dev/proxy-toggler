@@ -10,6 +10,7 @@ import { toggleProxyCommand } from './commands/toggle-proxy';
 import { KeychainService } from './core/keychain-service';
 import type { ToggleState } from './core/proxy-configuration';
 import { type Memento, ProxyManager } from './core/proxy-manager';
+import { HTTP_SETTING_KEYS } from './core/proxy-settings-writer';
 import type { ExtensionContext, VscodeApi } from './vscode/api';
 import { createCommandRegistrar, runInBackground } from './vscode/error-reporting';
 import { fileMemento } from './vscode/file-memento';
@@ -35,9 +36,7 @@ const SETTLE_MS = 2000;
 
 // The settings a window manages, and the one that decides whose they are in a remote window.
 const PROXY_SETTINGS = [
-  'http.proxy',
-  'http.proxyStrictSSL',
-  'http.noProxy',
+  ...HTTP_SETTING_KEYS.map((key) => `http.${key}`),
   'http.useLocalProxyConfiguration'
 ];
 
@@ -87,13 +86,12 @@ export function createProxyToggler(
       settingsHoldProxy: proxyManager.settingsHoldProxy(),
       side: proxySide(vscodeApi)
     });
-    await vscodeApi.commands.executeCommand('setContext', CONTEXT_KEYS.hasDrift, drift);
-    await vscodeApi.commands.executeCommand(
-      'setContext',
-      CONTEXT_KEYS.hasConfiguration,
-      state.hasConfiguration
-    );
-    await vscodeApi.commands.executeCommand('setContext', CONTEXT_KEYS.isEnabled, state.isEnabled);
+    const { commands } = vscodeApi;
+    await Promise.all([
+      commands.executeCommand('setContext', CONTEXT_KEYS.hasDrift, drift),
+      commands.executeCommand('setContext', CONTEXT_KEYS.hasConfiguration, state.hasConfiguration),
+      commands.executeCommand('setContext', CONTEXT_KEYS.isEnabled, state.isEnabled)
+    ]);
   };
 
   runInBackground(logger, 'Status bar refresh', refreshUi);

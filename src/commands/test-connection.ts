@@ -1,11 +1,6 @@
 import { extensionsSendDirect, windowSendsDirect } from '../core/bypass';
 import type { Profile } from '../core/profiles';
-import {
-  testConnection,
-  type TestOptions,
-  testTargetProblem,
-  untestedProxy
-} from '../core/test-connection';
+import { testConnection, testTargetProblem, untestedProxy } from '../core/test-connection';
 import type { VscodeApi } from '../vscode/api';
 import type { Notifier } from '../vscode/notification-service';
 import { proxySide } from '../vscode/proxy-side';
@@ -23,8 +18,7 @@ const DEFAULT_TARGET = 'https://marketplace.visualstudio.com';
 export async function testConnectionCommand(
   vscodeApi: TestApi,
   notificationService: Notifier,
-  profile: Profile,
-  options: TestOptions = {}
+  profile: Profile
 ): Promise<void> {
   const { l10n } = vscodeApi;
   const untested = untestedProxy(profile.proxyUrl);
@@ -74,7 +68,7 @@ export async function testConnectionCommand(
       location: vscodeApi.ProgressLocation.Notification,
       title: l10n.t('Testing {0}…', profile.name)
     },
-    () => testConnection(profile.proxyUrl, target.trim(), options)
+    () => testConnection(profile.proxyUrl, target.trim())
   );
 
   const notes = [

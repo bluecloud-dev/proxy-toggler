@@ -3,7 +3,11 @@ import type { ProxyOutcome } from '../core/proxy-outcome';
 import { type ConfigurationError, failedSettingWrite } from '../core/proxy-settings-writer';
 import type { VscodeApi } from '../vscode/api';
 import { userMessageOf } from '../vscode/error-reporting';
-import type { NotificationAction, Notifier } from '../vscode/notification-service';
+import {
+  ACTION_OPEN_SETTINGS,
+  type NotificationAction,
+  type Notifier
+} from '../vscode/notification-service';
 import { COMMANDS } from './command-ids';
 
 // The ProxyManager methods that change something. Commands hold only its queries, so every change
@@ -29,8 +33,13 @@ export type ProxyChange = <O extends ProxyOutcome>(
 ) => Promise<Reported<O>>;
 
 const ACTION_CONFIGURE_NOW: NotificationAction = { id: 'configure', title: 'Configure Now' };
-const ACTION_OPEN_SETTINGS: NotificationAction = { id: 'openSettings', title: 'Open Settings' };
 const ACTION_DISABLE_PROXY: NotificationAction = { id: 'disableProxy', title: 'Turn Proxy Off' };
+
+export async function turnOnOrOff(change: ProxyChange, on: boolean): Promise<void> {
+  await (on
+    ? change((manager) => manager.enableProxy())
+    : change((manager) => manager.disableProxy()));
+}
 
 // Runs a proxy change, refreshes the status bar whether it worked or not, then says what happened.
 // It shows at most one message, and only the error when a setting write failed (ADR 0004).

@@ -7,6 +7,11 @@ export type NotificationAction = {
   title: string;
 };
 
+export const ACTION_OPEN_SETTINGS: NotificationAction = {
+  id: 'openSettings',
+  title: 'Open Settings'
+};
+
 type MessageMethod = 'showInformationMessage' | 'showWarningMessage' | 'showErrorMessage';
 
 const MESSAGE_METHODS = {

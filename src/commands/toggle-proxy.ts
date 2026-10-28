@@ -1,7 +1,7 @@
 import type { ProxyManager } from '../core/proxy-manager';
 import type { VscodeApi } from '../vscode/api';
 import type { NotificationAction, Notifier } from '../vscode/notification-service';
-import type { ProxyChange } from './proxy-change';
+import { type ProxyChange, turnOnOrOff } from './proxy-change';
 
 const ACTION_CANCEL: NotificationAction = { id: 'cancel', title: 'Cancel' };
 
@@ -20,9 +20,7 @@ export async function toggleProxyCommand(
   // the prompt is open.
   const turnOn = !proxyManager.getState().isEnabled;
   if (await confirmToggle(notificationService, turnOn)) {
-    await (turnOn
-      ? change((manager) => manager.enableProxy())
-      : change((manager) => manager.disableProxy()));
+    await turnOnOrOff(change, turnOn);
   }
 }
 

@@ -1,5 +1,5 @@
 // Written in this order on enable and disable, and restored in this order after a failed enable.
-const HTTP_SETTING_KEYS = ['proxy', 'proxyStrictSSL', 'noProxy'] as const;
+export const HTTP_SETTING_KEYS = ['proxy', 'proxyStrictSSL', 'noProxy'] as const;
 
 export type HttpSettingKey = (typeof HTTP_SETTING_KEYS)[number];
 

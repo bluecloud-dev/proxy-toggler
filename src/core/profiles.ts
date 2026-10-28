@@ -1,5 +1,5 @@
 import { settingsMatch } from './match';
-import type { ProxySettingValues } from './proxy-settings-writer';
+import type { HttpSettingKey, ProxySettingValues } from './proxy-settings-writer';
 import { problemWith, validateBypassPattern, validateProxyUrl } from './validation';
 
 const MAX_NAME_LENGTH = 30;
@@ -67,8 +67,11 @@ export function findCurrentProfile(
   remembered: Profile | undefined
 ): Profile | undefined {
   const byName = remembered && profiles.find((profile) => sameName(profile.name, remembered.name));
-  const byValues = remembered && profiles.find((profile) => sameValues(profile, remembered));
-  return byName ?? byValues ?? sortByName(profiles)[0];
+  return (
+    byName ??
+    (remembered && profiles.find((profile) => sameValues(profile, remembered))) ??
+    sortByName(profiles)[0]
+  );
 }
 
 export function findProfileByName(profiles: readonly Profile[], name: string): Profile | undefined {
@@ -160,6 +163,14 @@ export function profileSettingValues(profile: Profile): ProxySettingValues {
     proxyStrictSSL: profile.strictSSL,
     noProxy: profile.bypassList
   };
+}
+
+// Whether VS Code's proxy settings carry the profile's values.
+export function matchesSettings(
+  settings: Record<HttpSettingKey, unknown>,
+  profile: Profile
+): boolean {
+  return settingsMatch(settings, profileSettingValues(profile));
 }
 
 // The same proxy URL after parsing, strict SSL and set of bypass patterns, whatever the names.

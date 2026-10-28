@@ -1,10 +1,14 @@
-import { valuesFromSettings } from '../core/from-settings';
+import { type ValuesFromSettings, valuesFromSettings } from '../core/from-settings';
 import { defaultProfileName, type Profile, validateProfileName } from '../core/profiles';
 import type { ProxyManager } from '../core/proxy-manager';
 import type { Saved } from '../core/proxy-outcome';
 import { problemWith, validateProxyUrl } from '../core/validation';
 import type { VscodeApi } from '../vscode/api';
-import type { NotificationAction, Notifier } from '../vscode/notification-service';
+import {
+  ACTION_OPEN_SETTINGS,
+  type NotificationAction,
+  type Notifier
+} from '../vscode/notification-service';
 import { askText, BACK } from '../vscode/quick-input';
 import type { ProxyChange } from './proxy-change';
 import { testConnectionCommand } from './test-connection';
@@ -20,12 +24,9 @@ type AddManager = Pick<
 >;
 
 const ACTION_CONTINUE: NotificationAction = { id: 'continue', title: 'Continue Without Them' };
-const ACTION_OPEN_SETTINGS: NotificationAction = { id: 'openSettings', title: 'Open Settings' };
 const ACTION_TURN_ON: NotificationAction = { id: 'turnOn', title: 'Turn On' };
 const ACTION_NOT_NOW: NotificationAction = { id: 'notNow', title: 'Not Now' };
 const ACTION_TEST: NotificationAction = { id: 'test', title: 'Test Connection' };
-
-type Start = Omit<Profile, 'name' | 'proxyUrl'> & { proxyUrl?: string; unheld: string[] };
 
 // Two steps, the proxy URL and then the name. A new profile starts with strict SSL on and an
 // empty bypass list, unless setup starts from the proxy VS Code already uses.
@@ -103,8 +104,8 @@ export async function addProfileCommand(
 }
 
 // With no profile yet and a proxy in VS Code's settings, setup starts from those settings.
-function startingValues(proxyManager: AddManager): Start {
-  const fresh: Start = { strictSSL: true, bypassList: [], unheld: [] };
+function startingValues(proxyManager: AddManager): ValuesFromSettings {
+  const fresh: ValuesFromSettings = { strictSSL: true, bypassList: [], unheld: [] };
   if (proxyManager.hasConfiguration()) {
     return fresh;
   }
@@ -120,7 +121,7 @@ async function askAndSave(
   vscodeApi: AddApi,
   proxyManager: AddManager,
   change: ProxyChange,
-  start: Start
+  start: ValuesFromSettings
 ): Promise<Saved | undefined> {
   let answers = await askForProfile(vscodeApi, proxyManager.getEntryNames(), start.proxyUrl);
   while (answers) {

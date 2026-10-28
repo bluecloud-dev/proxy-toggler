@@ -3,6 +3,7 @@ import * as net from 'node:net';
 import type { Duplex } from 'node:stream';
 import * as tls from 'node:tls';
 
+import { unbracket } from './bypass';
 import { defaultPortOf } from './match';
 
 // The result of a test connection, shown once and never logged or stored.
@@ -66,7 +67,7 @@ export async function testConnection(
       target.protocol === 'https:'
         ? await throughTunnel(socket, target, settings)
         : await throughProxy(socket, target, settings.timeoutMs);
-    return withFindings(verdict, proxyFinding);
+    return withFinding(verdict, proxyFinding);
   } catch (error: unknown) {
     return { outcome: 'fail', message: `${reasonFor(error, settings.timeoutMs)}.` };
   } finally {
@@ -94,20 +95,16 @@ export function untestedProxy(proxyUrl: string): TestVerdict | undefined {
       };
 }
 
-// The worse outcome wins, and every finding is said.
-function withFindings(verdict: TestVerdict, ...findings: Array<Finding | undefined>): TestVerdict {
+// The worse outcome wins, and the finding is said.
+function withFinding(verdict: TestVerdict, finding: Finding | undefined): TestVerdict {
+  if (!finding) {
+    return verdict;
+  }
   const rank = { skip: 0, pass: 1, warn: 2, fail: 3 } as const;
-  return findings.reduce<TestVerdict>(
-    (result, finding) =>
-      finding
-        ? {
-            outcome:
-              rank[finding.outcome] > rank[result.outcome] ? finding.outcome : result.outcome,
-            message: `${result.message} ${finding.message}`
-          }
-        : result,
-    verdict
-  );
+  return {
+    outcome: rank[finding.outcome] > rank[verdict.outcome] ? finding.outcome : verdict.outcome,
+    message: `${verdict.message} ${finding.message}`
+  };
 }
 
 // The chain is checked against the trusted authorities only, so that an issuer the OS trusts but
@@ -173,7 +170,7 @@ function connectToProxy(
   settings: Limits
 ): Promise<{ socket: net.Socket; finding?: Finding }> {
   // The URL keeps the brackets of an IPv6 host; sockets want the bare address.
-  const host = proxy.hostname.replace(/^\[(.*)\]$/, '$1');
+  const host = unbracket(proxy.hostname);
   const port = Number(proxy.port || defaultPortOf(proxy.protocol));
 
   return new Promise((resolve, reject) => {
@@ -220,7 +217,7 @@ async function throughTunnel(
     };
   }
 
-  const host = target.hostname.replace(/^\[(.*)\]$/, '$1');
+  const host = unbracket(target.hostname);
   const secure = await new Promise<tls.TLSSocket>((resolve, reject) => {
     const connection = tls.connect({
       socket,
@@ -256,7 +253,7 @@ async function throughTunnel(
     }
     secure.write(`HEAD / HTTP/1.1\r\nHost: ${target.host}\r\nConnection: close\r\n\r\n`);
     const answer = await readHead(secure, settings.timeoutMs);
-    return withFindings(
+    return withFinding(
       {
         outcome: 'pass',
         message: `The proxy opened a tunnel to ${target.host}, which answered ${answer.status}.`

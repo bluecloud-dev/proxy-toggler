@@ -3,13 +3,11 @@ import { createHash } from 'node:crypto';
 import type { FlaggedEntry } from '../core/profiles';
 import type { Memento } from '../core/proxy-manager';
 import type { VscodeApi } from '../vscode/api';
-import type { NotificationAction, Notifier } from '../vscode/notification-service';
+import { ACTION_OPEN_SETTINGS, type Notifier } from '../vscode/notification-service';
 
 // A hash of the hidden entries last warned about, per VS Code Profile. A hash, because a hidden
 // entry may hold anything, credentials included, and none of it may reach globalState.
 const WARNED_KEY = 'proxyToggler.hiddenProfilesWarned';
-
-const ACTION_OPEN_SETTINGS: NotificationAction = { id: 'openSettings', title: 'Open Settings' };
 
 // Warns once per distinct set of hidden entries. Only the Default profile's settings file holds
 // proxyToggler.profiles, so Open Settings opens the application settings file.

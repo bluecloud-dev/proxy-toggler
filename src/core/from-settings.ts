@@ -1,7 +1,7 @@
 import { defaultPortOf } from './match';
 import { parseNoProxyList } from './no-proxy';
 import type { HttpSettingKey } from './proxy-settings-writer';
-import { validateBypassPattern, validateProxyUrl, ValidationError } from './validation';
+import { problemWith, validateBypassPattern, validateProxyUrl } from './validation';
 
 // What setup starts from when VS Code already uses a proxy: the values a profile can hold, and
 // `unheld`, the values it cannot, named for the user without any credentials.
@@ -27,7 +27,7 @@ export function valuesFromSettings(settings: Record<HttpSettingKey, unknown>): V
 
   const bypassList: string[] = [];
   for (const pattern of parseNoProxyList(settings.noProxy)) {
-    if (isValid(() => validateBypassPattern(pattern))) {
+    if (problemWith(() => validateBypassPattern(pattern)) === undefined) {
       bypassList.push(pattern);
     } else {
       unheld.push(`bypass pattern "${pattern}"`);
@@ -57,7 +57,7 @@ function readProxyUrl(value: string): { proxyUrl: string } | { unheld: string } 
   const port = url.port || defaultPortOf(url.protocol);
   const proxyUrl = `${url.protocol}//${url.hostname}:${port ?? ''}`;
   const hasPath = !['', '/'].includes(url.pathname) || url.search !== '' || url.hash !== '';
-  if (!port || hasPath || !isValid(() => validateProxyUrl(proxyUrl))) {
+  if (!port || hasPath || problemWith(() => validateProxyUrl(proxyUrl)) !== undefined) {
     return { unheld: `proxy URL "${withoutCredentials(url)}"` };
   }
   return { proxyUrl };
@@ -70,16 +70,4 @@ function withoutCredentials(url: URL): string {
   return copy.pathname === '/' && !copy.search && !copy.hash
     ? copy.href.replace(/\/$/, '')
     : copy.href;
-}
-
-function isValid(validate: () => void): boolean {
-  try {
-    validate();
-    return true;
-  } catch (error: unknown) {
-    if (error instanceof ValidationError) {
-      return false;
-    }
-    throw error;
-  }
 }
