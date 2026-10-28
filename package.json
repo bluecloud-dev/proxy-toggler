@@ -155,7 +155,8 @@
     "yauzl": "^3.4.0"
   },
   "overrides": {
-    "serialize-javascript": "^7.0.5"
+    "serialize-javascript": "^7.0.5",
+    "@azure/msal-node": "^7.1.2"
   },
   "allowScripts": {
     "@vscode/vsce-sign": false,
