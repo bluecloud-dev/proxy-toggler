@@ -187,7 +187,7 @@
     "@types/sinon": "^22.0.2",
     "@types/vscode": "1.97.0",
     "@vscode/test-electron": "^3.1.0",
-    "@vscode/vsce": "^4.0.0",
+    "@vscode/vsce": "^4.1.0",
     "esbuild": "^0.28.2",
     "eslint": "^10.13.0",
     "eslint-config-prettier": "^10.1.8",
@@ -200,7 +200,7 @@
     "sinon": "^22.1.0",
     "ts-node": "^10.9.2",
     "typescript": "^5.9.3",
-    "typescript-eslint": "^8.72.0",
+    "typescript-eslint": "^8.72.1",
     "yauzl": "^3.4.0"
   },
   "overrides": {
