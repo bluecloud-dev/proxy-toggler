@@ -128,7 +128,7 @@ describe('switcher', () => {
 
     assert.deepEqual(vscode.executedCommands.at(-1), {
       command: 'workbench.action.openSettings',
-      args: ['@ext:aymenhammouda.proxy-toggler']
+      args: ['@ext:bluecloud-dev.proxy-toggler']
     });
   });
 

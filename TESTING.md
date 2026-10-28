@@ -150,8 +150,8 @@ they cover.
       the result shows once and never reaches **Output → Proxy Toggler**.
 - [ ] Policy or read-only settings: when a setting cannot be written, the error offers **Open
       Settings**.
-- [ ] Upgrade from 0.1.x with a saved configuration: a profile named after the proxy host is
-      current and off, and stored credentials are removed with a one-time notice.
+- [ ] After 0.1.0 (`aymenhammouda.proxy-toggler`) left the proxy on: with 0.1.0 uninstalled,
+      the toggle says that VS Code already uses a proxy, and a click starts setup from it.
 - [ ] An SSH window: the status bar names the host, and switching writes only the remote
       machine's settings. In a WSL window, the tooltip says it manages this computer's settings.
 - [ ] The **Proxy Toggler** output channel never contains a username or password.

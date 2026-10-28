@@ -1,7 +1,8 @@
 name: Release
 
-# A version tag builds, tests, and publishes a GitHub release. A manual run is a rehearsal: it
-# builds and tests the same way and keeps the files as a workflow artifact, but publishes nothing.
+# A version tag builds, tests, and publishes a GitHub release, then the same VSIX to the VS Code
+# Marketplace. A manual run is a rehearsal: it builds and tests the same way and keeps the files as
+# a workflow artifact, but publishes nothing.
 on:
   push:
     tags:
@@ -140,3 +141,51 @@ jobs:
           --title "Proxy Toggler $TAG_NAME"
           --notes-file release-notes.md
           --verify-tag
+
+  marketplace:
+    name: Publish to the VS Code Marketplace
+    needs: publish
+    if: github.event_name == 'push' && github.ref_type == 'tag'
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    # The Entra application trusts GitHub's OIDC token only for jobs in this environment, which
+    # runs for version tags alone; no secret is stored. A failed run can be re-run on its own.
+    environment: marketplace
+    permissions:
+      contents: read
+      id-token: write
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: Setup Node
+        uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version-file: .nvmrc
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci --ignore-scripts
+
+      - name: Download the tested files
+        uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
+        with:
+          name: release
+
+      - name: Check that the VSIX is the one that was tested
+        run: sha256sum --check SHA256SUMS
+
+      - name: Sign in with Microsoft Entra
+        uses: azure/login@a641126d1b8aa4d1fa005f4f92df94a3a4c4c906 # v3
+        with:
+          client-id: ${{ vars.AZURE_CLIENT_ID }}
+          tenant-id: ${{ vars.AZURE_TENANT_ID }}
+          allow-no-subscriptions: true
+
+      - name: Publish the VSIX
+        run: >-
+          node -r ./scripts/patch-os-cpus.cjs ./node_modules/@vscode/vsce/vsce publish
+          --azure-credential --packagePath proxy-toggler-*.vsix

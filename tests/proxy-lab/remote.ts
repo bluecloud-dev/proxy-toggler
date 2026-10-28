@@ -38,7 +38,7 @@ const REQUEST_URL = 'http://origin.lab.test:8088/remote-probe';
 // A settings write reaches the extension hosts within a second, so no event by then means none.
 const EVENT_WAIT_MS = 10000;
 // Proxy Toggler, when the runner loads it, and how long its start-up reconciliation may take.
-const PROXY_TOGGLER_ID = 'aymenhammouda.proxy-toggler';
+const PROXY_TOGGLER_ID = 'bluecloud-dev.proxy-toggler';
 const ACTIVATION_WAIT_MS = 3000;
 // An outside change waits for the runner, which may first open a second window.
 const OUTSIDE_CHANGE_WAIT_MS = 60000;

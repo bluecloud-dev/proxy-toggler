@@ -6,7 +6,7 @@ export const COMMANDS = {
   switchProfile: 'proxyToggler.switchProfile'
 } as const;
 
-export const EXTENSION_ID = 'aymenhammouda.proxy-toggler';
+export const EXTENSION_ID = 'bluecloud-dev.proxy-toggler';
 
 export const CONTEXT_KEYS = {
   hasConfiguration: 'proxyToggler.hasConfiguration',

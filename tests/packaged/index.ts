@@ -4,7 +4,7 @@ import * as vscode from 'vscode';
 
 import type { ProxyTogglerApi } from '../../src/proxy-toggler';
 
-const EXTENSION_ID = 'aymenhammouda.proxy-toggler';
+const EXTENSION_ID = 'bluecloud-dev.proxy-toggler';
 const STARTUP_TIMEOUT_MS = 15_000;
 
 // tests/run-packaged-test.ts runs this in a window that has the packaged VSIX installed and a

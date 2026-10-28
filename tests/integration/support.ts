@@ -5,7 +5,7 @@ import * as vscode from 'vscode';
 
 import type { ProxyTogglerApi } from '../../src/proxy-toggler';
 
-export const EXTENSION_ID = 'aymenhammouda.proxy-toggler';
+export const EXTENSION_ID = 'bluecloud-dev.proxy-toggler';
 
 export async function activateExtension(): Promise<ProxyTogglerApi> {
   const extension = vscode.extensions.getExtension<ProxyTogglerApi>(EXTENSION_ID);
