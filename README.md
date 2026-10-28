@@ -54,6 +54,14 @@
   machine's own proxy settings and leaves local windows alone
 - **Non-invasive** — leaves system proxy configuration untouched
 
+### Switch profiles from the status bar
+
+![Clicking "Proxy: Work" in the status bar turns the proxy off. The gear next to it opens the profile switcher, and picking Home turns the proxy on with that profile.](docs/media/switch-profiles.gif)
+
+### Add a profile and test its connection
+
+![Clicking "Proxy: Not Configured" asks for a proxy URL and a name, and saves the Office profile. Test Connection then reaches github.com through the proxy, which answers 200.](docs/media/add-and-test-profile.gif)
+
 ## :clipboard: Requirements
 
 - VS Code **1.97** or later
