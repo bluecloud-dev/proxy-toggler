@@ -9,6 +9,7 @@ import {
   findCurrentProfile,
   findProfileByName,
   type FlaggedEntry,
+  holdsName,
   type Profile,
   profileSettingValues,
   type ProfilesSetting,
@@ -466,12 +467,6 @@ export class ProxyManager {
       ...change
     });
   }
-}
-
-// Whether an entry holds the name, valid or not. A save or a delete finds its profile gone when
-// none does.
-function holdsName(entries: readonly unknown[], name: string): boolean {
-  return entryNames(entries).some((held) => sameName(held, name.trim()));
 }
 
 // A name that an entry holds is an outcome, not an error: another window can take it while the

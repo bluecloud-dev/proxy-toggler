@@ -1,11 +1,6 @@
 import { settingsMatch } from './match';
 import type { ProxySettingValues } from './proxy-settings-writer';
-import {
-  problemWith,
-  validateBypassPattern,
-  validateProxyUrl,
-  ValidationError
-} from './validation';
+import { problemWith, validateBypassPattern, validateProxyUrl } from './validation';
 
 const MAX_NAME_LENGTH = 30;
 
@@ -94,13 +89,9 @@ export function withProfile(
   replacing: string
 ): unknown[] {
   const index = indexOfName(entries, replacing);
-  // Another window or Settings Sync can remove the entry while it is being edited; saving
-  // nothing then must not look like a save.
+  // Callers check holdsName first. Failing here beats a save that saves nothing.
   if (index === -1) {
-    throw new ValidationError(
-      'name',
-      `Could not save ${replacing.trim()}: proxyToggler.profiles no longer has it. Another window or Settings Sync may have removed it.`
-    );
+    throw new Error(`No entry of proxyToggler.profiles is named "${replacing.trim()}".`);
   }
   return entries.map((entry, entryIndex) =>
     entryIndex === index ? { ...(entry as object), ...profile } : entry
@@ -111,6 +102,12 @@ export function withProfile(
 export function withoutProfile(entries: readonly unknown[], name: string): unknown[] {
   const index = indexOfName(entries, name);
   return entries.filter((_, entryIndex) => entryIndex !== index);
+}
+
+// Whether an entry holds the name, valid or not; findProfileByName sees only the profiles the
+// switcher shows.
+export function holdsName(entries: readonly unknown[], name: string): boolean {
+  return indexOfName(entries, name) !== -1;
 }
 
 function indexOfName(entries: readonly unknown[], name: string): number {

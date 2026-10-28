@@ -191,6 +191,18 @@ describe('saving into the setting', () => {
     ]);
   });
 
+  it('fails with a plain error when no entry has the name, which callers rule out first', () => {
+    assert.throws(
+      () => withProfile(entries, WORK, 'Office'),
+      (error: unknown) => {
+        assert.ok(error instanceof Error);
+        assert.equal(error.constructor, Error);
+        assert.match(error.message, /"Office"/);
+        return true;
+      }
+    );
+  });
+
   it('removes only the first entry with the name', () => {
     assert.deepEqual(withoutProfile(entries, 'Work'), ['not a profile', { name: 'work' }, HOME]);
   });
