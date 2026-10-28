@@ -133,8 +133,7 @@ async function askAndSave(
     if (result.kind === 'saved') {
       return result;
     }
-    // A failed write, which `change` has already reported.
-    if (result.kind === 'writeFailed') {
+    if (result.kind !== 'nameTaken') {
       return undefined;
     }
     answers = await askForProfile(
