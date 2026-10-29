@@ -52,6 +52,8 @@
 - **Strict SSL and no-proxy list** support
 - **Remote windows**: in SSH, Tunnels and remote container windows, the toggle manages the remote
   machine's own proxy settings and leaves local windows alone
+- **Integrated terminals** (opt-in): Git, npm and other command-line tools in VS Code's terminals
+  use the same proxy, in every project or only the ones you choose
 - **Non-invasive** — leaves system proxy configuration untouched
 
 ### Switch profiles from the status bar
@@ -130,6 +132,7 @@ Keyboard Shortcuts (JSON)** and add entries like these:
 | `proxyToggler.profiles`                | array   | `[]`    | The proxy profiles, shared by every VS Code Profile. Edit them in the application settings (**Preferences: Open Application Settings (JSON)**). |
 | `proxyToggler.confirmBeforeToggle`     | boolean | `false` | Ask before the status bar toggle or the Toggle Proxy command turns the proxy on or off                                                          |
 | `proxyToggler.showSwitchNotifications` | boolean | `false` | Show a short notification naming the profile when the proxy turns on or off or switches profiles                                                |
+| `proxyToggler.applyToTerminals`        | boolean | `false` | Give new integrated terminals and tasks the proxy VS Code uses; see [Integrated terminals](#integrated-terminals)                               |
 
 ### Managed VS Code Settings
 
@@ -199,6 +202,25 @@ settings, so Proxy Toggler sets no proxy. What VS Code uses next depends on how 
 
 The proxy lab measured this on VS Code 1.97 and the latest release; see
 [TESTING.md](TESTING.md#what-off-does).
+
+### Integrated terminals
+
+VS Code's proxy settings do not reach its integrated terminals. With
+`proxyToggler.applyToTerminals` on, new terminals and tasks get the proxy that `http.proxy` names
+as `http_proxy`, `https_proxy` and `no_proxy`, and the same names in upper case. Git, npm, pip,
+curl and most other command-line tools read them. Turning the proxy off removes them.
+
+- **User settings only:** a repository's settings cannot turn it on.
+- **Open terminals** keep their environment. VS Code marks them, and a relaunch picks up the change.
+- **`no_proxy`** starts with `localhost`, `127.0.0.1` and `::1`, which VS Code also reaches
+  directly, then your bypass list. A `*.example.com` entry becomes `.example.com`, the form these
+  tools read.
+- **No credentials and no certificate changes:** a `user:pass@` in `http.proxy` is left out, and
+  `http.proxyStrictSSL` has no effect on terminals.
+- **Your shell wins:** a proxy that your shell's startup files export replaces these values.
+- **Source Control view:** Git commands that VS Code runs itself, such as Sync or Push in the Source
+  Control view, do not run in a terminal and do not get this proxy. Set Git's own `http.proxy`
+  for them.
 
 ### `http.proxySupport`
 

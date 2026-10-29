@@ -20,6 +20,7 @@ import { proxySide } from './vscode/proxy-side';
 import { readYourWrites } from './vscode/read-your-writes-memento';
 import { whenSettled } from './vscode/settle';
 import { StatusBarController } from './vscode/status-bar-controller';
+import { TERMINALS_SETTING, updateTerminalEnvironment } from './vscode/terminal-environment';
 
 // Returned from activate(); integration tests read it through the extension's exports.
 export type ProxyTogglerApi = {
@@ -60,9 +61,10 @@ export function createProxyToggler(
         : globalState.update(key, value)
   };
   const notificationService = new NotificationService(vscodeApi, logger);
+  const httpSettings = createHttpSettings(vscodeApi);
   const proxyManager = new ProxyManager(
     globalState,
-    createHttpSettings(vscodeApi),
+    httpSettings,
     createProfilesSetting(vscodeApi),
     createCredentialsNotice(globalState, notificationService),
     records
@@ -93,6 +95,11 @@ export function createProxyToggler(
   };
 
   runInBackground(logger, 'Status bar refresh', refreshUi);
+  // Terminals follow the settings this window manages, whoever changes them.
+  const updateTerminals = (): void => {
+    updateTerminalEnvironment(vscodeApi, context.environmentVariableCollection, httpSettings);
+  };
+  runInBackground(logger, 'Terminal environment update', updateTerminals);
   // Warnings and one-time notices appear in the focused window, or else in the next window to
   // gain focus (ADR 0004).
   const announceIfFocused = async (): Promise<void> => {
@@ -127,6 +134,9 @@ export function createProxyToggler(
     vscodeApi.workspace.onDidChangeConfiguration((event) => {
       const profilesChanged = event.affectsConfiguration('proxyToggler.profiles');
       const proxyChanged = PROXY_SETTINGS.some((id) => event.affectsConfiguration(id));
+      if (proxyChanged || event.affectsConfiguration(TERMINALS_SETTING)) {
+        runInBackground(logger, 'Terminal environment update', updateTerminals);
+      }
       if (!profilesChanged && !proxyChanged) {
         return;
       }

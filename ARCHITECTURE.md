@@ -14,8 +14,8 @@ src/
                     rule (when VS Code's settings carry a profile's values), profiles (reading
                     the setting, the current profile), ProxyManager (the record, the toggle) and
                     the outcomes its changes return, ProxySettingsWriter (writing and clearing the
-                    http.* settings), the test connection and the bypass rules of the window and
-                    of extensions.
+                    http.* settings), the test connection, the bypass rules of the window and
+                    of extensions, and the environment variables terminals get.
   commands/         One file per command or flow (toggle, the switcher, add, edit and delete), the
                     activation-time checks (among them removing the credentials 0.1.x stored),
                     and proxy-change.ts, which runs the changes commands
@@ -23,7 +23,8 @@ src/
                     Proxy Off have no file: the composition root registers them as one-line
                     changes.
   vscode/           Adapters over the VS Code API: the API surface type, the http.* and profiles
-                    setting adapters, notifications, the status bar item, and error reporting.
+                    setting adapters, notifications, the status bar item, the integrated
+                    terminals' environment, and error reporting.
 ```
 
 Two dependency rules are enforced by ESLint (`eslint.config.mjs`):

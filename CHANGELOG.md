@@ -4,6 +4,15 @@ All notable changes to this project will be documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
+## [Unreleased]
+
+### Added
+
+- `proxyToggler.applyToTerminals` (off by default) gives new integrated terminals and tasks the
+  proxy VS Code uses, as `http_proxy`, `https_proxy` and `no_proxy` and the same names in upper
+  case, so Git, npm and other command-line tools use it too. It follows the proxy as it turns on,
+  off or switches profiles. It leaves out credentials and never turns off certificate checks.
+
 ## [0.2.0] - 2026-10-29
 
 Proxy Toggler is now on the VS Code Marketplace as `bluecloud-dev.proxy-toggler`. Version 0.1.0 was

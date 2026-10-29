@@ -77,6 +77,12 @@
     "configuration": {
       "title": "%configuration.title%",
       "properties": {
+        "proxyToggler.applyToTerminals": {
+          "type": "boolean",
+          "scope": "application",
+          "default": false,
+          "markdownDescription": "%configuration.applyToTerminals.description%"
+        },
         "proxyToggler.confirmBeforeToggle": {
           "type": "boolean",
           "default": false,

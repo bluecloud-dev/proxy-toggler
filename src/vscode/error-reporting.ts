@@ -28,7 +28,11 @@ export function createCommandRegistrar(
     });
 }
 
-export function runInBackground(logger: Logger, task: string, run: () => Promise<void>): void {
+export function runInBackground(
+  logger: Logger,
+  task: string,
+  run: () => Promise<void> | void
+): void {
   // The async wrapper also catches a callback that throws before returning its promise.
   void (async () => {
     try {

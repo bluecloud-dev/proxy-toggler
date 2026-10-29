@@ -94,8 +94,15 @@ export type WorkspaceConfiguration = Pick<
   'get' | 'inspect' | 'update'
 >;
 
+// The variables VS Code adds to the environment of new integrated terminals and tasks.
+export type EnvironmentVariableCollection = Pick<
+  vscode.GlobalEnvironmentVariableCollection,
+  'clear' | 'description' | 'replace' | typeof Symbol.iterator
+>;
+
 export type ExtensionContext = Pick<vscode.ExtensionContext, 'subscriptions'> & {
   globalState: Memento;
   secrets: SecretStorage;
   globalStorageUri: Pick<vscode.Uri, 'fsPath'>;
+  environmentVariableCollection: EnvironmentVariableCollection;
 };
