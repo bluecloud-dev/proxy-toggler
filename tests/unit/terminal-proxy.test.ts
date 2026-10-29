@@ -53,14 +53,35 @@ describe('terminalProxyVariables', () => {
     assert.equal(variables.NO_PROXY, `${LOOPBACK},corp.example.com`);
   });
 
-  it('leaves out every piece of a mistyped bypass string, so no credential slips through', () => {
+  it('leaves out a whole bypass string that holds credentials, whose password may hold commas', () => {
     const variables = terminalProxyVariables({
       proxy: 'http://proxy.example.com:8080',
       proxyStrictSSL: true,
-      noProxy: 'http://alice:s3cret,tail@internal,corp.example.com'
+      noProxy: 'http://alice:part1,s3cret,part2@internal,corp.example.com'
     });
 
-    assert.equal(variables.NO_PROXY, `${LOOPBACK},corp.example.com`);
+    assert.equal(variables.NO_PROXY, LOOPBACK);
+  });
+
+  it('keeps CIDR ranges, which command-line tools read even though profiles cannot hold them', () => {
+    const variables = terminalProxyVariables({
+      proxy: 'http://proxy.example.com:8080',
+      proxyStrictSSL: true,
+      noProxy: ['10.0.0.0/8']
+    });
+
+    assert.equal(variables.NO_PROXY, `${LOOPBACK},10.0.0.0/8`);
+  });
+
+  it('bypasses everything with "*" alone, the only form curl, Python and Node read', () => {
+    const variables = terminalProxyVariables({
+      proxy: 'http://proxy.example.com:8080',
+      proxyStrictSSL: true,
+      noProxy: ['corp.example.com', '*']
+    });
+
+    assert.equal(variables.NO_PROXY, '*');
+    assert.equal(variables.no_proxy, '*');
   });
 
   it('bypasses loopback addresses as extensions do, then the bypass list, without repeats', () => {
