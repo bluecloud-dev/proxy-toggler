@@ -53,6 +53,16 @@ describe('terminalProxyVariables', () => {
     assert.equal(variables.NO_PROXY, `${LOOPBACK},corp.example.com`);
   });
 
+  it('leaves out every piece of a mistyped bypass string, so no credential slips through', () => {
+    const variables = terminalProxyVariables({
+      proxy: 'http://proxy.example.com:8080',
+      proxyStrictSSL: true,
+      noProxy: 'http://alice:s3cret,tail@internal,corp.example.com'
+    });
+
+    assert.equal(variables.NO_PROXY, `${LOOPBACK},corp.example.com`);
+  });
+
   it('bypasses loopback addresses as extensions do, then the bypass list, without repeats', () => {
     const variables = terminalProxyVariables({
       proxy: 'http://proxy.example.com:8080',

@@ -253,7 +253,7 @@ choice, whichever window has focus.
 - **Open terminals** keep their environment. VS Code marks them, and a relaunch picks up the change.
 - **`no_proxy`** starts with `localhost`, `127.0.0.1` and `::1`, which VS Code also reaches
   directly, then your bypass list. A `*.example.com` entry becomes `.example.com`, the form these
-  tools read.
+  tools read. Entries a profile cannot hold, such as CIDR ranges, are left out.
 - **No credentials and no certificate changes:** a `user:pass@` in `http.proxy` is left out, and
   `http.proxyStrictSSL` has no effect on terminals.
 - **Your shell wins:** a proxy that your shell's startup files export replaces these values.
