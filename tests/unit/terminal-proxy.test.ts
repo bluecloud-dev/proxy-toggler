@@ -43,6 +43,16 @@ describe('terminalProxyVariables', () => {
     assert.ok(Object.values(variables).every((value) => !value.includes('secret')));
   });
 
+  it('leaves out bypass entries that hold credentials, which name no host', () => {
+    const variables = terminalProxyVariables({
+      proxy: 'http://proxy.example.com:8080',
+      proxyStrictSSL: true,
+      noProxy: ['alice:secret@internal.example', 'corp.example.com']
+    });
+
+    assert.equal(variables.NO_PROXY, `${LOOPBACK},corp.example.com`);
+  });
+
   it('bypasses loopback addresses as extensions do, then the bypass list, without repeats', () => {
     const variables = terminalProxyVariables({
       proxy: 'http://proxy.example.com:8080',

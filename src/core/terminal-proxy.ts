@@ -15,11 +15,13 @@ export function terminalProxyVariables(
   // Secrets never leave VS Code's login dialog (ADR 0003).
   const proxy = withoutCredentials(new URL(settings.proxy.trim()));
   // Terminals go direct where extensions do. Tools read ".x" as x and its subdomains; "*.x" they
-  // do not understand.
+  // do not understand. No host name holds "@", so an entry with one is only credentials.
   const bypass = [
     ...new Set([
       ...EXTENSIONS_ALWAYS_DIRECT,
-      ...parseNoProxyList(settings.noProxy).map((pattern) => pattern.replace(/^\*\./, '.'))
+      ...parseNoProxyList(settings.noProxy)
+        .filter((pattern) => !pattern.includes('@'))
+        .map((pattern) => pattern.replace(/^\*\./, '.'))
     ])
   ].join(',');
   // curl, and so Git, reads only the lowercase http_proxy; other tools read the uppercase names
