@@ -5,7 +5,10 @@ import type { Memento } from '../core/proxy-manager';
 // The slice of the VS Code API this extension uses. src/extension.ts passes the real module,
 // which must satisfy these signatures without a cast; unit tests pass small fakes.
 export type VscodeApi = {
-  ConfigurationTarget: { Global: vscode.ConfigurationTarget };
+  ConfigurationTarget: {
+    Global: vscode.ConfigurationTarget;
+    Workspace: vscode.ConfigurationTarget;
+  };
   env: Pick<typeof vscode.env, 'remoteName'>;
   ProgressLocation: { Notification: vscode.ProgressLocation };
   QuickInputButtons: { Back: vscode.QuickInputButton };
@@ -32,6 +35,8 @@ export type VscodeApi = {
     onDidChangeWindowState(listener: (state: vscode.WindowState) => unknown): vscode.Disposable;
   };
   workspace: {
+    // Undefined while no folder is open.
+    readonly workspaceFolders: readonly Pick<vscode.WorkspaceFolder, 'name'>[] | undefined;
     getConfiguration(section: string): WorkspaceConfiguration;
     onDidChangeConfiguration(
       listener: (event: vscode.ConfigurationChangeEvent) => unknown
@@ -102,6 +107,7 @@ export type EnvironmentVariableCollection = Pick<
 
 export type ExtensionContext = Pick<vscode.ExtensionContext, 'subscriptions'> & {
   globalState: Memento;
+  workspaceState: Memento;
   secrets: SecretStorage;
   globalStorageUri: Pick<vscode.Uri, 'fsPath'>;
   environmentVariableCollection: EnvironmentVariableCollection;

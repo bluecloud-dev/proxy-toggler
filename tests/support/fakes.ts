@@ -202,6 +202,7 @@ export function createExtensionContext(
   return {
     subscriptions: [],
     globalState: createMemento(stores.state),
+    workspaceState: createMemento(),
     secrets: createSecretStorage(stores.secrets, stores.secretFailures),
     globalStorageUri: {
       fsPath: stores.globalStorage ?? path.join(os.tmpdir(), 'proxy-toggler-unused-global-storage')

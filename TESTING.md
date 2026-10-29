@@ -154,6 +154,23 @@ they cover.
       the toggle says that VS Code already uses a proxy, and a click starts setup from it.
 - [ ] An SSH window: the status bar names the host, and switching writes only the remote
       machine's settings. In a WSL window, the tooltip says it manages this computer's settings.
+- [ ] Project defaults: with `"proxyToggler.defaultProfile": false` in user settings and `"Work"` in
+      a work folder's settings, opening the work folder turns Work on, focusing a personal window
+      turns the proxy off, and focusing the work window again turns Work on, with no notification.
+      The tooltip says "This project's default." or "Your default.".
+- [ ] A switch made in the work window survives focus leaving and coming back, and the tooltip
+      says "Changed in this window."; editing the work folder's default replaces it.
+- [ ] The switcher's **This Project** entries write the folder's `.vscode/settings.json`, and do
+      not show while no folder is open.
+- [ ] A folder that names a profile you lack leaves the proxy alone and warns once, with **Add
+      Profile…**.
+- [ ] Restricted Mode: an untrusted folder's `proxyToggler.defaultProfile` has no effect until you
+      trust it.
+- [ ] With `proxyToggler.applyToTerminals` on, a new terminal in the work window shows Work's URL
+      in `echo $HTTPS_PROXY` while the personal window has focus, and an empty value in the
+      personal window.
+- [ ] An SSH window with a folder default switches only the remote machine's settings when it
+      gains focus.
 - [ ] The **Proxy Toggler** output channel never contains a username or password.
 - [ ] A screen reader announces the toggle's state, such as "Proxy on, profile Work".
 

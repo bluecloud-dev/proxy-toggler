@@ -12,6 +12,18 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
   proxy VS Code uses, as `http_proxy`, `https_proxy` and `no_proxy` and the same names in upper
   case, so Git, npm and other command-line tools use it too. It follows the proxy as it turns on,
   off or switches profiles. It leaves out credentials and never turns off certificate checks.
+- Project defaults: `proxyToggler.defaultProfile` names the profile a project uses, or `false` for
+  no proxy, and VS Code's proxy follows the focused window's choice. Your user settings give the
+  default for every project that names none, and a switch or toggle made in a window stays that
+  window's choice until it closes or reloads. The switcher's **This Project** entries set it, and
+  the toggle's tooltip says where the proxy came from. A project that names a profile you lack
+  leaves the proxy alone and offers once to add it. Projects hold names only, never URLs (ADR
+  0006).
+
+### Changed
+
+- Restricted Mode: the extension's untrusted-workspace support is now `limited`, because a
+  folder's settings cannot set `proxyToggler.defaultProfile` until you trust it.
 
 ## [0.2.0] - 2026-10-29
 
