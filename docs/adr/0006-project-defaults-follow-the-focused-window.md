@@ -38,7 +38,8 @@ is on.
   [ADR 0004](0004-focused-window-acts-on-outside-changes.md) and is not an override; the next
   focus change applies the window's choice again.
 - Background traffic in a window without focus uses the focused window's proxy.
-- An override lasts until its window closes or reloads; nothing stores it.
+- An override lasts until its window closes or reloads; nothing stores it. An override that names
+  a profile deleted or renamed since is dropped, and the window's default applies.
 - A project that names a profile the user lacks, such as a teammate's or a renamed one, leaves the
   proxy alone and asks once per project to add it. Renaming a profile never rewrites a project's
   settings, which may be committed.

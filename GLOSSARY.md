@@ -84,7 +84,7 @@ _Avoid_: workspace profile, binding, recommendation
 
 **Window override**:
 The last proxy change the user made in a window. It replaces that window's project default until
-the window closes or reloads.
+the window closes or reloads, or its profile is deleted or renamed.
 _Avoid_: manual mode, pinned profile
 
 **Window choice**:

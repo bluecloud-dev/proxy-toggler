@@ -40,6 +40,13 @@ export class WindowChoices {
   ) {}
 
   current(): WindowChoice | undefined {
+    // A profile deleted or renamed since the user chose it here: the default takes over.
+    if (
+      this.override?.kind === 'profile' &&
+      !findProfileByName(this.proxyManager.getProfiles(), this.override.name)
+    ) {
+      this.override = undefined;
+    }
     return this.override ?? readDefaultProfile(this.configuration().get('defaultProfile'));
   }
 

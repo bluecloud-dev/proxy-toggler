@@ -228,8 +228,8 @@ left unset everywhere, Proxy Toggler switches only when you do.
   default changes. It shows no notification; the toggle's tooltip says "This project's default.",
   "Your default." or "Changed in this window.".
 - **Your changes win in their window:** a switch or toggle made in a window stays that window's
-  choice until it closes or reloads, and focus coming back keeps it. Changing the default replaces
-  it.
+  choice until it closes or reloads, and focus coming back keeps it. Changing the default, or
+  deleting or renaming that profile, replaces it.
 - **Windows in the background** use the proxy of the window you work in, for VS Code's own
   traffic. Their terminals keep their own project's choice.
 - **Names only:** a project names a profile and never holds a proxy URL. If you have no profile by

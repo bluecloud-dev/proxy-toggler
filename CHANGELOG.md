@@ -15,10 +15,10 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 - Project defaults: `proxyToggler.defaultProfile` names the profile a project uses, or `false` for
   no proxy, and VS Code's proxy follows the focused window's choice. Your user settings give the
   default for every project that names none, and a switch or toggle made in a window stays that
-  window's choice until it closes or reloads. The switcher's **This Project** entries set it, and
-  the toggle's tooltip says where the proxy came from. A project that names a profile you lack
-  leaves the proxy alone and offers once to add it. Projects hold names only, never URLs (ADR
-  0006).
+  window's choice until it closes or reloads, or its profile is deleted or renamed. The switcher's
+  **This Project** entries set it, and the toggle's tooltip says where the proxy came from. A
+  project that names a profile you lack leaves the proxy alone and offers once to add it. Projects
+  hold names only, never URLs (ADR 0006).
 
 ### Changed
 

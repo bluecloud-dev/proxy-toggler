@@ -160,6 +160,22 @@ describe('project defaults', () => {
     assert.equal(host.settings.get('http.proxy'), HOME.proxyUrl);
   });
 
+  it("drops a manual change once its profile is deleted, and follows the window's default", async () => {
+    const host = createFakeHost({ ...PROFILES, 'proxyToggler.defaultProfile': 'Home' });
+    const { vscode } = openWindow(host, new Map(), { workspace: {} });
+    await settle();
+    await vscode.commandHandlers.get(COMMANDS.switchProfile)?.('Work');
+    await settle();
+
+    vscode.changeSettings({ 'proxyToggler.profiles': [HOME] });
+    vscode.setFocused(false);
+    vscode.setFocused(true);
+    await settle();
+
+    assert.equal(host.settings.get('http.proxy'), HOME.proxyUrl);
+    assert.deepEqual(vscode.messages, []);
+  });
+
   it('says nothing when it switches by itself, even with switch notifications on', async () => {
     const host = createFakeHost({ ...PROFILES, 'proxyToggler.showSwitchNotifications': true });
     const { vscode } = openWindow(host, new Map(), { workspace: WORK_PROJECT });
