@@ -35,7 +35,11 @@
   ],
   "capabilities": {
     "untrustedWorkspaces": {
-      "supported": true
+      "supported": "limited",
+      "description": "%capabilities.untrustedWorkspaces.description%",
+      "restrictedConfigurations": [
+        "proxyToggler.defaultProfile"
+      ]
     },
     "virtualWorkspaces": true
   },
@@ -77,6 +81,19 @@
     "configuration": {
       "title": "%configuration.title%",
       "properties": {
+        "proxyToggler.applyToTerminals": {
+          "type": "boolean",
+          "scope": "application",
+          "default": false,
+          "markdownDescription": "%configuration.applyToTerminals.description%"
+        },
+        "proxyToggler.defaultProfile": {
+          "type": [
+            "string",
+            "boolean"
+          ],
+          "markdownDescription": "%configuration.defaultProfile.description%"
+        },
         "proxyToggler.confirmBeforeToggle": {
           "type": "boolean",
           "default": false,

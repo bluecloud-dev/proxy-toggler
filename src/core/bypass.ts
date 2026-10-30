@@ -4,7 +4,7 @@ import { isIP } from 'node:net';
 
 // Extensions go through @vscode/proxy-agent: each pattern is a domain suffix, so "x" and ".x"
 // both cover the domain and every subdomain; "*.x" never matches; a lone "*" matches everything.
-const EXTENSIONS_ALWAYS_DIRECT = ['localhost', '127.0.0.1', '::1', '::ffff:127.0.0.1'];
+export const EXTENSIONS_ALWAYS_DIRECT = ['localhost', '127.0.0.1', '::1', '::ffff:127.0.0.1'];
 
 export function extensionsSendDirect(host: string, patterns: readonly string[]): boolean {
   const name = normalize(host);

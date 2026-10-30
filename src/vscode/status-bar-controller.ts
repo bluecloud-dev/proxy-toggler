@@ -1,6 +1,7 @@
 import type * as vscode from 'vscode';
 
 import type { ToggleState } from '../core/proxy-configuration';
+import type { ChoiceOrigin } from '../core/window-choice';
 import type { StatusBarItem, VscodeApi } from './api';
 import type { ProxySide } from './proxy-side';
 
@@ -14,6 +15,8 @@ export type StatusView = {
   settingsHoldProxy: boolean;
   // Whose proxy settings the toggle manages; a remote machine's own settings show its label.
   side: ProxySide;
+  // Set while the proxy in effect is this window's choice (ADR 0006).
+  origin?: ChoiceOrigin;
 };
 
 type Presentation = { icon: string; text: string; tooltip: string; label: string };
@@ -56,11 +59,13 @@ export class StatusBarController implements vscode.Disposable {
           label: `${presentation.label}. ${warning}`
         }
       : presentation;
-    const sideNote = this.sideNoteFor(view.side);
+    const notes = [this.originNoteFor(view.origin), this.sideNoteFor(view.side)]
+      .filter((note) => note !== undefined)
+      .join(' ');
     this.item.text = `$(${icon}) ${text}`;
-    this.item.tooltip = sideNote ? `${tooltip} ${sideNote}` : tooltip;
+    this.item.tooltip = notes ? `${tooltip} ${notes}` : tooltip;
     this.item.accessibilityInformation = {
-      label: sideNote ? `${label.endsWith('.') ? label : `${label}.`} ${sideNote}` : label,
+      label: notes ? `${label.endsWith('.') ? label : `${label}.`} ${notes}` : label,
       role: 'button'
     };
     this.item.backgroundColor = drift
@@ -82,6 +87,20 @@ export class StatusBarController implements vscode.Disposable {
   }
 
   // In a remote window, which settings the toggle manages.
+  private originNoteFor(origin: ChoiceOrigin | undefined): string | undefined {
+    const { l10n } = this.vscodeApi;
+    switch (origin) {
+      case 'window':
+        return l10n.t('Changed in this window.');
+      case 'project':
+        return l10n.t("This project's default.");
+      case 'user':
+        return l10n.t('Your default.');
+      default:
+        return undefined;
+    }
+  }
+
   private sideNoteFor(side: ProxySide): string | undefined {
     const { l10n } = this.vscodeApi;
     if (side.kind === 'remote') {

@@ -1,6 +1,6 @@
 import type * as vscode from 'vscode';
 
-import { type Profile, sortByName } from '../core/profiles';
+import { type Profile, sameName, sortByName } from '../core/profiles';
 import type { ProxyManager } from '../core/proxy-manager';
 import type { VscodeApi } from '../vscode/api';
 import { useLocalProxySettings, useOwnProxySettings } from '../vscode/http-settings';
@@ -39,7 +39,19 @@ type SwitcherManager = Pick<
 
 type SwitcherItem = vscode.QuickPickItem & {
   profile?: Profile;
-  action?: 'on' | 'off' | 'save' | 'add' | 'edit' | 'delete' | 'separate' | 'shared' | 'settings';
+  action?:
+    | 'on'
+    | 'off'
+    | 'save'
+    | 'add'
+    | 'edit'
+    | 'delete'
+    | 'separate'
+    | 'shared'
+    | 'settings'
+    | 'project';
+  // For 'project': the default profile to write in the project's settings; undefined removes it.
+  projectDefault?: string | false;
 };
 
 // Opens the switcher, or switches straight to the profile a keybinding names.
@@ -117,7 +129,13 @@ async function showSwitcher(
 
   // Opens on the current profile, so Enter keeps it, or turns it on while the proxy is off.
   const choice = await pickOne(vscodeApi, {
-    items: [...leading, ...profileItems, ...separator, ...actionItems],
+    items: [
+      ...leading,
+      ...profileItems,
+      ...separator,
+      ...actionItems,
+      ...projectItems(vscodeApi, currentProfile)
+    ],
     activeItem: profileItems.find((item) => item.profile && isCurrent(item.profile)),
     placeholder: l10n.t('Pick a proxy profile to turn on')
   });
@@ -143,10 +161,54 @@ async function showSwitcher(
     await useOwnProxySettings(vscodeApi);
   } else if (choice?.action === 'shared') {
     await useLocalProxySettings(vscodeApi);
+  } else if (choice?.action === 'project') {
+    // The change event applies the new default in this window (ADR 0006).
+    await vscodeApi.workspace
+      .getConfiguration('proxyToggler')
+      .update('defaultProfile', choice.projectDefault, vscodeApi.ConfigurationTarget.Workspace);
   } else if (choice?.action === 'settings') {
     await vscodeApi.commands.executeCommand(
       'workbench.action.openSettings',
       `@ext:${EXTENSION_ID}`
     );
   }
+}
+
+// The entries that set the open folder's default profile; none while no folder is open.
+function projectItems(vscodeApi: SwitcherApi, currentProfile?: Profile): SwitcherItem[] {
+  if (!vscodeApi.workspace.workspaceFolders?.length) {
+    return [];
+  }
+  const { l10n } = vscodeApi;
+  const projectValue = vscodeApi.workspace
+    .getConfiguration('proxyToggler')
+    .inspect<unknown>('defaultProfile')?.workspaceValue;
+  const usesCurrent =
+    typeof projectValue === 'string' &&
+    currentProfile !== undefined &&
+    sameName(projectValue.trim(), currentProfile.name);
+  const items: SwitcherItem[] = [
+    ...(currentProfile && !usesCurrent
+      ? [
+          {
+            label: l10n.t('Use {0} in This Project', currentProfile.name),
+            action: 'project' as const,
+            projectDefault: currentProfile.name
+          }
+        ]
+      : []),
+    ...(projectValue === false
+      ? []
+      : [
+          {
+            label: l10n.t('Use No Proxy in This Project'),
+            action: 'project' as const,
+            projectDefault: false as const
+          }
+        ]),
+    ...(projectValue === undefined
+      ? []
+      : [{ label: l10n.t('Stop Using a Project Default'), action: 'project' as const }])
+  ];
+  return [{ label: l10n.t('This Project'), kind: vscodeApi.QuickPickItemKind.Separator }, ...items];
 }

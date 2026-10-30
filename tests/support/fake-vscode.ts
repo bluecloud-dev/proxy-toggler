@@ -58,6 +58,9 @@ export function createFakeRemote(name: string, settings: Record<string, unknown>
 // say otherwise (http.useLocalProxyConfiguration).
 const USES_LOCAL_PROXY_BY_DEFAULT = new Set(['wsl', 'dev-container']);
 
+// ConfigurationTarget.Workspace.
+const WORKSPACE_TARGET = 2;
+
 export type FakeVscodeOptions = {
   // Another window of the same VS Code; by default each fake is a VS Code of its own.
   host?: FakeHost;
@@ -78,6 +81,8 @@ export type FakeVscodeOptions = {
   settings?: Record<string, unknown>;
   // Registered defaults by full setting id; `get` falls back to them, as VS Code does.
   defaults?: Record<string, unknown>;
+  // The open folder's settings by full setting id; without them, no folder is open.
+  workspace?: Record<string, unknown>;
   // Whether the window has focus at activation; it does unless a test says otherwise.
   focused?: boolean;
 };
@@ -100,6 +105,9 @@ export type FakeVscode = VscodeApi & {
   changeSettings(values: Record<string, unknown>): void;
   // The same for the remote machine's settings of a remote window.
   changeRemoteSettings(values: Record<string, unknown>): void;
+  // The same for the open folder's settings.
+  changeWorkspaceSettings(values: Record<string, unknown>): void;
+  workspaceSettings: Map<string, unknown> | undefined;
 };
 
 export function createFakeVscode(options: FakeVscodeOptions = {}): FakeVscode {
@@ -115,6 +123,7 @@ export function createFakeVscode(options: FakeVscodeOptions = {}): FakeVscode {
   }
   const settings = host.settings;
   const defaults = new Map(Object.entries(options.defaults ?? {}));
+  const workspaceSettings = options.workspace && new Map(Object.entries(options.workspace));
   const settingUpdates: FakeVscode['settingUpdates'] = [];
   const statusBarItems: FakeStatusBarItem[] = [];
   const logs: string[] = [];
@@ -190,7 +199,9 @@ export function createFakeVscode(options: FakeVscodeOptions = {}): FakeVscode {
     const id = (key: string): string => `${section}.${key}`;
     const configuration = {
       get: (key: string, defaultValue?: unknown) => {
-        const value = userValue(id(key));
+        const value = workspaceSettings?.has(id(key))
+          ? workspaceSettings.get(id(key))
+          : userValue(id(key));
         return value === undefined ? defaultOf(id(key), defaultValue) : value;
       },
       // globalLocalValue and globalRemoteValue are runtime fields that vscode.d.ts omits.
@@ -199,10 +210,21 @@ export function createFakeVscode(options: FakeVscodeOptions = {}): FakeVscode {
         defaultValue: defaultOf(id(key)),
         globalLocalValue: settings.get(id(key)),
         globalRemoteValue: isMachineScoped(id(key)) ? remote?.settings.get(id(key)) : undefined,
-        globalValue: userValue(id(key))
+        globalValue: userValue(id(key)),
+        workspaceValue: workspaceSettings?.get(id(key))
       }),
       update: async (key: string, value: unknown, target?: unknown) => {
         settingUpdates.push({ id: id(key), value, target });
+        if (target === WORKSPACE_TARGET) {
+          if (!workspaceSettings) {
+            throw new Error(
+              'Unable to write to Workspace Settings because no workspace is opened.'
+            );
+          }
+          setOrDelete(workspaceSettings, id(key), value);
+          notify([id(key)]);
+          return;
+        }
         // A key that the remote machine's settings already hold is written there even when it
         // belongs to this computer, and then changes nothing (research 4.3, lab check 2).
         const onRemote =
@@ -338,6 +360,16 @@ export function createFakeVscode(options: FakeVscodeOptions = {}): FakeVscode {
       }
       fireConfigurationChange(Object.keys(values), host.windows);
     },
+    changeWorkspaceSettings: (values) => {
+      if (!workspaceSettings) {
+        throw new Error('Only a window with a folder open has workspace settings.');
+      }
+      for (const [id, value] of Object.entries(values)) {
+        setOrDelete(workspaceSettings, id, value);
+      }
+      notify(Object.keys(values));
+    },
+    workspaceSettings,
     changeRemoteSettings: (values) => {
       if (!remote) {
         throw new Error('Only a remote window has remote settings.');
@@ -357,7 +389,7 @@ export function createFakeVscode(options: FakeVscodeOptions = {}): FakeVscode {
         listener({ focused, active: focused });
       }
     },
-    ConfigurationTarget: { Global: 1 },
+    ConfigurationTarget: { Global: 1, Workspace: WORKSPACE_TARGET },
     env: { remoteName: remote?.name },
     ProgressLocation: { Notification: 15 },
     QuickInputButtons: { Back: backButton },
@@ -426,6 +458,7 @@ export function createFakeVscode(options: FakeVscodeOptions = {}): FakeVscode {
       }
     },
     workspace: {
+      workspaceFolders: workspaceSettings && [{ name: 'project' }],
       getConfiguration,
       onDidChangeConfiguration: (listener) => {
         configurationListeners.push(listener);
@@ -437,6 +470,14 @@ export function createFakeVscode(options: FakeVscodeOptions = {}): FakeVscode {
       }
     }
   };
+}
+
+function setOrDelete(layer: Map<string, unknown>, id: string, value: unknown): void {
+  if (value === undefined) {
+    layer.delete(id);
+  } else {
+    layer.set(id, value);
+  }
 }
 
 // Makes every settings update reject, as when policy manages the settings.

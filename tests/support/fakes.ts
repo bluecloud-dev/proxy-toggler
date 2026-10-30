@@ -1,10 +1,16 @@
 import * as os from 'node:os';
 import * as path from 'node:path';
 
+import type * as vscode from 'vscode';
+
 import type { ProfilesSetting } from '../../src/core/profiles';
 import type { Memento } from '../../src/core/proxy-manager';
 import type { HttpSettingKey, HttpSettings } from '../../src/core/proxy-settings-writer';
-import type { ExtensionContext, SecretStorage } from '../../src/vscode/api';
+import type {
+  EnvironmentVariableCollection,
+  ExtensionContext,
+  SecretStorage
+} from '../../src/vscode/api';
 import type { NotificationAction } from '../../src/vscode/notification-service';
 
 export type FakeMemento = Memento & {
@@ -149,6 +155,38 @@ export function createNotificationRecorder(
   };
 }
 
+export type FakeEnvironmentVariableCollection = EnvironmentVariableCollection & {
+  variables: Map<string, string>;
+  // Every change, each of which VS Code passes on to the terminals at once.
+  changes: number;
+};
+
+export function createEnvironmentVariableCollection(
+  variables = new Map<string, string>()
+): FakeEnvironmentVariableCollection {
+  const collection: FakeEnvironmentVariableCollection = {
+    variables,
+    changes: 0,
+    description: undefined,
+    replace: (variable, value) => {
+      collection.changes += 1;
+      variables.set(variable, value);
+    },
+    clear: () => {
+      collection.changes += 1;
+      variables.clear();
+    },
+    *[Symbol.iterator]() {
+      for (const [variable, value] of variables) {
+        // The extension only replaces; 1 is EnvironmentVariableMutatorType.Replace.
+        const mutator = { type: 1 as vscode.EnvironmentVariableMutatorType, value, options: {} };
+        yield [variable, mutator] as [string, vscode.EnvironmentVariableMutator];
+      }
+    }
+  };
+  return collection;
+}
+
 export function createExtensionContext(
   stores: {
     state?: Map<string, unknown>;
@@ -157,14 +195,19 @@ export function createExtensionContext(
     // The extension's global storage folder; on the remote machine in a remote window.
     globalStorage?: string;
   } = {}
-): ExtensionContext & { globalState: FakeMemento } {
+): ExtensionContext & {
+  globalState: FakeMemento;
+  environmentVariableCollection: FakeEnvironmentVariableCollection;
+} {
   return {
     subscriptions: [],
     globalState: createMemento(stores.state),
+    workspaceState: createMemento(),
     secrets: createSecretStorage(stores.secrets, stores.secretFailures),
     globalStorageUri: {
       fsPath: stores.globalStorage ?? path.join(os.tmpdir(), 'proxy-toggler-unused-global-storage')
-    }
+    },
+    environmentVariableCollection: createEnvironmentVariableCollection()
   };
 }
 

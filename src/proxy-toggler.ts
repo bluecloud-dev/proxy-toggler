@@ -3,10 +3,11 @@ import { COMMANDS, CONTEXT_KEYS } from './commands/command-ids';
 import { createCredentialsNotice } from './commands/credentials-notice';
 import { editProfileCommand } from './commands/edit-profile';
 import { warnAboutHiddenProfiles } from './commands/profile-warning';
-import { createProxyChange } from './commands/proxy-change';
+import { createProxyChange, type ProxyChange } from './commands/proxy-change';
 import { announceRemovedCredentials, removeStoredCredentials } from './commands/stored-credentials';
 import { switchProfileCommand } from './commands/switcher';
 import { toggleProxyCommand } from './commands/toggle-proxy';
+import { DEFAULT_PROFILE_SETTING, WindowChoices } from './commands/window-choices';
 import type { ToggleState } from './core/proxy-configuration';
 import { type Memento, ProxyManager } from './core/proxy-manager';
 import { HTTP_SETTING_KEYS } from './core/proxy-settings-writer';
@@ -20,6 +21,7 @@ import { proxySide } from './vscode/proxy-side';
 import { readYourWrites } from './vscode/read-your-writes-memento';
 import { whenSettled } from './vscode/settle';
 import { StatusBarController } from './vscode/status-bar-controller';
+import { TERMINALS_SETTING, updateTerminalEnvironment } from './vscode/terminal-environment';
 
 // Returned from activate(); integration tests read it through the extension's exports.
 export type ProxyTogglerApi = {
@@ -60,9 +62,10 @@ export function createProxyToggler(
         : globalState.update(key, value)
   };
   const notificationService = new NotificationService(vscodeApi, logger);
+  const httpSettings = createHttpSettings(vscodeApi);
   const proxyManager = new ProxyManager(
     globalState,
-    createHttpSettings(vscodeApi),
+    httpSettings,
     createProfilesSetting(vscodeApi),
     createCredentialsNotice(globalState, notificationService),
     records
@@ -75,6 +78,14 @@ export function createProxyToggler(
 
   context.subscriptions.push(logger, statusBarController);
 
+  const windowChoices = new WindowChoices(
+    vscodeApi,
+    proxyManager,
+    notificationService,
+    context.workspaceState,
+    () => addProfileCommand(vscodeApi, proxyManager, notificationService, change)
+  );
+
   const refreshUi = async (): Promise<void> => {
     const state = proxyManager.getState();
     const drift = proxyManager.hasDrift();
@@ -82,7 +93,8 @@ export function createProxyToggler(
       profileCount: proxyManager.getProfiles().length,
       drift,
       settingsHoldProxy: proxyManager.settingsHoldProxy(),
-      side: proxySide(vscodeApi)
+      side: proxySide(vscodeApi),
+      origin: windowChoices.origin()
     });
     const { commands } = vscodeApi;
     await Promise.all([
@@ -93,6 +105,30 @@ export function createProxyToggler(
   };
 
   runInBackground(logger, 'Status bar refresh', refreshUi);
+  // Terminals get this window's choice, or else follow the settings this window manages, whoever
+  // changes them.
+  const updateTerminals = (): void => {
+    updateTerminalEnvironment(vscodeApi, context.environmentVariableCollection, {
+      read: () => windowChoices.terminalSettings(httpSettings.read())
+    });
+  };
+  runInBackground(logger, 'Terminal environment update', updateTerminals);
+  const runChange = createProxyChange(vscodeApi, proxyManager, notificationService, refreshUi);
+  // What commands change is the user's choice for this window (ADR 0006).
+  const change: ProxyChange = async (makeChange, options) => {
+    const outcome = await runChange(makeChange, options);
+    windowChoices.noteManualChange(outcome);
+    updateTerminals();
+    // The toggle says where the proxy came from, which runChange could not know yet.
+    await refreshUi();
+    return outcome;
+  };
+  // VS Code's proxy follows the focused window's choice.
+  const applyWindowChoice = async (): Promise<void> => {
+    if (vscodeApi.window.state.focused) {
+      await windowChoices.apply(runChange);
+    }
+  };
   // Warnings and one-time notices appear in the focused window, or else in the next window to
   // gain focus (ADR 0004).
   const announceIfFocused = async (): Promise<void> => {
@@ -127,6 +163,22 @@ export function createProxyToggler(
     vscodeApi.workspace.onDidChangeConfiguration((event) => {
       const profilesChanged = event.affectsConfiguration('proxyToggler.profiles');
       const proxyChanged = PROXY_SETTINGS.some((id) => event.affectsConfiguration(id));
+      const defaultChanged = event.affectsConfiguration(DEFAULT_PROFILE_SETTING);
+      if (defaultChanged) {
+        windowChoices.defaultChanged();
+        runInBackground(logger, 'Window choice', async () => {
+          await applyWindowChoice();
+          await refreshUi();
+        });
+      }
+      if (
+        proxyChanged ||
+        profilesChanged ||
+        defaultChanged ||
+        event.affectsConfiguration(TERMINALS_SETTING)
+      ) {
+        runInBackground(logger, 'Terminal environment update', updateTerminals);
+      }
       if (!profilesChanged && !proxyChanged) {
         return;
       }
@@ -147,7 +199,10 @@ export function createProxyToggler(
       runInBackground(logger, 'Hidden profiles warning', warnIfFocused);
       // An outside change seen while no window had focus falls to the next window to gain it.
       if (windowState.focused) {
-        runInBackground(logger, 'Reconciliation', reconcile);
+        runInBackground(logger, 'Reconciliation', async () => {
+          await reconcile();
+          await applyWindowChoice();
+        });
       }
     })
   );
@@ -161,6 +216,7 @@ export function createProxyToggler(
   runInBackground(logger, 'Migration and reconciliation', async () => {
     await proxyManager.migrateSavedProxy();
     await reconcile();
+    await applyWindowChoice();
   });
   // A later read, once writes from other windows have landed, records the copy or makes it again.
   runInBackground(logger, 'Migration check', async () => {
@@ -169,7 +225,6 @@ export function createProxyToggler(
     await refreshUi();
   });
 
-  const change = createProxyChange(vscodeApi, proxyManager, notificationService, refreshUi);
   const register = createCommandRegistrar(vscodeApi, logger, notificationService);
   context.subscriptions.push(
     // Adds the first profile, or edits the current one.

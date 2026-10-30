@@ -182,6 +182,52 @@ describe('createProxyToggler', () => {
     assert.deepEqual(vscode.settings.get('http.noProxy'), ['localhost', '127.0.0.1']);
   });
 
+  describe('integrated terminals', () => {
+    const OPTED_IN = { 'proxyToggler.applyToTerminals': true };
+    const terminalProxyOf = (context: ReturnType<typeof activateWith>['context']) =>
+      context.environmentVariableCollection.variables.get('HTTPS_PROXY');
+
+    it('get the proxy at activation once the user opts in', async () => {
+      const { context } = activateWith({ settings: { ...APPLIED_SETTINGS, ...OPTED_IN } });
+
+      await flushBackgroundTasks();
+
+      assert.equal(terminalProxyOf(context), PROFILE.proxyUrl);
+    });
+
+    it('follow the proxy as it is turned on and off', async () => {
+      const { vscode, context } = activateWith(
+        { settings: { ...PROFILES, ...OPTED_IN } },
+        { 'proxyToggler.state': { isEnabled: false, hasConfiguration: true } }
+      );
+
+      await vscode.commandHandlers.get(COMMANDS.enable)?.();
+      await flushBackgroundTasks();
+      const whenOn = terminalProxyOf(context);
+      await vscode.commandHandlers.get(COMMANDS.disable)?.();
+      await flushBackgroundTasks();
+
+      assert.equal(whenOn, PROFILE.proxyUrl);
+      assert.equal(context.environmentVariableCollection.variables.size, 0);
+    });
+
+    it('get the proxy or lose it as the user opts in or out', async () => {
+      const { vscode, context } = activateWith({ settings: APPLIED_SETTINGS });
+      await flushBackgroundTasks();
+      const beforeOptIn = terminalProxyOf(context);
+
+      vscode.changeSettings(OPTED_IN);
+      await flushBackgroundTasks();
+      const afterOptIn = terminalProxyOf(context);
+      vscode.changeSettings({ 'proxyToggler.applyToTerminals': false });
+      await flushBackgroundTasks();
+
+      assert.equal(beforeOptIn, undefined);
+      assert.equal(afterOptIn, PROFILE.proxyUrl);
+      assert.equal(terminalProxyOf(context), undefined);
+    });
+  });
+
   describe('when VS Code echoes an older stored state after a newer write', () => {
     // VS Code sends every change of the extension's state back to the extension host, and an echo
     // of an earlier write can arrive after a newer one and replace it for a moment.

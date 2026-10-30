@@ -14,16 +14,18 @@ src/
                     rule (when VS Code's settings carry a profile's values), profiles (reading
                     the setting, the current profile), ProxyManager (the record, the toggle) and
                     the outcomes its changes return, ProxySettingsWriter (writing and clearing the
-                    http.* settings), the test connection and the bypass rules of the window and
-                    of extensions.
+                    http.* settings), the test connection, the bypass rules of the window and
+                    of extensions, and the environment variables terminals get.
   commands/         One file per command or flow (toggle, the switcher, add, edit and delete), the
                     activation-time checks (among them removing the credentials 0.1.x stored),
                     and proxy-change.ts, which runs the changes commands
-                    make through ProxyManager and reports what it did. Turn Proxy On and Turn
+                    make through ProxyManager and reports what it did, and window-choices.ts,
+                    each window's choice for VS Code's proxy (ADR 0006). Turn Proxy On and Turn
                     Proxy Off have no file: the composition root registers them as one-line
                     changes.
   vscode/           Adapters over the VS Code API: the API surface type, the http.* and profiles
-                    setting adapters, notifications, the status bar item, and error reporting.
+                    setting adapters, notifications, the status bar item, the integrated
+                    terminals' environment, and error reporting.
 ```
 
 Two dependency rules are enforced by ESLint (`eslint.config.mjs`):
@@ -233,13 +235,17 @@ rollback details, and recovery actions. Unexpected causes are logged for diagnos
   window's remote side uses the local proxy settings or its own. The sources are in
   [the v0.2.0 research](docs/design/v0.2.0-research.md), findings A3 and B3 and the remote-window
   section.
-- **Supported in Restricted Mode and virtual workspaces.** The extension reads no workspace files
-  and writes only user settings, `globalState`, its global storage and SecretStorage, so the
-  manifest declares
-  `untrustedWorkspaces.supported: true` and `virtualWorkspaces: true`. In Restricted Mode VS Code
-  ignores workspace values of the `http.*` settings, which it marks restricted, so a workspace can
-  change only `proxyToggler.confirmBeforeToggle`, which adds or removes a confirmation prompt.
-  Without the declaration, VS Code disables the extension in every untrusted folder.
+- **Limited support in Restricted Mode; virtual workspaces supported.** The extension reads one
+  workspace setting, `proxyToggler.defaultProfile`, and writes it only from the switcher's **This
+  Project** entries; otherwise it writes user settings, `globalState`, `workspaceState`, its global
+  storage and SecretStorage. The manifest declares `untrustedWorkspaces.supported: "limited"`,
+  with `proxyToggler.defaultProfile` under `restrictedConfigurations`, and `virtualWorkspaces:
+true`. In Restricted Mode VS Code returns only the user's value of that setting and ignores
+  workspace values of the `http.*` settings, which it marks restricted, so a workspace can change
+  only `proxyToggler.confirmBeforeToggle`, which adds or removes a confirmation prompt. Without the
+  declaration, VS Code disables the extension in every untrusted folder.
+- **VS Code's proxy follows the focused window.** Each window's choice is its override, else its
+  project default; see [ADR 0006](docs/adr/0006-project-defaults-follow-the-focused-window.md).
 - **Bypass lists are arrays.** Profiles keep `bypassList` as a list, like VS Code's `http.noProxy`.
   0.1.x stored a comma-separated string, which migration splits.
 - **State changes run one at a time.** VS Code runs commands concurrently, and a double click on

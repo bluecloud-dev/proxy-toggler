@@ -75,6 +75,23 @@ A change Proxy Toggler makes to the profiles, the record or VS Code's proxy sett
 user asked for it in this window.
 _Avoid_: own change, user action
 
+### Projects
+
+**Project default**:
+The profile, or no proxy, that `proxyToggler.defaultProfile` names for a project. The user's own
+value is the project default of every project that names none.
+_Avoid_: workspace profile, binding, recommendation
+
+**Window override**:
+The last proxy change the user made in a window. It replaces that window's project default until
+the window closes or reloads, or its profile is deleted or renamed.
+_Avoid_: manual mode, pinned profile
+
+**Window choice**:
+What a window wants VS Code's proxy to be: its window override, or else its project default. VS
+Code's proxy follows the focused window's choice, and each window's terminals get its own.
+_Avoid_: active choice, window profile
+
 ### Remote
 
 **Remote window**:

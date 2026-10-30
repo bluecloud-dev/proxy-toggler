@@ -27,9 +27,11 @@ export type ProxyChanger = Pick<
 type Reported<O extends ProxyOutcome> = O | { kind: 'writeFailed' };
 
 // The change makes one ProxyManager call and never waits for the user, so the extension's own
-// prompts never hold up ProxyManager's queue.
+// prompts never hold up ProxyManager's queue. An automatic change, such as following the focused
+// window (ADR 0006), announces no success.
 export type ProxyChange = <O extends ProxyOutcome>(
-  change: (manager: ProxyChanger) => Promise<O>
+  change: (manager: ProxyChanger) => Promise<O>,
+  options?: { automatic?: boolean }
 ) => Promise<Reported<O>>;
 
 const ACTION_CONFIGURE_NOW: NotificationAction = { id: 'configure', title: 'Configure Now' };
@@ -133,7 +135,8 @@ export function createProxyChange(
   };
 
   return async <O extends ProxyOutcome>(
-    change: (manager: ProxyChanger) => Promise<O>
+    change: (manager: ProxyChanger) => Promise<O>,
+    options: { automatic?: boolean } = {}
   ): Promise<Reported<O>> => {
     let outcome: O;
     try {
@@ -148,7 +151,9 @@ export function createProxyChange(
       return { kind: 'writeFailed' };
     }
     await refreshUi();
-    await report(outcome);
+    if (!options.automatic || !['on', 'off'].includes(outcome.kind)) {
+      await report(outcome);
+    }
     return outcome;
   };
 }

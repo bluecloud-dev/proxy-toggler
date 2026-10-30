@@ -63,7 +63,7 @@ function readProxyUrl(value: string): { proxyUrl: string } | { unheld: string } 
   return { proxyUrl };
 }
 
-function withoutCredentials(url: URL): string {
+export function withoutCredentials(url: URL): string {
   const copy = new URL(url.href);
   copy.username = '';
   copy.password = '';

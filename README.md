@@ -52,6 +52,10 @@
 - **Strict SSL and no-proxy list** support
 - **Remote windows**: in SSH, Tunnels and remote container windows, the toggle manages the remote
   machine's own proxy settings and leaves local windows alone
+- **Project defaults**: a project's settings name the profile it uses, or no proxy, and VS Code's
+  proxy follows the window you work in
+- **Integrated terminals** (opt-in): Git, npm and other command-line tools in VS Code's terminals
+  use the same proxy, in every project or only the ones you choose
 - **Non-invasive** — leaves system proxy configuration untouched
 
 ### Switch profiles from the status bar
@@ -125,11 +129,13 @@ Keyboard Shortcuts (JSON)** and add entries like these:
 
 ## :gear: Settings
 
-| Setting                                | Type    | Default | Description                                                                                                                                     |
-| -------------------------------------- | ------- | ------- | ----------------------------------------------------------------------------------------------------------------------------------------------- |
-| `proxyToggler.profiles`                | array   | `[]`    | The proxy profiles, shared by every VS Code Profile. Edit them in the application settings (**Preferences: Open Application Settings (JSON)**). |
-| `proxyToggler.confirmBeforeToggle`     | boolean | `false` | Ask before the status bar toggle or the Toggle Proxy command turns the proxy on or off                                                          |
-| `proxyToggler.showSwitchNotifications` | boolean | `false` | Show a short notification naming the profile when the proxy turns on or off or switches profiles                                                |
+| Setting                                | Type              | Default | Description                                                                                                                                     |
+| -------------------------------------- | ----------------- | ------- | ----------------------------------------------------------------------------------------------------------------------------------------------- |
+| `proxyToggler.profiles`                | array             | `[]`    | The proxy profiles, shared by every VS Code Profile. Edit them in the application settings (**Preferences: Open Application Settings (JSON)**). |
+| `proxyToggler.confirmBeforeToggle`     | boolean           | `false` | Ask before the status bar toggle or the Toggle Proxy command turns the proxy on or off                                                          |
+| `proxyToggler.showSwitchNotifications` | boolean           | `false` | Show a short notification naming the profile when the proxy turns on or off or switches profiles                                                |
+| `proxyToggler.applyToTerminals`        | boolean           | `false` | Give new integrated terminals and tasks the proxy VS Code uses; see [Integrated terminals](#integrated-terminals)                               |
+| `proxyToggler.defaultProfile`          | string or `false` | unset   | The profile a project uses, or `false` for no proxy; see [Project defaults](#project-defaults)                                                  |
 
 ### Managed VS Code Settings
 
@@ -199,6 +205,62 @@ settings, so Proxy Toggler sets no proxy. What VS Code uses next depends on how 
 
 The proxy lab measured this on VS Code 1.97 and the latest release; see
 [TESTING.md](TESTING.md#what-off-does).
+
+### Project defaults
+
+VS Code's own proxy is one setting shared by every window, so two open windows cannot use two
+proxies at once. Instead, each project can name a default, and VS Code's proxy follows the window
+you work in. For a work project behind a proxy and personal projects without one:
+
+```jsonc
+// User settings: no proxy for every project that names none
+"proxyToggler.defaultProfile": false
+
+// The work project's .vscode/settings.json
+"proxyToggler.defaultProfile": "Work"
+```
+
+The switcher's **This Project** entries write the project's setting for you: **Use Work in This
+Project**, **Use No Proxy in This Project** and **Stop Using a Project Default**. With the setting
+left unset everywhere, Proxy Toggler switches only when you do.
+
+- **When it switches:** when a project's window opens with focus, when it gains focus, and when its
+  default changes. It shows no notification; the toggle's tooltip says "This project's default.",
+  "Your default." or "Changed in this window.".
+- **Your changes win in their window:** a switch or toggle made in a window stays that window's
+  choice until it closes or reloads, and focus coming back keeps it. Changing the default, or
+  deleting or renaming that profile, replaces it.
+- **Windows in the background** use the proxy of the window you work in, for VS Code's own
+  traffic. Their terminals keep their own project's choice.
+- **Names only:** a project names a profile and never holds a proxy URL. If you have no profile by
+  that name, as with a teammate's project, the proxy stays as it is and Proxy Toggler offers once
+  to add it.
+- **Untrusted folders:** in Restricted Mode, VS Code ignores a folder's value and uses yours.
+- **Multi-root workspaces** have one default, in the `.code-workspace` file.
+- **Remote windows** switch the settings they manage: an SSH window the remote machine's own, a WSL
+  window this computer's.
+
+### Integrated terminals
+
+VS Code's proxy settings do not reach its integrated terminals. With
+`proxyToggler.applyToTerminals` on, new terminals and tasks get the proxy that `http.proxy` names
+as `http_proxy`, `https_proxy` and `no_proxy`, and the same names in upper case. Git, npm, pip,
+curl and most other command-line tools read them. Turning the proxy off removes them. In a window
+with a [project default](#project-defaults), or a change you made in it, terminals get that
+choice, whichever window has focus.
+
+- **User settings only:** a repository's settings cannot turn it on.
+- **Open terminals** keep their environment. VS Code marks them, and a relaunch picks up the change.
+- **`no_proxy`** starts with `localhost`, `127.0.0.1` and `::1`, which VS Code also reaches
+  directly, then your bypass list. A `*.example.com` entry becomes `.example.com`, the form these
+  tools read. A `*` entry, which sends everything direct, becomes the whole `no_proxy`, the only
+  form these tools read.
+- **No credentials and no certificate changes:** a `user:pass@` in `http.proxy` is left out, and
+  `http.proxyStrictSSL` has no effect on terminals.
+- **Your shell wins:** a proxy that your shell's startup files export replaces these values.
+- **Source Control view:** Git commands that VS Code runs itself, such as Sync or Push in the Source
+  Control view, do not run in a terminal and do not get this proxy. Set Git's own `http.proxy`
+  for them.
 
 ### `http.proxySupport`
 
