@@ -2,6 +2,7 @@
 # rewrites untracked local files. Add new top-level files or folders here.
 /*
 !/.github/
+!/assets/
 !/dev/
 !/docs/
 !/scripts/

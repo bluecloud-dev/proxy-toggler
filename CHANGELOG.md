@@ -4,26 +4,46 @@ All notable changes to this project will be documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
-## [Unreleased]
+## [0.3.0] - 2026-10-30
+
+Your terminals can now use the proxy VS Code uses, and each project can name the profile it uses.
+A walkthrough on VS Code's Welcome page shows how, from your first profile on.
 
 ### Added
 
 - `proxyToggler.applyToTerminals` (off by default) gives new integrated terminals and tasks the
   proxy VS Code uses, as `http_proxy`, `https_proxy` and `no_proxy` and the same names in upper
   case, so Git, npm and other command-line tools use it too. It follows the proxy as it turns on,
-  off or switches profiles. It leaves out credentials and never turns off certificate checks.
+  off or switches profiles. It leaves out credentials and never turns off certificate checks
+  ([#82]).
 - Project defaults: `proxyToggler.defaultProfile` names the profile a project uses, or `false` for
-  no proxy, and VS Code's proxy follows the focused window's choice. Your user settings give the
-  default for every project that names none, and a switch or toggle made in a window stays that
-  window's choice until it closes or reloads, or its profile is deleted or renamed. The switcher's
-  **This Project** entries set it, and the toggle's tooltip says where the proxy came from. A
-  project that names a profile you lack leaves the proxy alone and offers once to add it. Projects
-  hold names only, never URLs (ADR 0006).
+  no proxy. Your user settings give the default for every project that names none. A project that
+  names a profile you lack leaves the proxy alone and offers once to add it. Projects hold names
+  only, never URLs ([#13], ADR 0006).
+- VS Code's proxy follows the focused window's choice. A switch or toggle made in a window stays
+  that window's choice until it closes or reloads, or its profile is deleted or renamed, and each
+  window's terminals get that window's choice ([#83]).
+- The switcher's **This Project** entries set or clear the project's default ([#14]), and the
+  toggle's tooltip says where the proxy came from ([#16]).
+- A **Get Started with Proxy Toggler** walkthrough on VS Code's Welcome page, in five steps: add
+  a profile, turn it on and off, switch profiles, then use the proxy in terminals and give a
+  project its own. Each step checks itself off when you do it. VS Code opens it after install, and
+  **Welcome: Open Walkthrough…** opens it again.
+- The README explains project defaults and integrated terminals, with their security notes
+  ([#18]).
 
 ### Changed
 
 - Restricted Mode: the extension's untrusted-workspace support is now `limited`, because a
-  folder's settings cannot set `proxyToggler.defaultProfile` until you trust it.
+  folder's settings cannot set `proxyToggler.defaultProfile` until you trust it ([#19]).
+
+[#82]: https://github.com/bluecloud-dev/proxy-toggler/issues/82
+[#13]: https://github.com/bluecloud-dev/proxy-toggler/issues/13
+[#83]: https://github.com/bluecloud-dev/proxy-toggler/issues/83
+[#14]: https://github.com/bluecloud-dev/proxy-toggler/issues/14
+[#16]: https://github.com/bluecloud-dev/proxy-toggler/issues/16
+[#18]: https://github.com/bluecloud-dev/proxy-toggler/issues/18
+[#19]: https://github.com/bluecloud-dev/proxy-toggler/issues/19
 
 ## [0.2.0] - 2026-10-29
 
