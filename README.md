@@ -56,6 +56,8 @@
   proxy follows the window you work in
 - **Integrated terminals** (opt-in): Git, npm and other command-line tools in VS Code's terminals
   use the same proxy, in every project or only the ones you choose
+- **Get Started walkthrough** on VS Code's Welcome page, from your first profile to terminals and
+  project defaults
 - **Non-invasive** — leaves system proxy configuration untouched
 
 ### Switch profiles from the status bar
@@ -77,6 +79,9 @@
    ```sh
    code --install-extension proxy-toggler-*.vsix
    ```
+
+   VS Code then opens the **Get Started with Proxy Toggler** walkthrough, which covers these
+   steps and more. **Welcome: Open Walkthrough…** opens it again.
 
 2. Open Command Palette (`Cmd/Ctrl+Shift+P`) and run:
 

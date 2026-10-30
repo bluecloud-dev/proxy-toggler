@@ -7,6 +7,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 ## [0.3.0] - 2026-10-30
 
 Your terminals can now use the proxy VS Code uses, and each project can name the profile it uses.
+A walkthrough on VS Code's Welcome page shows how, from your first profile on.
 
 ### Added
 
@@ -24,6 +25,10 @@ Your terminals can now use the proxy VS Code uses, and each project can name the
   window's terminals get that window's choice ([#83]).
 - The switcher's **This Project** entries set or clear the project's default ([#14]), and the
   toggle's tooltip says where the proxy came from ([#16]).
+- A **Get Started with Proxy Toggler** walkthrough on VS Code's Welcome page, in five steps: add
+  a profile, turn it on and off, switch profiles, then use the proxy in terminals and give a
+  project its own. Each step checks itself off when you do it. VS Code opens it after install, and
+  **Welcome: Open Walkthrough…** opens it again.
 - The README explains project defaults and integrated terminals, with their security notes
   ([#18]).
 

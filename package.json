@@ -143,7 +143,73 @@
           "description": "%configuration.showSwitchNotifications.description%"
         }
       }
-    }
+    },
+    "walkthroughs": [
+      {
+        "id": "getStarted",
+        "title": "%walkthrough.title%",
+        "description": "%walkthrough.description%",
+        "steps": [
+          {
+            "id": "addProfile",
+            "title": "%walkthrough.addProfile.title%",
+            "description": "%walkthrough.addProfile.description%",
+            "media": {
+              "markdown": "assets/walkthrough/add-profile.md"
+            },
+            "completionEvents": [
+              "onContext:proxyToggler.hasConfiguration"
+            ]
+          },
+          {
+            "id": "toggle",
+            "title": "%walkthrough.toggle.title%",
+            "description": "%walkthrough.toggle.description%",
+            "media": {
+              "markdown": "assets/walkthrough/toggle.md"
+            },
+            "completionEvents": [
+              "onCommand:proxyToggler.toggle",
+              "onCommand:proxyToggler.enable",
+              "onCommand:proxyToggler.disable"
+            ]
+          },
+          {
+            "id": "switchProfile",
+            "title": "%walkthrough.switchProfile.title%",
+            "description": "%walkthrough.switchProfile.description%",
+            "media": {
+              "markdown": "assets/walkthrough/switch-profile.md"
+            },
+            "completionEvents": [
+              "onCommand:proxyToggler.switchProfile"
+            ]
+          },
+          {
+            "id": "terminals",
+            "title": "%walkthrough.terminals.title%",
+            "description": "%walkthrough.terminals.description%",
+            "media": {
+              "markdown": "assets/walkthrough/terminals.md"
+            },
+            "completionEvents": [
+              "onSettingChanged:proxyToggler.applyToTerminals"
+            ]
+          },
+          {
+            "id": "projectDefault",
+            "title": "%walkthrough.projectDefault.title%",
+            "description": "%walkthrough.projectDefault.description%",
+            "media": {
+              "markdown": "assets/walkthrough/project-default.md"
+            },
+            "completionEvents": [
+              "onSettingChanged:proxyToggler.defaultProfile"
+            ]
+          }
+        ]
+      }
+    ]
   },
   "scripts": {
     "build": "npm run typecheck && node ./esbuild.js",
