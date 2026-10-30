@@ -26,7 +26,7 @@
   "walkthrough.switchProfile.title": "Switch profiles",
   "walkthrough.switchProfile.description": "Click the gear next to the toggle and pick a profile to turn it on. The switcher also adds, edits and deletes profiles, and **Edit Profile…** tests a connection through one.\n[Switch Profile](command:proxyToggler.switchProfile)",
   "walkthrough.terminals.title": "Use the proxy in terminals",
-  "walkthrough.terminals.description": "VS Code's proxy does not reach its integrated terminals. Turn on **Apply To Terminals** in your user settings, and new terminals and tasks get it as `http_proxy`, `https_proxy` and `no_proxy`, which Git, npm and curl read.\n[Open the Setting](command:workbench.action.openSettings?%5B%22proxyToggler.applyToTerminals%22%5D)",
+  "walkthrough.terminals.description": "VS Code's proxy does not reach its integrated terminals. Turn on **Apply To Terminals** in your user settings, and new terminals and tasks get it as ``http_proxy``, ``https_proxy`` and ``no_proxy``, which Git, npm and curl read.\n[Open the Setting](command:workbench.action.openSettings?%5B%22proxyToggler.applyToTerminals%22%5D)",
   "walkthrough.projectDefault.title": "Give a project its own proxy",
   "walkthrough.projectDefault.description": "A project can name the profile it uses, and VS Code's proxy follows the window you work in. With a folder open, turn on the profile the project needs, then pick **Use … in This Project** in the switcher.\n[Switch Profile](command:proxyToggler.switchProfile)"
 }

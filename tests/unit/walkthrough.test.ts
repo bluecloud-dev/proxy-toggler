@@ -54,6 +54,13 @@ describe('walkthrough', () => {
     }
   });
 
+  it('writes code in step descriptions as ``code``, since VS Code shows single backticks as is', () => {
+    for (const step of steps) {
+      const description = localized(step.description);
+      assert.doesNotMatch(description, /(^|[^`])`[^`]+`(?!`)/, `${step.id}: ${description}`);
+    }
+  });
+
   it('runs only commands the extension contributes, or the Settings editor', () => {
     const known = new Set([
       ...manifest.contributes.commands.map(({ command }) => command),

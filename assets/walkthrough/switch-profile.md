@@ -1,7 +1,7 @@
 # Switch profiles
 
-Click the gear next to the toggle, or run **Proxy Toggler: Switch Profile…**. The switcher lists
-your profiles with the current one checked. Picking one turns it on.
+Click the gear next to the toggle, or run **Proxy Toggler: Switch Profile…** from the Command
+Palette. The switcher lists your profiles with the current one checked. Picking one turns it on.
 
 Below the profiles, the switcher can:
 
@@ -16,5 +16,9 @@ To switch with a key, run **Preferences: Open Keyboard Shortcuts (JSON)** and pa
 name:
 
 ```json
-{ "key": "ctrl+alt+w", "command": "proxyToggler.switchProfile", "args": "Work" }
+{
+  "key": "ctrl+alt+w",
+  "command": "proxyToggler.switchProfile",
+  "args": "Work"
+}
 ```
