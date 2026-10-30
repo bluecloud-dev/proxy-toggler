@@ -11,4 +11,5 @@ A profile holds what VS Code needs to reach the internet through a proxy:
 Profiles hold no user name or password. When a proxy asks you to sign in, VS Code shows its own
 sign-in dialog.
 
-After saving, **Test Connection** sends one request through the proxy to check that it works.
+After saving, **Test Connection** can send one request through an HTTP or HTTPS proxy to check that
+it works. It does not test SOCKS proxies.

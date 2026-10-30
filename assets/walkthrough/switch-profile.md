@@ -10,7 +10,8 @@ Below the profiles, the switcher can:
 - Set this project's default, under **This Project**
 
 **Edit Profile…** also offers **Test Connection…**, which sends one request through the
-profile's proxy to a URL you pick and says whether it got through.
+profile's proxy to a URL you pick and says whether it got through. It tests HTTP and HTTPS proxies,
+not SOCKS ones.
 
 To switch with a key, run **Preferences: Open Keyboard Shortcuts (JSON)** and pass a profile's
 name:
