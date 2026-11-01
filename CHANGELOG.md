@@ -4,6 +4,14 @@ All notable changes to this project will be documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
+## [0.3.1] - 2026-11-01
+
+### Changed
+
+- Publish releases with GitHub Actions OIDC and the Marketplace trusted publishing policy,
+  replacing the Microsoft Entra sign-in step. The same tested VSIX is published to GitHub and
+  the VS Code Marketplace.
+
 ## [0.3.0] - 2026-10-30
 
 Your terminals can now use the proxy VS Code uses, and each project can name the profile it uses.

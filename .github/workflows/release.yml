@@ -148,8 +148,7 @@ jobs:
     if: github.event_name == 'push' && github.ref_type == 'tag'
     runs-on: ubuntu-latest
     timeout-minutes: 10
-    # The Entra application trusts GitHub's OIDC token only for jobs in this environment, which
-    # runs for version tags alone; no secret is stored. A failed run can be re-run on its own.
+    # The Marketplace policy matches release.yml and this environment, restricted to version tags.
     environment: marketplace
     permissions:
       contents: read
@@ -178,14 +177,7 @@ jobs:
       - name: Check that the VSIX is the one that was tested
         run: sha256sum --check SHA256SUMS
 
-      - name: Sign in with Microsoft Entra
-        uses: azure/login@a641126d1b8aa4d1fa005f4f92df94a3a4c4c906 # v3
-        with:
-          client-id: ${{ vars.AZURE_CLIENT_ID }}
-          tenant-id: ${{ vars.AZURE_TENANT_ID }}
-          allow-no-subscriptions: true
-
       - name: Publish the VSIX
         run: >-
           node -r ./scripts/patch-os-cpus.cjs ./node_modules/@vscode/vsce/vsce publish
-          --azure-credential --packagePath proxy-toggler-*.vsix
+          --oidc --packagePath proxy-toggler-*.vsix
