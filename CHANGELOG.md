@@ -4,6 +4,18 @@ All notable changes to this project will be documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
+## [0.3.2] - 2026-11-19
+
+### Security
+
+- Upgrade the development dependencies `serialize-javascript`, `minimatch`, `glob`, and `diff` to
+  patched versions, and pin the proxy lab container images by digest. ([#89](https://github.com/bluecloud-dev/proxy-toggler/pull/89))
+
+### Changed
+
+- Update the CodeQL action and npm tooling for linting, formatting, and VSIX packaging.
+  ([#87](https://github.com/bluecloud-dev/proxy-toggler/pull/87), [#88](https://github.com/bluecloud-dev/proxy-toggler/pull/88))
+
 ## [0.3.1] - 2026-11-01
 
 ### Changed
