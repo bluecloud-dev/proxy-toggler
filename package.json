@@ -2,7 +2,7 @@
   "name": "proxy-toggler",
   "displayName": "%extension.displayName%",
   "description": "%extension.description%",
-  "version": "0.3.1",
+  "version": "0.3.2",
   "publisher": "bluecloud-dev",
   "private": true,
   "license": "MIT",
