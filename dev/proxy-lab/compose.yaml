@@ -4,7 +4,7 @@ name: proxy-toggler-lab
 
 services:
   squid-open:
-    image: ubuntu/squid:7.2-26.04_edge
+    image: ubuntu/squid:7.2-26.04_edge@sha256:42decc7f79b4e1044f4fe9b3a855af2cbfc76652f3191694726e21058443edc9
     # The image runs Squid under Pebble; --args replaces the arguments of its "squid" service.
     command: ['--args', 'squid', '-f', '/etc/squid/lab/open.conf', '-NYC']
     environment:
@@ -18,7 +18,7 @@ services:
       - '127.0.0.1:3128:3128'
 
   squid-auth:
-    image: ubuntu/squid:7.2-26.04_edge
+    image: ubuntu/squid:7.2-26.04_edge@sha256:42decc7f79b4e1044f4fe9b3a855af2cbfc76652f3191694726e21058443edc9
     entrypoint: ['sh', '/etc/squid/lab/auth-entrypoint.sh']
     command: ['--args', 'squid', '-f', '/etc/squid/lab/auth.conf', '-NYC']
     environment:
@@ -32,7 +32,7 @@ services:
   # Intercepts TLS with a certificate authority that mitmproxy generates on first start and that
   # no client trusts.
   mitmproxy:
-    image: mitmproxy/mitmproxy:12.2.3
+    image: mitmproxy/mitmproxy:12.2.3@sha256:00b77b5d8804c8ad18cb6caefbf9d5849e895e8986c5ce011f4ae30f4385962f
     command: ['mitmdump', '--mode', 'regular@8080']
     environment:
       # Without a terminal Python buffers its output, which would delay `docker compose logs`.
@@ -43,7 +43,7 @@ services:
 
   # A plain SOCKS5 relay: --ignore-hosts passes every connection through untouched.
   socks5:
-    image: mitmproxy/mitmproxy:12.2.3
+    image: mitmproxy/mitmproxy:12.2.3@sha256:00b77b5d8804c8ad18cb6caefbf9d5849e895e8986c5ce011f4ae30f4385962f
     command: ['mitmdump', '--mode', 'socks5@1080', '--ignore-hosts', '.*']
     environment:
       PYTHONUNBUFFERED: '1'
@@ -52,7 +52,7 @@ services:
       - '127.0.0.1:1080:1080'
 
   pac:
-    image: nginx:1.31.7-alpine
+    image: nginx:1.31.7-alpine@sha256:892bb2152464f0c5d8972593a5f5afaf8054552580b699d95f8ff4af08c2d33d
     volumes:
       - ./pac/nginx.conf:/etc/nginx/conf.d/default.conf:ro
       - ./pac/proxy.pac:/usr/share/nginx/pac/proxy.pac:ro
@@ -61,7 +61,7 @@ services:
 
   origin:
     # The Debian image, unlike the Alpine one, ships openssl to generate the certificate.
-    image: nginx:1.31.7
+    image: nginx:1.31.7@sha256:8632b3314d74c61f0e27f59055bab13f7793b988c94c090154d867bc29e0f39b
     entrypoint: ['sh', '/etc/nginx/lab/entrypoint.sh']
     command: ['nginx', '-g', 'daemon off;']
     volumes:

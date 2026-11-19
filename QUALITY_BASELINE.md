@@ -130,10 +130,10 @@ The extension has no webviews or custom editors today. If one is added:
   `allowScripts` allows them. All three are denied (`esbuild`, `keytar`, `@vscode/vsce-sign`),
   because building, testing, and packaging work without them. Approve one only for a tool that
   fails without it.
-- **Overrides:** use `overrides` only to force a patched transitive release when the parent
-  package cannot be upgraded, and record why. Current entry: `serialize-javascript` `^7.0.5`,
-  because Mocha 11 pins `^6` and Mocha 12 cannot load in VS Code 1.91's extension host. Remove it
-  when the runner moves to Mocha 12.
+- **Overrides:** use `overrides` to force a patched transitive release when the parent package
+  cannot be upgraded. Mocha 11 requires overrides for `diff` and `serialize-javascript` while
+  the VS Code integration tests require its CommonJS runner. Mocha and other development tools
+  also require patched versions of `glob` and `minimatch` outside their declared ranges.
 - **Updates:** Dependabot (`.github/dependabot.yml`) opens weekly pull requests for npm and GitHub
   Actions, grouping minor and patch updates. It skips `@types/vscode`, major updates of
   `@types/node`, and major updates of Mocha, for the reasons above. Upgrade one major version per
